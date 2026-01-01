@@ -3,25 +3,59 @@
   <head>
     <meta charset="utf-8" />
     <title>Fantasy Console</title>
-    <style>
-      html {
-        margin: 0;
-        background: #000;
-      }
-      body {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-      canvas {
-        width: 640px;
-        height: 480px;
-        image-rendering: pixelated;
-      }
-    </style>
+    <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <canvas id="screen" width="320" height="240"></canvas>
+    
+    <div id="devtools">
+      <div class="panel" id="debug">
+        <h3>Debug Info</h3>
+        <div class="metric">
+          <span class="metric-label">FPS:</span>
+          <span class="metric-value" id="fps">60</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Updates/Frame:</span>
+          <span class="metric-value" id="updates">1</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Accumulator:</span>
+          <span class="metric-value"><span id="acc">0</span> ms</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Input Mask:</span>
+          <span class="metric-value" id="input">0x00</span>
+        </div>
+      </div>
+      
+      <div class="panel">
+        <h3>Controls</h3>
+        <div class="help">
+          <strong>Arrow Keys:</strong> D-Pad<br>
+          <strong>Z:</strong> A Button<br>
+          <strong>X:</strong> B Button<br>
+          <strong>Enter:</strong> Start
+        </div>
+      </div>
+      
+      <div class="panel">
+        <h3>System</h3>
+        <div class="metric">
+          <span class="metric-label">Resolution:</span>
+          <span class="metric-value">320×240</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Tick Rate:</span>
+          <span class="metric-value">60 Hz</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Memory:</span>
+          <span class="metric-value">1 MB</span>
+        </div>
+      </div>
+    </div>
+    
     <script type="module" src="main.js"></script>
   </body>
 </html>

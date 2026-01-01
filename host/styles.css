@@ -1,0 +1,72 @@
+* {
+  box-sizing: border-box;
+}
+
+html {
+  margin: 0;
+  background: #000;
+}
+
+body {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 20px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  color: #fff;
+}
+
+canvas {
+  width: 640px;
+  height: 480px;
+  image-rendering: pixelated;
+  border: 2px solid #333;
+}
+
+#devtools {
+  width: 300px;
+  background: #1a1a1a;
+  border: 2px solid #333;
+  border-radius: 4px;
+}
+
+.panel {
+  padding: 15px;
+  border-bottom: 1px solid #333;
+}
+
+.panel:last-child {
+  border-bottom: none;
+}
+
+.panel h3 {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  color: #0f0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.metric {
+  display: flex;
+  justify-content: space-between;
+  margin: 8px 0;
+  font-size: 13px;
+}
+
+.metric-label {
+  color: #888;
+}
+
+.metric-value {
+  color: #fff;
+  font-weight: bold;
+}
+
+.help {
+  color: #666;
+  font-size: 11px;
+  margin-top: 10px;
+  line-height: 1.5;
+}

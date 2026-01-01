@@ -84,6 +84,16 @@ const MAX_UPDATES = 5;                 // Safety cap to prevent spiral of death
 let last = performance.now();          // Last frame timestamp
 let acc = 0;                           // Time accumulator for fixed timestep
 
+// === Dev Tools ===
+let fps = 60;
+let frameCount = 0;
+let lastFpsUpdate = performance.now();
+
+const fpsEl = document.getElementById('fps');
+const updatesEl = document.getElementById('updates');
+const accEl = document.getElementById('acc');
+const inputEl = document.getElementById('input');
+
 // Pause game when tab is hidden, resume when visible
 // This stops the animation loop entirely to save CPU when tab is in background
 document.addEventListener("visibilitychange", () => {
@@ -123,6 +133,20 @@ function frame(now) {
   // Render current state (runs at display refresh rate)
   draw();
   ctx.putImageData(image, 0, 0);
+
+  // Update FPS counter
+  frameCount++;
+  if (now - lastFpsUpdate >= 1000) {
+    fps = Math.round(frameCount * 1000 / (now - lastFpsUpdate));
+    frameCount = 0;
+    lastFpsUpdate = now;
+  }
+
+  // Update dev tools panel
+  fpsEl.textContent = fps;
+  updatesEl.textContent = updates;
+  accEl.textContent = Math.round(acc);
+  inputEl.textContent = '0x' + inputMask.toString(16).padStart(2, '0').toUpperCase();
 
   // Continue the loop only if document is still visible
   if (!document.hidden) {
