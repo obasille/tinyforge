@@ -1,3 +1,27 @@
 <!DOCTYPE html>
-<canvas id="screen" width="320" height="240"></canvas>
-<script type="module" src="main.js"></script>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Fantasy Console</title>
+    <style>
+      html {
+        margin: 0;
+        background: #000;
+      }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      canvas {
+        width: 640px;
+        height: 480px;
+        image-rendering: pixelated;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="screen" width="320" height="240"></canvas>
+    <script type="module" src="main.js"></script>
+  </body>
+</html>
