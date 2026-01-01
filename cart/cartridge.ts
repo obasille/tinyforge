@@ -8,15 +8,31 @@ declare const memory: WebAssembly.Memory;
 // === constants ===
 export const WIDTH: i32 = 320;
 export const HEIGHT: i32 = 240;
-export const FB_PTR: usize = 0;
+
+enum Button {
+  UP    = 1 << 0,
+  DOWN  = 1 << 1,
+  LEFT  = 1 << 2,
+  RIGHT = 1 << 3,
+  A     = 1 << 4,
+  B     = 1 << 5,
+  START = 1 << 6
+}
 
 // === lifecycle ===
 export function init(): void {
   cls(0xFF000000); // black
 }
 
-export function update(): void {
+let px: i32 = 160;
+let py: i32 = 120;
+
+export function update(input: i32): void {
   // game logic
+  if (input & Button.LEFT)  px--;
+  if (input & Button.RIGHT) px++;
+  if (input & Button.UP)    py--;
+  if (input & Button.DOWN)  py++;
 }
 
 export function draw(): void {
@@ -29,6 +45,8 @@ export function draw(): void {
       pset(x, y, 0xFF000000 | (r << 16) | (g << 8) | b);
     }
   }
+  // draw player
+  pset(px, py, 0xffffffff);
 }
 
 // === framebuffer helpers ===
