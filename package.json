@@ -4,7 +4,8 @@
   "description": "A small, deterministic fantasy console for building simple 2D games on the web",
   "type": "module",
   "scripts": {
-    "build": "asc cart/cartridge.ts -o cart/cartridge.wasm -O3 --runtime stub --importMemory",
+    "build": "asc cart/cartridge.ts -o cart/cartridge.wasm --config cart/asconfig.json",
+    "build:debug": "asc cart/cartridge.ts -o cart/cartridge.wasm --config cart/asconfig.json --target debug",
     "serve": "python -m http.server 8080",
     "dev": "npm run build && npm run serve"
   },
@@ -17,6 +18,6 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "assemblyscript": "^0.27.0"
+    "assemblyscript": "^0.28.9"
   }
 }

@@ -1,3 +1,4 @@
+import * as loader from '@assemblyscript/loader';
 import { addConsoleEntry } from './console-panel.js';
 
 const canvas = document.getElementById("screen");
@@ -10,17 +11,21 @@ const memory = new WebAssembly.Memory({
   maximum: 16    // fixed, no growth
 });
 
+// WASM module and exports
+let wasmExports;
+
 const wasm = await (async () => {
   try {
-    const wasm = await WebAssembly.instantiateStreaming(
+    const wasm = await loader.instantiateStreaming(
       fetch("../cart/cartridge.wasm"),
       {
         env: {
           memory,
           abort: (msg, file, line, column) => {
-            // See AS __getString implementation in wasm-string.js
             hasAborted = true;  // Stop frame loop
-            const errorMsg =`Abort at ${line}:${column}`;
+            msg = wasmExports.__getString(msg);
+            file = wasmExports.__getString(file);
+            const errorMsg =`Abort at ${file} ${line}:${column} => ${msg}`;
             addConsoleEntry('ABORT', errorMsg);
             console.error("WASM abort:", { msg, file, line, column });
           },
@@ -29,17 +34,20 @@ const wasm = await (async () => {
           },
           // Console logging functions
           'console.log': (msg) => {
-            addConsoleEntry('LOG', msg);
+            addConsoleEntry('LOG', wasmExports.__getString(msg));
           },
           'console.warn': (msg) => {
-            addConsoleEntry('WARN', msg);
+            addConsoleEntry('WARN', wasmExports.__getString(msg));
           },
           'console.error': (msg) => {
-            addConsoleEntry('ERROR', msg);
+            addConsoleEntry('ERROR', wasmExports.__getString(msg));
           }
         }
       }
     );
+
+    // Capture exports for use in import functions
+    wasmExports = wasm.exports;
 
     // Validate required exports
     const required = ['init', 'update', 'draw', 'WIDTH', 'HEIGHT'];
@@ -58,9 +66,8 @@ const wasm = await (async () => {
   }
 })();
 
-const { init, update, draw, WIDTH, HEIGHT } =
-  wasm.instance.exports;
-
+const { init, update, draw, WIDTH, HEIGHT } = wasm.instance.exports;
+  
 // Create a Uint8ClampedArray that points to the framebuffer in WASM memory
 // Note: UInt8ClampedArray type is required by ImageData
 const fb = new Uint8ClampedArray(

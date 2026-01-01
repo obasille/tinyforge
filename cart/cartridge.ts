@@ -40,16 +40,16 @@ function setPY(value: i32): void {
 
 // === lifecycle ===
 export function init(): void {
+  warn("Game starting...");
+
   cls(0xFF000000); // black
   
   // Initialize player position in RAM
   setPX(160);
   setPY(120);
-}
 
-log("Game started!");
-warn("Player health low");
-error("Invalid state detected");
+  log("Game started!");
+}
 
 export function update(input: i32, prevInput: i32): void {
   // Load player position from RAM

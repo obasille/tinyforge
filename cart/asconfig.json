@@ -1,16 +1,20 @@
 {
-  "targets": {
-    "release": {
-      "runtime": "stub",
-      "optimizeLevel": 3,
-      "shrinkLevel": 2,
-      "noAssert": true,
-      "lowMemoryLimit": 0,
-      "memoryBase": 0,
-      "exportRuntime": false
-    }
-  },
   "options": {
-    "runtime": "stub"
+    "runtime": "stub",
+    "exportRuntime": false,
+    "importMemory": true,
+    "lowMemoryLimit": 0,
+    "memoryBase": 307200
+  },
+  "targets": {
+    "debug": {
+      "debug": true,
+      "sourceMap": true
+    },
+    "release": {
+      "optimizeLevel": 3,
+      "shrinkLevel": 0,
+      "noAssert": true
+    }
   }
 }
