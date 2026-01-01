@@ -20,7 +20,10 @@ export function addConsoleEntry(type, message) {
   consoleEntries.scrollTop = consoleEntries.scrollHeight;
   
   // Also log to browser console
-  console.error(`[${type}]`, message);
+  const msg = `[${type}] ${message}`;
+  if (type === 'ERROR' || type === 'ABORT') console.error(msg);
+  else if (type === 'WARN') console.warn(msg);
+  else console.log(msg);
 }
 
 clearBtn.addEventListener('click', () => {

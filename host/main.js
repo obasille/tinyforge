@@ -21,30 +21,26 @@ const wasm = await (async () => {
             // See AS __getString implementation in wasm-string.js
             hasAborted = true;  // Stop frame loop
             const errorMsg =`Abort at ${line}:${column}`;
-            addConsoleEntry('RUNTIME', errorMsg);
+            addConsoleEntry('ABORT', errorMsg);
             console.error("WASM abort:", { msg, file, line, column });
           },
           trace: (msg) => {
             addConsoleEntry('TRACE', msg);
-            console.log("WASM trace:", msg);
           },
           // Console logging functions
           'console.log': (msg) => {
             addConsoleEntry('LOG', msg);
-            console.log("WASM log:", msg);
           },
           'console.warn': (msg) => {
             addConsoleEntry('WARN', msg);
-            console.warn("WASM warn:", msg);
           },
           'console.error': (msg) => {
             addConsoleEntry('ERROR', msg);
-            console.error("WASM error:", msg);
           }
         }
       }
     );
-    
+
     // Validate required exports
     const required = ['init', 'update', 'draw', 'WIDTH', 'HEIGHT'];
     const missing = required.filter(name => !wasm.instance.exports[name]);
@@ -57,8 +53,7 @@ const wasm = await (async () => {
     
     return wasm;
   } catch (e) {
-    addConsoleEntry('LOAD', `Failed to load cartridge: ${e.message}`);
-    console.error("WASM load error:", e);
+    addConsoleEntry('ERROR', `Failed to load cartridge: ${e.message}`);
     throw e;
   }
 })();
@@ -106,7 +101,7 @@ window.addEventListener("keyup", e => {
 try {
   init();
 } catch (e) {
-  addConsoleEntry('RUNTIME', `Error in init(): ${e.message}`);
+  addConsoleEntry('ERROR', `Error in init(): ${e.message}`);
   hasAborted = true;
 }
 
@@ -164,7 +159,7 @@ function frame(now) {
       acc -= DT;                         // Consume one timestep
       updates++;
     } catch (e) {
-      addConsoleEntry('RUNTIME', `Error in update(): ${e.message}`);
+      addConsoleEntry('ERROR', `Error in update(): ${e.message}`);
       break;
     }
   }
@@ -182,7 +177,7 @@ function frame(now) {
       draw();
       ctx.putImageData(image, 0, 0);
     } catch (e) {
-      addConsoleEntry('RUNTIME', `Error in draw(): ${e.message}`);
+      addConsoleEntry('ERROR', `Error in draw(): ${e.message}`);
     }
   }
 
