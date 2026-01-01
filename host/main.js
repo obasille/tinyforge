@@ -74,26 +74,60 @@ window.addEventListener("keyup", e => {
 
 init();
 
-const TICK_HZ = 60;
-const DT = 1000 / TICK_HZ; // ms
+// === Fixed Timestep Loop ===
 
-let last = performance.now();
-let acc = 0;
+// This ensures deterministic game logic regardless of actual frame rate
+const TICK_HZ = 60;                    // Target simulation rate (60 updates per second)
+const DT = 1000 / TICK_HZ;             // Delta time per update (16.67ms)
+const MAX_UPDATES = 5;                 // Safety cap to prevent spiral of death
+
+let last = performance.now();          // Last frame timestamp
+let acc = 0;                           // Time accumulator for fixed timestep
+
+// Pause game when tab is hidden, resume when visible
+// This stops the animation loop entirely to save CPU when tab is in background
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    // Tab hidden - animation loop will stop naturally
+  } else {
+    // Tab visible - restart animation loop
+    last = performance.now();          // Reset reference time on resume
+    acc = 0;                           // Clear accumulated time
+    requestAnimationFrame(frame);      // Restart the loop
+  }
+});
 
 function frame(now) {
+  // Accumulate time since last frame
   acc += now - last;
   last = now;
 
-  while (acc >= DT) {
-    update(inputMask, prevInputMask);
-    prevInputMask = inputMask;
-    acc -= DT;
+  // Run fixed timestep updates
+  // This loop ensures update() is called at exactly TICK_HZ frequency
+  // Multiple updates may occur per frame if rendering is slow
+  let updates = 0;
+  while (acc >= DT && updates < MAX_UPDATES) {
+    update(inputMask, prevInputMask);  // Game logic update
+    prevInputMask = inputMask;         // Track previous input state
+    acc -= DT;                         // Consume one timestep
+    updates++;
+  }
+  
+  // If we hit the update cap, skip frames rather than spiraling
+  // This prevents the game from freezing while trying to catch up
+  if (updates >= MAX_UPDATES) {
+    console.warn("Max updates reached, skipping frames");
+    acc = 0;                           // Reset to prevent runaway
   }
 
+  // Render current state (runs at display refresh rate)
   draw();
   ctx.putImageData(image, 0, 0);
 
-  requestAnimationFrame(frame);
+  // Continue the loop only if document is still visible
+  if (!document.hidden) {
+    requestAnimationFrame(frame);
+  }
 }
 
 requestAnimationFrame(frame);
