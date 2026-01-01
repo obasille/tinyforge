@@ -50,7 +50,7 @@ const wasm = await (async () => {
     wasmExports = wasm.exports;
 
     // Validate required exports
-    const required = ['init', 'update', 'draw', 'WIDTH', 'HEIGHT'];
+    const required = ['init', 'update', 'draw'];
     const missing = required.filter(name => !wasm.instance.exports[name]);
     
     if (missing.length > 0) {
@@ -66,7 +66,9 @@ const wasm = await (async () => {
   }
 })();
 
-const { init, update, draw, WIDTH, HEIGHT } = wasm.instance.exports;
+const { init, update, draw } = wasm.instance.exports;
+const WIDTH = 320;
+const HEIGHT = 240;
   
 // Create a Uint8ClampedArray that points to the framebuffer in WASM memory
 // Note: UInt8ClampedArray type is required by ImageData

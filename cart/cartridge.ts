@@ -10,8 +10,6 @@
 // Import console SDK
 import { WIDTH, HEIGHT, Button, RAM_START, log, warn, error } from './console';
 
-// Re-export required constants for host
-export { WIDTH, HEIGHT };
 
 // === Memory offsets for game state ===
 const PX_ADDR: usize = RAM_START;      // Player X position (i32)
