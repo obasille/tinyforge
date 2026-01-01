@@ -193,6 +193,47 @@ The cartridge never sees individual key events.
 
 ---
 
+## Console Logging
+
+The console SDK provides logging functions that output to the HTML console panel:
+
+```ts
+import { log, warn, error } from './console';
+
+log("Player initialized");      // Blue entry [LOG]
+warn("Health low");              // Yellow entry [WARN]
+error("Invalid state");          // Red entry [ERROR]
+```
+
+**Important notes:**
+- These functions accept **string literals only** (no dynamic strings)
+- No string concatenation or interpolation is possible due to no-allocation constraints
+- Use these for debugging and important state notifications
+- All messages are timestamped in the console panel
+
+**Examples:**
+
+```ts
+export function init(): void {
+  log("Game started");
+  // Initialize game state...
+}
+
+export function update(input: i32, prevInput: i32): void {
+  if (playerHealth < 20) {
+    warn("Low health");
+  }
+  
+  if (invalidCondition) {
+    error("Detected invalid state");
+  }
+}
+```
+
+Each log type appears with a distinct color in the console panel below the game canvas.
+
+---
+
 ## Timing Model
 
 - Fixed timestep: **60 Hz**
@@ -246,6 +287,7 @@ The SDK provides:
 - Memory declarations and memory map constants
 - Display constants (WIDTH, HEIGHT)
 - Input constants (Button enum)
+- Console logging functions (log, warn, error)
 
 ### Minimal cartridge
 

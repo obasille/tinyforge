@@ -1,27 +1,7 @@
+import { addConsoleEntry } from './console-panel.js';
+
 const canvas = document.getElementById("screen");
 const ctx = canvas.getContext("2d");
-
-// === Error Reporting ===
-const errorList = document.getElementById('error-list');
-const clearBtn = document.getElementById('clear-console');
-
-function reportError(type, message) {
-  const entry = document.createElement('div');
-  entry.className = `error-entry error-${type.toLowerCase()}`;
-  
-  const time = new Date().toLocaleTimeString();
-  entry.innerHTML = `<span class="error-time">${time}</span><span class="error-type">[${type}]</span>${message}`;
-  
-  errorList.appendChild(entry);
-  errorList.scrollTop = errorList.scrollHeight;
-  
-  // Also log to browser console
-  console.error(`[${type}]`, message);
-}
-
-clearBtn.addEventListener('click', () => {
-  errorList.innerHTML = '';
-});
 
 let hasAborted = false;
 
@@ -41,12 +21,25 @@ const wasm = await (async () => {
             // See AS __getString implementation in wasm-string.js
             hasAborted = true;  // Stop frame loop
             const errorMsg =`Abort at ${line}:${column}`;
-            reportError('RUNTIME', errorMsg);
+            addConsoleEntry('RUNTIME', errorMsg);
             console.error("WASM abort:", { msg, file, line, column });
           },
           trace: (msg) => {
-            reportError('TRACE', msg);
+            addConsoleEntry('TRACE', msg);
             console.log("WASM trace:", msg);
+          },
+          // Console logging functions
+          'console.log': (msg) => {
+            addConsoleEntry('LOG', msg);
+            console.log("WASM log:", msg);
+          },
+          'console.warn': (msg) => {
+            addConsoleEntry('WARN', msg);
+            console.warn("WASM warn:", msg);
+          },
+          'console.error': (msg) => {
+            addConsoleEntry('ERROR', msg);
+            console.error("WASM error:", msg);
           }
         }
       }
@@ -64,7 +57,7 @@ const wasm = await (async () => {
     
     return wasm;
   } catch (e) {
-    reportError('LOAD', `Failed to load cartridge: ${e.message}`);
+    addConsoleEntry('LOAD', `Failed to load cartridge: ${e.message}`);
     console.error("WASM load error:", e);
     throw e;
   }
@@ -113,7 +106,7 @@ window.addEventListener("keyup", e => {
 try {
   init();
 } catch (e) {
-  reportError('RUNTIME', `Error in init(): ${e.message}`);
+  addConsoleEntry('RUNTIME', `Error in init(): ${e.message}`);
   hasAborted = true;
 }
 
@@ -171,7 +164,7 @@ function frame(now) {
       acc -= DT;                         // Consume one timestep
       updates++;
     } catch (e) {
-      reportError('RUNTIME', `Error in update(): ${e.message}`);
+      addConsoleEntry('RUNTIME', `Error in update(): ${e.message}`);
       break;
     }
   }
@@ -189,7 +182,7 @@ function frame(now) {
       draw();
       ctx.putImageData(image, 0, 0);
     } catch (e) {
-      reportError('RUNTIME', `Error in draw(): ${e.message}`);
+      addConsoleEntry('RUNTIME', `Error in draw(): ${e.message}`);
     }
   }
 

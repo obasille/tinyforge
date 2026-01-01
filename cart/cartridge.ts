@@ -8,7 +8,7 @@
 // Use: primitive types (i32, f32, etc.), load/store operations, and stack variables.
 
 // Import console SDK
-import { memory, WIDTH, HEIGHT, Button, RAM_START } from './console';
+import { WIDTH, HEIGHT, Button, RAM_START, log, warn, error } from './console';
 
 // Re-export required constants for host
 export { WIDTH, HEIGHT };
@@ -46,6 +46,10 @@ export function init(): void {
   setPX(160);
   setPY(120);
 }
+
+log("Game started!");
+warn("Player health low");
+error("Invalid state detected");
 
 export function update(input: i32, prevInput: i32): void {
   // Load player position from RAM

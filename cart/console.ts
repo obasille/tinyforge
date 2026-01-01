@@ -37,3 +37,15 @@ export enum Button {
   B     = 1 << 5,
   START = 1 << 6
 }
+
+// === Console Logging ===
+// These functions output to the HTML console panel
+// Note: Accepts string literals only (no allocations)
+@external("env", "console.log")
+export declare function log(msg: string): void;
+
+@external("env", "console.warn")
+export declare function warn(msg: string): void;
+
+@external("env", "console.error")
+export declare function error(msg: string): void;
