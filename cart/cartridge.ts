@@ -8,7 +8,7 @@
 // Use: primitive types (i32, f32, etc.), load/store operations, and stack variables.
 
 // Import console SDK
-import { WIDTH, HEIGHT, Button, RAM_START, log, warn, error, getI32, setI32 } from './console';
+import { WIDTH, HEIGHT, clearFramebuffer, pset, Button, log, warn, getI32, setI32 } from './console';
 
 
 // === RAM Variable System ===
@@ -45,7 +45,7 @@ function setPY(value: i32): void {
 export function init(): void {
   warn("Game starting...");
 
-  cls(0xFF000000); // black
+  clearFramebuffer(0xFF000000); // black
   
   // Initialize player position in RAM
   setPX(160);
@@ -85,26 +85,9 @@ export function draw(): void {
       const r = x & 255;
       const g = y & 255;
       const b = 128;
-      pset(x, y, 0xFF000000 | (r << 16) | (g << 8) | b);
+      pset(x, y, (r << 16) | (g << 8) | b);
     }
   }
   // draw player
-  pset(px, py, 0xffffffff);
-}
-
-// === framebuffer helpers ===
-@inline
-function pset(x: i32, y: i32, color: u32): void {
-  const i = (y * WIDTH + x) << 2;
-  store<u32>(i, color);
-}
-
-@inline
-function cls(color: u32): void {
-  let i = 0;
-  const end = WIDTH * HEIGHT * 4;
-  while (i < end) {
-    store<u32>(i, color);
-    i += 4;
-  }
+  pset(px, py, 0xffffff);
 }

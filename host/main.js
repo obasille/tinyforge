@@ -32,6 +32,10 @@ const wasm = await (async () => {
           trace: (msg) => {
             addConsoleEntry('TRACE', msg);
           },
+          // Fast framebuffer clear using native JS fill()
+          clearFramebuffer: (color) => {
+            fb32.fill(color | 0xFF000000);
+          },
           // Console logging functions
           'console.log': (msg) => {
             addConsoleEntry('LOG', wasmExports.__getString(msg));
@@ -76,6 +80,13 @@ const fb = new Uint8ClampedArray(
   memory.buffer,
   0,
   WIDTH * HEIGHT * 4
+);
+
+// Create Uint32Array view for efficient clearing
+const fb32 = new Uint32Array(
+  memory.buffer,
+  0,
+  WIDTH * HEIGHT
 );
 
 const image = new ImageData(fb, WIDTH, HEIGHT);

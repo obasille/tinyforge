@@ -292,17 +292,14 @@ The SDK provides:
 ### Minimal cartridge
 
 ```ts
-import { memory, WIDTH, HEIGHT, Button, RAM_START } from './console';
-
-// Re-export for host
-export { WIDTH, HEIGHT };
+import { memory, clearFramebuffer, pset, Button, RAM_START } from './console';
 
 // Game state in RAM
 const X_ADDR: usize = RAM_START;
 const Y_ADDR: usize = RAM_START + 4;
 
 export function init(): void {
-  cls(0xff000000);
+  clearFramebuffer(0xff000000);
   store<i32>(X_ADDR, 160);
   store<i32>(Y_ADDR, 120);
 }
@@ -319,25 +316,10 @@ export function update(input: i32, prevInput: i32): void {
 }
 
 export function draw(): void {
-  cls(0xff000000);
+  clearFramebuffer(0xff000000);
   const x = load<i32>(X_ADDR);
   const y = load<i32>(Y_ADDR);
   pset(x, y, 0xffffffff);
-}
-
-@inline
-function pset(px: i32, py: i32, color: u32): void {
-  const i = (py * WIDTH + px) << 2;
-  store<u32>(i, color);
-}
-
-function cls(color: u32): void {
-  let i: usize = 0;
-  const end = WIDTH * HEIGHT * 4;
-  while (i < end) {
-    store<u32>(i, color);
-    i += 4;
-  }
 }
 ```
 
