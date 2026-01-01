@@ -6,7 +6,17 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <canvas id="screen" width="320" height="240"></canvas>
+    <div id="game-container">
+      <canvas id="screen" width="320" height="240"></canvas>
+      
+      <div id="console">
+        <div class="console-header">
+          <span class="console-title">Console</span>
+          <button id="clear-console" class="console-btn">Clear</button>
+        </div>
+        <div id="error-list" class="error-log"></div>
+      </div>
+    </div>
     
     <div id="devtools">
       <div class="panel" id="debug">

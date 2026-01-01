@@ -17,11 +17,100 @@ body {
   color: #fff;
 }
 
+#game-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
 canvas {
   width: 640px;
   height: 480px;
   image-rendering: pixelated;
   border: 2px solid #333;
+  border-bottom: none;
+}
+
+#console {
+  width: 640px;
+  background: #0a0a0a;
+  border: 2px solid #333;
+  border-top: 1px solid #333;
+}
+
+.console-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: #1a1a1a;
+  border-bottom: 1px solid #333;
+}
+
+.console-title {
+  font-size: 12px;
+  color: #0f0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.console-btn {
+  background: #2a2a2a;
+  border: 1px solid #444;
+  color: #888;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.console-btn:hover {
+  background: #333;
+  color: #aaa;
+}
+
+.error-log {
+  height: 150px;
+  overflow-y: auto;
+  padding: 8px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.error-log:empty::before {
+  content: "No errors";
+  color: #444;
+  font-style: italic;
+}
+
+.error-entry {
+  padding: 6px 8px;
+  margin: 4px 0;
+  border-left: 3px solid #f44;
+  background: #2a0000;
+  color: #faa;
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.error-entry.error-load {
+  border-left-color: #f44;
+}
+
+.error-entry.error-runtime {
+  border-left-color: #fa0;
+}
+
+.error-type {
+  color: #f44;
+  font-weight: bold;
+  margin-right: 8px;
+}
+
+.error-time {
+  color: #666;
+  font-size: 10px;
+  margin-right: 8px;
 }
 
 #devtools {

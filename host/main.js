@@ -1,6 +1,30 @@
 const canvas = document.getElementById("screen");
 const ctx = canvas.getContext("2d");
 
+// === Error Reporting ===
+const errorList = document.getElementById('error-list');
+const clearBtn = document.getElementById('clear-console');
+
+function reportError(type, message) {
+  const entry = document.createElement('div');
+  entry.className = `error-entry error-${type.toLowerCase()}`;
+  
+  const time = new Date().toLocaleTimeString();
+  entry.innerHTML = `<span class="error-time">${time}</span><span class="error-type">[${type}]</span>${message}`;
+  
+  errorList.appendChild(entry);
+  errorList.scrollTop = errorList.scrollHeight;
+  
+  // Also log to browser console
+  console.error(`[${type}]`, message);
+}
+
+clearBtn.addEventListener('click', () => {
+  errorList.innerHTML = '';
+});
+
+let hasAborted = false;
+
 const memory = new WebAssembly.Memory({
   initial: 16,   // 16 × 64 KB = 1 MB
   maximum: 16    // fixed, no growth
@@ -8,26 +32,40 @@ const memory = new WebAssembly.Memory({
 
 const wasm = await (async () => {
   try {
-    const instance = await WebAssembly.instantiateStreaming(
+    const wasm = await WebAssembly.instantiateStreaming(
       fetch("../cart/cartridge.wasm"),
       {
-        env: { memory }
+        env: {
+          memory,
+          abort: (msg, file, line, column) => {
+            // See AS __getString implementation in wasm-string.js
+            hasAborted = true;  // Stop frame loop
+            const errorMsg =`Abort at ${line}:${column}`;
+            reportError('RUNTIME', errorMsg);
+            console.error("WASM abort:", { msg, file, line, column });
+          },
+          trace: (msg) => {
+            reportError('TRACE', msg);
+            console.log("WASM trace:", msg);
+          }
+        }
       }
     );
     
     // Validate required exports
     const required = ['init', 'update', 'draw', 'WIDTH', 'HEIGHT'];
-    const missing = required.filter(name => !instance.instance.exports[name]);
+    const missing = required.filter(name => !wasm.instance.exports[name]);
     
     if (missing.length > 0) {
-      const error = `Cartridge missing required exports: ${missing.join(', ')}`;
-      document.body.innerHTML = `<pre style="color:red;padding:20px;">${error}</pre>`;
-      throw new Error(error);
+      throw new Error(
+        `Cartridge missing required exports: ${missing.join(', ')}`
+      );
     }
     
-    return instance;
+    return wasm;
   } catch (e) {
-    document.body.innerHTML = `<pre style="color:red;padding:20px;">Failed to load cartridge:\n${e}</pre>`;
+    reportError('LOAD', `Failed to load cartridge: ${e.message}`);
+    console.error("WASM load error:", e);
     throw e;
   }
 })();
@@ -72,7 +110,12 @@ window.addEventListener("keyup", e => {
   }
 });
 
-init();
+try {
+  init();
+} catch (e) {
+  reportError('RUNTIME', `Error in init(): ${e.message}`);
+  hasAborted = true;
+}
 
 // === Fixed Timestep Loop ===
 
@@ -108,6 +151,11 @@ document.addEventListener("visibilitychange", () => {
 });
 
 function frame(now) {
+  // Stop if WASM has aborted
+  if (hasAborted) {
+    return;
+  }
+
   // Accumulate time since last frame
   acc += now - last;
   last = now;
@@ -116,11 +164,16 @@ function frame(now) {
   // This loop ensures update() is called at exactly TICK_HZ frequency
   // Multiple updates may occur per frame if rendering is slow
   let updates = 0;
-  while (acc >= DT && updates < MAX_UPDATES) {
-    update(inputMask, prevInputMask);  // Game logic update
-    prevInputMask = inputMask;         // Track previous input state
-    acc -= DT;                         // Consume one timestep
-    updates++;
+  while (acc >= DT && updates < MAX_UPDATES && !hasAborted) {
+    try {
+      update(inputMask, prevInputMask);  // Game logic update
+      prevInputMask = inputMask;         // Track previous input state
+      acc -= DT;                         // Consume one timestep
+      updates++;
+    } catch (e) {
+      reportError('RUNTIME', `Error in update(): ${e.message}`);
+      break;
+    }
   }
   
   // If we hit the update cap, skip frames rather than spiraling
@@ -131,8 +184,14 @@ function frame(now) {
   }
 
   // Render current state (runs at display refresh rate)
-  draw();
-  ctx.putImageData(image, 0, 0);
+  if (!hasAborted) {
+    try {
+      draw();
+      ctx.putImageData(image, 0, 0);
+    } catch (e) {
+      reportError('RUNTIME', `Error in draw(): ${e.message}`);
+    }
+  }
 
   // Update FPS counter
   frameCount++;
@@ -148,8 +207,8 @@ function frame(now) {
   accEl.textContent = Math.round(acc);
   inputEl.textContent = '0x' + inputMask.toString(16).padStart(2, '0').toUpperCase();
 
-  // Continue the loop only if document is still visible
-  if (!document.hidden) {
+  // Continue the loop only if document is still visible and no abort occurred
+  if (!document.hidden && !hasAborted) {
     requestAnimationFrame(frame);
   }
 }
