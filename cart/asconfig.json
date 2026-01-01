@@ -1,0 +1,10 @@
+{
+  "targets": {
+    "release": {
+      "runtime": "stub",
+      "optimizeLevel": 3,
+      "shrinkLevel": 2,
+      "noAssert": true
+    }
+  }
+}
