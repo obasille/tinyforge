@@ -4,8 +4,8 @@
   "description": "A small, deterministic fantasy console for building simple 2D games on the web",
   "type": "module",
   "scripts": {
-    "build": "asc cart/pong.ts -o cart/cartridge.wasm --config cart/asconfig.json",
-    "build:debug": "asc cart/pong.ts -o cart/cartridge.wasm --config cart/asconfig.json --target debug",
+    "build": "asc cart/snake.ts -o cart/cartridge.wasm --config cart/asconfig.json",
+    "build:debug": "asc cart/snake.ts -o cart/cartridge.wasm --config cart/asconfig.json --target debug",
     "serve": "python -m http.server 8080",
     "dev": "npm run build && npm run serve"
   },
