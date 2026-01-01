@@ -1,0 +1,378 @@
+# Fantasy Console (AssemblyScript + WebAssembly)
+
+A small, **deterministic fantasy console** for building simple 2D games on the web.
+
+The goal of this project is to provide a **console‑like programming environment** with a fixed resolution, fixed timestep, direct framebuffer access, and a strict separation between **console (host)** and **cartridge (game)**.
+
+This is *not* a game engine and not a framework. It is intentionally minimal, opinionated, and low‑level.
+
+---
+
+## Design Goals
+
+- **Console / Cartridge split**
+  - The WASM file *is the cartridge* (code only)
+  - The host (JavaScript) *is the console* (RAM, input, timing, rendering)
+
+- **Deterministic execution**
+  - Fixed 60 Hz update loop
+  - No clocks or async APIs exposed to the cartridge
+  - Replay‑ and save‑state‑friendly by design
+
+- **Direct framebuffer access**
+  - 320 × 240 resolution
+  - 32‑bit RGBA framebuffer (24‑bit color, alpha unused)
+  - Cartridge writes pixels directly into shared memory
+
+- **Web‑native**
+  - Runs in any modern browser
+  - Zero‑copy rendering via `<canvas>`
+  - Simple HTML‑based dev tooling
+
+- **Fast iteration**
+  - Simple build pipeline
+  - Designed for hot reload and debugging
+
+---
+
+## What This Is (and Is Not)
+
+### This **is**:
+- A small fantasy console
+- A learning and experimentation platform
+- A software‑rendered, pixel‑based system
+- Close to retro hardware programming models
+
+### This **is not**:
+- A full game engine
+- A scene graph or ECS framework
+- A high‑performance GPU renderer
+- A general WebAssembly application template
+
+---
+
+## High‑Level Architecture
+
+```
+┌──────────────────────────────┐
+│        Host (JavaScript)     │
+│  - Canvas rendering          │
+│  - Input collection          │
+│  - Fixed timestep            │
+│  - RAM allocation            │
+│  - Cartridge loading         │
+└──────────────┬───────────────┘
+               │ shared memory
+┌──────────────┴───────────────┐
+│   Cartridge (AssemblyScript) │
+│  - Game logic                │
+│  - Software rendering        │
+│  - Deterministic state       │
+└──────────────────────────────┘
+```
+
+The cartridge has **no access** to:
+- DOM APIs
+- Time
+- Events
+- Storage
+- Rendering APIs
+
+It only sees memory and exported functions.
+
+---
+
+## Project Structure
+
+```
+fantasy-console/
+├─ host/                # The console (JavaScript + HTML)
+│  ├─ index.html        # Canvas and page shell
+│  └─ main.js           # Input, timing, rendering, WASM loader
+│
+└─ cart/                # The cartridge (AssemblyScript)
+   ├─ cartridge.ts      # Game code
+   ├─ asconfig.json     # AssemblyScript configuration
+   └─ cartridge.wasm   # Compiled output
+```
+
+### `host/`
+Owns everything that would be considered *hardware* on a real console:
+
+- RAM allocation
+- Frame timing
+- Input devices
+- Rendering
+- Cartridge loading
+
+### `cart/`
+Contains only game code:
+
+- Update logic
+- Drawing logic
+- Direct writes to the framebuffer
+
+The cartridge is treated as **ROM‑like code**.
+
+---
+
+## Framebuffer
+
+- Resolution: **320 × 240**
+- Format: **RGBA8888** (little-endian)
+- Size: **307,200 bytes**
+
+```
+Offset 0x000000 ──────────────────────
+Framebuffer (320 × 240 × 4)
+```
+
+Pixels are written directly by the cartridge using integer math.
+
+The host creates a zero-copy `ImageData` view into WASM memory and blits it to a `<canvas>`.
+
+---
+
+## Memory Map
+
+The console exposes a **fixed, shared linear memory** to the cartridge.
+
+All offsets are **absolute** and part of the hardware contract.
+
+```
+Address        Size        Description
+----------------------------------------------
+0x000000       307,200 B   Framebuffer (RGBA8888)
+0x04B000       256 KB      Game RAM (heap, state)
+0x08B000       64 KB       Save data (optional)
+0x09B000       64 KB       Debug / tooling
+```
+
+Notes:
+- Memory is allocated by the **host (JS)**
+- Memory size is fixed at startup
+- Memory does **not** grow at runtime
+- The framebuffer region should be treated as write-only by the cartridge
+
+---
+
+## Input Model
+
+Input is **snapshot‑based**, not event‑based.
+
+- The host collects keyboard state
+- State is packed into a bitmask
+- The mask is passed to the cartridge once per tick
+
+Buttons constants:
+
+```
+UP    = 1 << 0
+DOWN  = 1 << 1
+LEFT  = 1 << 2
+RIGHT = 1 << 3
+A     = 1 << 4
+B     = 1 << 5
+START = 1 << 6
+```
+
+The cartridge never sees individual key events.
+
+---
+
+## Timing Model
+
+- Fixed timestep: **60 Hz**
+- Update and render are decoupled
+- The host owns all timing
+
+Flow:
+
+```
+while accumulator >= dt:
+  update(input)
+
+draw()
+blit framebuffer
+```
+
+This guarantees deterministic simulation regardless of frame rate.
+
+---
+
+## Memory Ownership
+
+Memory is **allocated by the host**, not the cartridge.
+
+- The host creates a fixed `WebAssembly.Memory`
+- The cartridge imports it
+- Memory does not grow at runtime
+
+This mirrors real hardware:
+
+- Console owns RAM
+- Cartridge assumes a known memory map
+
+This also enables:
+- Hot reload
+- Save states
+- Memory inspection
+
+---
+
+## Writing a Cartridge (Quickstart)
+
+A cartridge is a **pure AssemblyScript module** that:
+
+- Imports memory from the host
+- Exports a small, fixed API
+- Writes directly to the framebuffer
+
+### Minimal cartridge
+
+```ts
+@external("env", "memory")
+declare const memory: WebAssembly.Memory;
+
+export const WIDTH: i32 = 320;
+export const HEIGHT: i32 = 240;
+export const FB_PTR: usize = 0;
+
+let x: i32 = 160;
+let y: i32 = 120;
+
+export function update(input: i32): void {
+  if (input & (1 << 2)) x--; // LEFT
+  if (input & (1 << 3)) x++; // RIGHT
+}
+
+export function draw(): void {
+  cls(0xff000000);
+  pset(x, y, 0xffffffff);
+}
+
+@inline
+function pset(px: i32, py: i32, color: u32): void {
+  const i = (py * WIDTH + px) << 2;
+  store<u32>(i, color);
+}
+
+function cls(color: u32): void {
+  let i: usize = 0;
+  const end = WIDTH * HEIGHT * 4;
+  while (i < end) {
+    store<u32>(i, color);
+    i += 4;
+  }
+}
+```
+
+The cartridge:
+- Has no access to time
+- Has no access to events
+- Has no access to rendering APIs
+
+All interaction happens through memory and exported functions.
+
+---
+
+## Building the Cartridge
+
+### Prerequisites
+
+- Node.js
+- AssemblyScript
+
+Install AssemblyScript:
+
+```
+npm install -g assemblyscript
+```
+
+### Build
+
+From the `cart/` directory:
+
+```
+asc cartridge.ts \
+  -o cartridge.wasm \
+  -O3 \
+  --runtime stub \
+  --importMemory
+```
+
+The output `cartridge.wasm` is loaded by the host.
+
+---
+
+## Running the Console
+
+You must serve the project over **HTTP** (not `file://`).
+
+### Simple local server
+
+From the project root:
+
+```
+python -m http.server 8080
+```
+
+Then open:
+
+```
+http://localhost:8080/host/index.html
+```
+
+A VS Code Live Server or any static server also works.
+
+---
+
+## Development Notes
+
+- No dynamic allocation per frame
+- No floating‑point math in hot paths
+- Prefer integer arithmetic
+- Think like a software renderer
+
+This project intentionally favors **clarity and control** over abstraction.
+
+---
+
+## Planned / Possible Extensions
+
+- Sprite blitter helpers
+- Tilemap helpers
+- Audio (WebAudio command API)
+- Hot reload preserving RAM
+- HTML debug overlay
+- Save states and replays
+
+None of these are required to make games.
+
+---
+
+## Philosophy
+
+This project treats WebAssembly as a **virtual console CPU**, not as a web optimization target.
+
+Constraints are a feature.
+
+By removing time, events, and rendering APIs from the cartridge, games become:
+
+- Easier to reason about
+- Easier to debug
+- Easier to replay
+- Easier to port
+
+If you enjoy programming close to the metal, this project is for you.
+
+---
+
+## License
+
+MIT (or choose your own)
+
+---
+
+Happy hacking 🚀
+
