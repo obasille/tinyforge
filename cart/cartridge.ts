@@ -1,3 +1,10 @@
+// Compiler with asc
+// asc cartridge.ts -o cartridge.wasm -O3 --runtime stub --importMemory
+
+// Console RAM
+@external("env", "memory")
+declare const memory: WebAssembly.Memory;
+
 // === constants ===
 export const WIDTH: i32 = 320;
 export const HEIGHT: i32 = 240;
