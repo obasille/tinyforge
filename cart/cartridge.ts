@@ -1,6 +1,12 @@
 // Compiler with asc
 // asc cartridge.ts -o cartridge.wasm -O3 --runtime stub --importMemory
 
+// CONSTRAINT: NO DYNAMIC ALLOCATION
+// This cartridge uses --runtime stub which provides no heap allocator.
+// All data must be stored in the fixed linear memory (RAM).
+// Avoid: new arrays, strings, objects, closures, or any operation that allocates.
+// Use: primitive types (i32, f32, etc.), load/store operations, and stack variables.
+
 // Import console SDK
 import { memory, WIDTH, HEIGHT, Button, RAM_START } from './console';
 

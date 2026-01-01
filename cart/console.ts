@@ -1,6 +1,10 @@
 // Fantasy Console SDK
 // This file defines the console's hardware interface and API
 // All cartridges should import from this file
+//
+// IMPORTANT: Cartridges use --runtime stub (no heap allocator)
+// Do not use: new arrays, strings, objects, or any dynamic allocation
+// Only use: primitives, load/store, and stack variables
 
 // === External Memory ===
 @external("env", "memory")

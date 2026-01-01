@@ -4,7 +4,13 @@
       "runtime": "stub",
       "optimizeLevel": 3,
       "shrinkLevel": 2,
-      "noAssert": true
+      "noAssert": true,
+      "lowMemoryLimit": 0,
+      "memoryBase": 0,
+      "exportRuntime": false
     }
+  },
+  "options": {
+    "runtime": "stub"
   }
 }

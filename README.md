@@ -369,7 +369,38 @@ A VS Code Live Server or any static server also works.
 
 ## Development Notes
 
-- No dynamic allocation per frame
+### No Dynamic Allocation
+
+The cartridge uses `--runtime stub` which provides **zero heap allocation**.
+
+**This is enforced at runtime (not compile time):**
+- `lowMemoryLimit: 0` - No heap memory available
+- `memoryBase: 0` - No runtime bookkeeping memory
+- `exportRuntime: false` - No runtime functions exported
+- If allocation code exists, the WASM will fail to instantiate (missing `__new` function)
+- AssemblyScript does not prevent writing allocation code, it just won't run
+
+**What you CANNOT use:**
+- `new Array()`, `new String()`, `new Object()`
+- String concatenation or manipulation
+- Closures that capture variables
+- Any standard library function that allocates
+
+**What you CAN use:**
+- Primitive types: `i32`, `f32`, `u32`, `i64`, etc.
+- `load<T>()` and `store<T>()` for memory access
+- Local variables (stored on the stack)
+- Inline functions
+- Fixed-size loops
+
+**Why this constraint:**
+- Guarantees deterministic execution (no GC pauses)
+- Simplifies reasoning about memory layout
+- Matches retro hardware programming model
+- Enables save states and hot reload
+
+### Other Guidelines
+
 - No floating‑point math in hot paths
 - Prefer integer arithmetic
 - Think like a software renderer
@@ -383,11 +414,13 @@ This project intentionally favors **clarity and control** over abstraction.
 
 ## Planned / Possible Extensions
 
+- **Build-time allocation detection**
+  - Pre-build linting to catch `new Array()`, `new String()`, etc.
+  - TypeScript type deprecation for forbidden constructs
 - Sprite blitter helpers
 - Tilemap helpers
 - Audio (WebAudio command API)
 - Hot reload preserving RAM
-- HTML debug overlay
 - Save states and replays
 
 None of these are required to make games.
