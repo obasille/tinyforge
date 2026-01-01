@@ -4,23 +4,33 @@
 import { WIDTH, HEIGHT, Button, log, getI32, setI32, getU8, setU8, clearFramebuffer, pset, fillRect, drawRect, drawNumber, drawChar, drawString } from './console';
 
 // === Constants ===
+@inline
 const GRID_SIZE: i32 = 16;           // Size of each grid cell in pixels
+@inline
 const GRID_WIDTH: i32 = WIDTH / GRID_SIZE;   // 20 cells wide
+@inline
 const GRID_HEIGHT: i32 = HEIGHT / GRID_SIZE; // 15 cells tall
+@inline
 const MAX_SNAKE_LENGTH: i32 = GRID_WIDTH * GRID_HEIGHT; // Maximum possible length
 
+@inline
 const INITIAL_SPEED: u8 = 10;       // Frames between moves (lower = faster)
+@inline
 const SPEED_INCREMENT: u8 = 1;      // Speed increase per food eaten
 
 // Directions
-const DIR_UP: u8 = 0;
-const DIR_RIGHT: u8 = 1;
-const DIR_DOWN: u8 = 2;
-const DIR_LEFT: u8 = 3;
+enum Direction {
+  UP = 0,
+  RIGHT = 1,
+  DOWN = 2,
+  LEFT = 3
+}
 
 // Game states
-const STATE_PLAYING: u8 = 0;
-const STATE_GAME_OVER: u8 = 1;
+enum GameState {
+  PLAYING = 0,
+  GAME_OVER = 1
+}
 
 // === RAM Layout ===
 enum Var {
@@ -122,14 +132,14 @@ function moveSnake(): void {
   let headY = getSegmentY(0);
   
   // Calculate new head position
-  if (dir == DIR_UP) headY = (headY - 1) as u8;
-  else if (dir == DIR_DOWN) headY = (headY + 1) as u8;
-  else if (dir == DIR_LEFT) headX = (headX - 1) as u8;
-  else if (dir == DIR_RIGHT) headX = (headX + 1) as u8;
+  if (dir == Direction.UP) headY = (headY - 1) as u8;
+  else if (dir == Direction.DOWN) headY = (headY + 1) as u8;
+  else if (dir == Direction.LEFT) headX = (headX - 1) as u8;
+  else if (dir == Direction.RIGHT) headX = (headX + 1) as u8;
   
   // Check collision
   if (checkCollision(headX, headY)) {
-    setU8(Var.GAME_STATE, STATE_GAME_OVER);
+    setU8(Var.GAME_STATE, GameState.GAME_OVER as u8);
     log("Game Over!");
     return;
   }
@@ -186,9 +196,9 @@ export function init(): void {
   setSegment(1, (startX - 1) as u8, startY);
   setSegment(2, (startX - 2) as u8, startY);
   
-  setU8(Var.SNAKE_DIR, DIR_RIGHT);
-  setU8(Var.NEXT_DIR, DIR_RIGHT);
-  setU8(Var.GAME_STATE, STATE_PLAYING);
+  setU8(Var.SNAKE_DIR, Direction.RIGHT as u8);
+  setU8(Var.NEXT_DIR, Direction.RIGHT as u8);
+  setU8(Var.GAME_STATE, GameState.PLAYING as u8);
   setU8(Var.SCORE, 0);
   setU8(Var.SPEED, INITIAL_SPEED);
   setU8(Var.MOVE_TIMER, INITIAL_SPEED);
@@ -206,25 +216,25 @@ export function update(input: i32, prevInput: i32): void {
   const state = getU8(Var.GAME_STATE);
   
   // Restart on START button
-  if (state == STATE_GAME_OVER && (input & Button.START)) {
+  if (state == GameState.GAME_OVER && (input & Button.START)) {
     init();
     return;
   }
   
-  if (state != STATE_PLAYING) return;
+  if (state != GameState.PLAYING) return;
   
   // Handle input (queue direction change)
   const currentDir = getU8(Var.SNAKE_DIR);
   const pressed = input & ~prevInput;
   
   if (pressed & Button.UP) {
-    if (currentDir != DIR_DOWN) setU8(Var.NEXT_DIR, DIR_UP);
+    if (currentDir != Direction.DOWN) setU8(Var.NEXT_DIR, Direction.UP as u8);
   } else if (pressed & Button.DOWN) {
-    if (currentDir != DIR_UP) setU8(Var.NEXT_DIR, DIR_DOWN);
+    if (currentDir != Direction.UP) setU8(Var.NEXT_DIR, Direction.DOWN as u8);
   } else if (pressed & Button.LEFT) {
-    if (currentDir != DIR_RIGHT) setU8(Var.NEXT_DIR, DIR_LEFT);
+    if (currentDir != Direction.RIGHT) setU8(Var.NEXT_DIR, Direction.LEFT as u8);
   } else if (pressed & Button.RIGHT) {
-    if (currentDir != DIR_LEFT) setU8(Var.NEXT_DIR, DIR_RIGHT);
+    if (currentDir != Direction.LEFT) setU8(Var.NEXT_DIR, Direction.RIGHT as u8);
   }
   
   // Update movement timer
@@ -287,7 +297,7 @@ export function draw(): void {
   drawNumber(50, 4, score as i32, 0xffffff);
   
   // Game over message
-  if (state == STATE_GAME_OVER) {
+  if (state == GameState.GAME_OVER) {
     fillRect(60, HEIGHT / 2 - 30, 200, 60, 0x000000);
     drawRect(60, HEIGHT / 2 - 30, 200, 60, 0xff0000);
     

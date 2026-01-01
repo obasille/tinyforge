@@ -4,17 +4,26 @@
 import { WIDTH, HEIGHT, Button, log, getI32, setI32, getF32, setF32, getU8, setU8, clearFramebuffer, drawString, drawNumber, drawRect, fillRect } from './console';
 
 // === Constants ===
+@inline
 const PADDLE_WIDTH: i32 = 40;
+@inline
 const PADDLE_HEIGHT: i32 = 6;
+@inline
 const BALL_SIZE: i32 = 4;
+@inline
 const PADDLE_SPEED: f32 = 3.0;
+@inline
 const BALL_SPEED_INITIAL: f32 = 2.0;
+@inline
 const BALL_SPEED_INCREMENT: f32 = 0.1;
+@inline
 const MAX_SCORE: i32 = 5;
 
 // Game states
-const STATE_PLAYING: u8 = 0;
-const STATE_GAME_OVER: u8 = 1;
+enum GameState {
+  PLAYING = 0,
+  GAME_OVER = 1
+}
 
 // === RAM Layout ===
 enum Var {
@@ -121,7 +130,7 @@ function checkCollision(): void {
     log("Player 2 scores!");
     
     if (p2Score >= MAX_SCORE) {
-      setU8(Var.GAME_STATE, STATE_GAME_OVER);
+      setU8(Var.GAME_STATE, GameState.GAME_OVER as u8);
       setU8(Var.WINNER, 2);
       log("Player 2 wins!");
     } else {
@@ -136,7 +145,7 @@ function checkCollision(): void {
     log("Player 1 scores!");
     
     if (p1Score >= MAX_SCORE) {
-      setU8(Var.GAME_STATE, STATE_GAME_OVER);
+      setU8(Var.GAME_STATE, GameState.GAME_OVER as u8);
       setU8(Var.WINNER, 1);
       log("Player 1 wins!");
     } else {
@@ -161,7 +170,7 @@ export function init(): void {
   resetBall(1);
   
   // Set game state
-  setU8(Var.GAME_STATE, STATE_PLAYING);
+  setU8(Var.GAME_STATE, GameState.PLAYING as u8);
   
   log("Pong ready! First to 5 wins!");
 }
@@ -170,12 +179,12 @@ export function update(input: i32, prevInput: i32): void {
   const state = getU8(Var.GAME_STATE);
   
   // Restart on START button
-  if (state == STATE_GAME_OVER && (input & Button.START)) {
+  if (state == GameState.GAME_OVER && (input & Button.START)) {
     init();
     return;
   }
   
-  if (state != STATE_PLAYING) return;
+  if (state != GameState.PLAYING) return;
   
   // Player 1 (top paddle) - A & B buttons
   let p1X = getF32(Var.P1_X);
@@ -243,7 +252,7 @@ export function draw(): void {
   drawNumber(10, HEIGHT - 20, p2Score, 0xff5500);
   
   // Game over message
-  if (state == STATE_GAME_OVER) {
+  if (state == GameState.GAME_OVER) {
     const winner = getU8(Var.WINNER);
     fillRect(60, HEIGHT / 2 - 20, 200, 40, 0x000000);
     drawRect(60, HEIGHT / 2 - 20, 200, 40, 0xffffff);

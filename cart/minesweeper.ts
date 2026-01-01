@@ -4,22 +4,31 @@
 import { clearFramebuffer, Button, log, getI32, setI32, getU8, setU8, drawNumber, drawString, drawRect, fillCircle, fillRect } from './console';
 
 // === Constants ===
+@inline
 const GRID_SIZE: i32 = 10;
+@inline
 const MINE_COUNT: i32 = 15;
+@inline
 const CELL_SIZE: i32 = 24;
+@inline
 const GRID_OFFSET_X: i32 = 40;  // Center 240px grid in 320px width
+@inline
 const GRID_OFFSET_Y: i32 = 0;
 
 // Cell bit flags
-const CELL_MINE: u8 = 1 << 7;      // bit 7: has mine
-const CELL_FLAGGED: u8 = 1 << 6;   // bit 6: flagged by player
-const CELL_REVEALED: u8 = 1 << 5;  // bit 5: revealed
-const CELL_COUNT_MASK: u8 = 0x0F;  // bits 0-3: adjacent mine count (0-8)
+enum CellFlag {
+  MINE = 1 << 7,      // bit 7: has mine
+  FLAGGED = 1 << 6,   // bit 6: flagged by player
+  REVEALED = 1 << 5,  // bit 5: revealed
+  COUNT_MASK = 0x0F   // bits 0-3: adjacent mine count (0-8)
+}
 
 // Game states
-const STATE_PLAYING: u8 = 0;
-const STATE_WON: u8 = 1;
-const STATE_LOST: u8 = 2;
+enum GameState {
+  PLAYING = 0,
+  WON = 1,
+  LOST = 2
+}
 
 // === RAM Layout ===
 enum Var {
@@ -67,8 +76,8 @@ function placeMines(): void {
     const y = randomRange(GRID_SIZE);
     const cell = getCellData(x, y);
     
-    if ((cell & CELL_MINE) == 0) {
-      setCellData(x, y, cell | CELL_MINE);
+    if ((cell & CellFlag.MINE) == 0) {
+      setCellData(x, y, (cell | CellFlag.MINE) as u8);
       placed++;
     }
   }
@@ -78,18 +87,18 @@ function calculateAdjacentMines(): void {
   for (let y: i32 = 0; y < GRID_SIZE; y++) {
     for (let x: i32 = 0; x < GRID_SIZE; x++) {
       const cell = getCellData(x, y);
-      if (cell & CELL_MINE) continue;
+      if (cell & CellFlag.MINE) continue;
       
       let count: i32 = 0;
       for (let dy: i32 = -1; dy <= 1; dy++) {
         for (let dx: i32 = -1; dx <= 1; dx++) {
           if (dx == 0 && dy == 0) continue;
           const neighbor = getCellData(x + dx, y + dy);
-          if (neighbor & CELL_MINE) count++;
+          if (neighbor & CellFlag.MINE) count++;
         }
       }
       
-      setCellData(x, y, (cell & ~CELL_COUNT_MASK) | (count as u8));
+      setCellData(x, y, ((cell & ~CellFlag.COUNT_MASK) | (count as u8)) as u8);
     }
   }
 }
@@ -98,22 +107,22 @@ function revealCell(x: i32, y: i32): void {
   if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return;
   
   let cell = getCellData(x, y);
-  if ((cell & CELL_REVEALED) || (cell & CELL_FLAGGED)) return;
+  if ((cell & CellFlag.REVEALED) || (cell & CellFlag.FLAGGED)) return;
   
   // Reveal this cell
-  cell |= CELL_REVEALED;
+  cell |= (CellFlag.REVEALED as u8);
   setCellData(x, y, cell);
   setU8(Var.REVEALED_COUNT, getU8(Var.REVEALED_COUNT) + 1);
   
   // If mine, game over
-  if (cell & CELL_MINE) {
-    setU8(Var.GAME_STATE, STATE_LOST);
+  if (cell & CellFlag.MINE) {
+    setU8(Var.GAME_STATE, GameState.LOST as u8);
     log("Game Over!");
     return;
   }
   
   // If zero mines adjacent, flood fill (iterative)
-  if ((cell & CELL_COUNT_MASK) == 0) {
+  if ((cell & CellFlag.COUNT_MASK) == 0) {
     for (let dy: i32 = -1; dy <= 1; dy++) {
       for (let dx: i32 = -1; dx <= 1; dx++) {
         if (dx == 0 && dy == 0) continue;
@@ -125,13 +134,13 @@ function revealCell(x: i32, y: i32): void {
 
 function toggleFlag(x: i32, y: i32): void {
   let cell = getCellData(x, y);
-  if (cell & CELL_REVEALED) return;
+  if (cell & CellFlag.REVEALED) return;
   
-  if (cell & CELL_FLAGGED) {
-    cell &= ~CELL_FLAGGED;
+  if (cell & CellFlag.FLAGGED) {
+    cell &= ~(CellFlag.FLAGGED as u8);
     setU8(Var.FLAG_COUNT, getU8(Var.FLAG_COUNT) - 1);
   } else if ((getU8(Var.FLAG_COUNT) as i32) < MINE_COUNT) {
-    cell |= CELL_FLAGGED;
+    cell |= (CellFlag.FLAGGED as u8);
     setU8(Var.FLAG_COUNT, getU8(Var.FLAG_COUNT) + 1);
   }
   setCellData(x, y, cell);
@@ -141,7 +150,7 @@ function checkWin(): void {
   const revealed = getU8(Var.REVEALED_COUNT) as i32;
   const target = GRID_SIZE * GRID_SIZE - MINE_COUNT;
   if (revealed >= target) {
-    setU8(Var.GAME_STATE, STATE_WON);
+    setU8(Var.GAME_STATE, GameState.WON as u8);
     log("You Win!");
   }
 }
@@ -158,7 +167,7 @@ export function init(): void {
   // Initialize state
   setI32(Var.CURSOR_X, 5);
   setI32(Var.CURSOR_Y, 5);
-  setU8(Var.GAME_STATE, STATE_PLAYING);
+  setU8(Var.GAME_STATE, GameState.PLAYING as u8);
   setU8(Var.REVEALED_COUNT, 0);
   setU8(Var.FLAG_COUNT, 0);
   setI32(Var.RNG_SEED, 12345);
@@ -172,7 +181,7 @@ export function init(): void {
 
 export function update(input: i32, prevInput: i32): void {
   const state = getU8(Var.GAME_STATE);
-  if (state != STATE_PLAYING) return;
+  if (state != GameState.PLAYING) return;
   
   let cx = getI32(Var.CURSOR_X);
   let cy = getI32(Var.CURSOR_Y);
@@ -216,7 +225,7 @@ export function draw(): void {
       
       // Cell background
       let bgColor: u32 = 0x1a1a1a;
-      if (cell & CELL_REVEALED) {
+      if (cell & CellFlag.REVEALED) {
         bgColor = 0x000000;
       }
       fillRect(sx + 1, sy + 1, CELL_SIZE - 2, CELL_SIZE - 2, bgColor);
@@ -229,20 +238,20 @@ export function draw(): void {
       drawRect(sx, sy, CELL_SIZE, CELL_SIZE, borderColor);
       
       // Cell content
-      if (cell & CELL_REVEALED) {
-        if (cell & CELL_MINE) {
+      if (cell & CellFlag.REVEALED) {
+        if (cell & CellFlag.MINE) {
           // Draw mine (red circle)
           fillCircle(sx + 12, sy + 12, 6, 0xff0000);
         } else {
-          const count = cell & CELL_COUNT_MASK;
+          const count = cell & CellFlag.COUNT_MASK;
           if (count > 0) {
             drawNumber(sx + 8, sy + 8, count, 0x00ff00);
           }
         }
-      } else if (cell & CELL_FLAGGED) {
+      } else if (cell & CellFlag.FLAGGED) {
         // Draw flag (yellow)
         fillRect(sx + 10, sy + 6, 4, 12, 0xffaa00);
-      } else if (state == STATE_LOST && (cell & CELL_MINE)) {
+      } else if (state == GameState.LOST && (cell & CellFlag.MINE)) {
         // Reveal all mines when lost
         fillCircle(sx + 12, sy + 12, 6, 0xff0000);
       }
@@ -259,12 +268,12 @@ export function draw(): void {
   }
   
   // Game over messages
-  if (state == STATE_WON) {
+  if (state == GameState.WON) {
     // Draw background frame
     fillRect(75, 105, 170, 30, 0x0044aa);
     drawRect(75, 105, 170, 30, 0x00aaff);
     drawString(120, 115, "YOU WIN!", 0x00aaff);
-  } else if (state == STATE_LOST) {
+  } else if (state == GameState.LOST) {
     // Draw background frame
     fillRect(75, 105, 170, 30, 0xaa5500);
     drawRect(75, 105, 170, 30, 0xffaa00);
