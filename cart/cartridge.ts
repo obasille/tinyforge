@@ -8,32 +8,37 @@
 // Use: primitive types (i32, f32, etc.), load/store operations, and stack variables.
 
 // Import console SDK
-import { WIDTH, HEIGHT, Button, RAM_START, log, warn, error } from './console';
+import { WIDTH, HEIGHT, Button, RAM_START, log, warn, error, getI32, setI32 } from './console';
 
 
-// === Memory offsets for game state ===
-const PX_ADDR: usize = RAM_START;      // Player X position (i32)
-const PY_ADDR: usize = RAM_START + 4;  // Player Y position (i32)
+// === RAM Variable System ===
+// Generic RAM allocation and access for game state
+// Each enum value represents an offset from RAM_START
 
-// === RAM accessors ===
+enum Var {
+  PX = 0,    // Player X (i32, 4 bytes)
+  PY = 4,    // Player Y (i32, 4 bytes)
+  // Add more variables here:
+  // SCORE = 8,
+  // HEALTH = 12,
+  // etc.
+}
+
 @inline
 function getPX(): i32 {
-  return load<i32>(PX_ADDR);
+  return getI32(Var.PX);
 }
-
 @inline
 function setPX(value: i32): void {
-  store<i32>(PX_ADDR, value);
+  setI32(Var.PX, value);
 }
-
 @inline
 function getPY(): i32 {
-  return load<i32>(PY_ADDR);
+  return getI32(Var.PY);
 }
-
 @inline
 function setPY(value: i32): void {
-  store<i32>(PY_ADDR, value);
+  setI32(Var.PY, value);
 }
 
 // === lifecycle ===

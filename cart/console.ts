@@ -49,3 +49,35 @@ export declare function warn(msg: string): void;
 
 @external("env", "console.error")
 export declare function error(msg: string): void;
+
+
+// Generic RAM accessors
+@inline
+export function getI32(offset: u32): i32 {
+  return load<i32>(RAM_START + offset);
+}
+
+@inline
+export function setI32(offset: u32, value: i32): void {
+  store<i32>(RAM_START + offset, value);
+}
+
+@inline
+export function getF32(offset: u32): f32 {
+  return load<f32>(RAM_START + offset);
+}
+
+@inline
+export function setF32(offset: u32, value: f32): void {
+  store<f32>(RAM_START + offset, value);
+}
+
+@inline
+export function getU8(offset: u32): u8 {
+  return load<u8>(RAM_START + offset);
+}
+
+@inline
+export function setU8(offset: u32, value: u8): void {
+  store<u8>(RAM_START + offset, value);
+}
