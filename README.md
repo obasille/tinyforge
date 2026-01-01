@@ -91,8 +91,8 @@ fantasy-console/
 │  └─ main.js           # Input, timing, rendering, WASM loader
 │
 ├─ cart/                # The cartridge (AssemblyScript)
+│  ├─ console.ts        # Console SDK (memory map, constants, input)
 │  ├─ cartridge.ts      # Game code
-│  ├─ memory.ts         # Memory map constants
 │  ├─ asconfig.json     # AssemblyScript configuration
 │  └─ cartridge.wasm   # Compiled output
 │
@@ -168,16 +168,14 @@ Input is **snapshot‑based**, not event‑based.
 - Both current and previous frame masks are passed to the cartridge
 - This allows detecting button press vs. hold
 
-Buttons constants:
+The `Button` enum is provided by the console SDK:
 
-```
-UP    = 1 << 0
-DOWN  = 1 << 1
-LEFT  = 1 << 2
-RIGHT = 1 << 3
-A     = 1 << 4
-B     = 1 << 5
-START = 1 << 6
+```ts
+import { Button } from './console';
+
+// Button values:
+// UP = 1 << 0, DOWN = 1 << 1, LEFT = 1 << 2, RIGHT = 1 << 3
+// A = 1 << 4, B = 1 << 5, START = 1 << 6
 ```
 
 Detecting button press (not hold):
@@ -239,21 +237,23 @@ This also enables:
 
 A cartridge is a **pure AssemblyScript module** that:
 
-- Imports memory from the host
+- Imports the console SDK (`console.ts`)
 - Exports a small, fixed API (`init`, `update`, `draw`, `WIDTH`, `HEIGHT`)
 - Writes directly to the framebuffer
 - Stores game state in RAM (not module variables)
 
+The SDK provides:
+- Memory declarations and memory map constants
+- Display constants (WIDTH, HEIGHT)
+- Input constants (Button enum)
+
 ### Minimal cartridge
 
 ```ts
-@external("env", "memory")
-declare const memory: WebAssembly.Memory;
+import { memory, WIDTH, HEIGHT, Button, RAM_START } from './console';
 
-import { RAM_START } from './memory';
-
-export const WIDTH: i32 = 320;
-export const HEIGHT: i32 = 240;
+// Re-export for host
+export { WIDTH, HEIGHT };
 
 // Game state in RAM
 const X_ADDR: usize = RAM_START;
@@ -269,8 +269,8 @@ export function update(input: i32, prevInput: i32): void {
   let x = load<i32>(X_ADDR);
   let y = load<i32>(Y_ADDR);
   
-  if (input & (1 << 2)) x--; // LEFT
-  if (input & (1 << 3)) x++; // RIGHT
+  if (input & Button.LEFT) x--;
+  if (input & Button.RIGHT) x++;
   
   store<i32>(X_ADDR, x);
   store<i32>(Y_ADDR, y);

@@ -1,25 +1,11 @@
 // Compiler with asc
 // asc cartridge.ts -o cartridge.wasm -O3 --runtime stub --importMemory
 
-// Console RAM
-@external("env", "memory")
-declare const memory: WebAssembly.Memory;
+// Import console SDK
+import { memory, WIDTH, HEIGHT, Button, RAM_START } from './console';
 
-import { FB_START, RAM_START } from './memory';
-
-// === constants ===
-export const WIDTH: i32 = 320;
-export const HEIGHT: i32 = 240;
-
-enum Button {
-  UP    = 1 << 0,
-  DOWN  = 1 << 1,
-  LEFT  = 1 << 2,
-  RIGHT = 1 << 3,
-  A     = 1 << 4,
-  B     = 1 << 5,
-  START = 1 << 6
-}
+// Re-export required constants for host
+export { WIDTH, HEIGHT };
 
 // === Memory offsets for game state ===
 const PX_ADDR: usize = RAM_START;      // Player X position (i32)
