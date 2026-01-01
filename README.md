@@ -90,10 +90,13 @@ fantasy-console/
 │  ├─ index.html        # Canvas and page shell
 │  └─ main.js           # Input, timing, rendering, WASM loader
 │
-└─ cart/                # The cartridge (AssemblyScript)
-   ├─ cartridge.ts      # Game code
-   ├─ asconfig.json     # AssemblyScript configuration
-   └─ cartridge.wasm   # Compiled output
+├─ cart/                # The cartridge (AssemblyScript)
+│  ├─ cartridge.ts      # Game code
+│  ├─ memory.ts         # Memory map constants
+│  ├─ asconfig.json     # AssemblyScript configuration
+│  └─ cartridge.wasm   # Compiled output
+│
+└─ package.json         # Build scripts and dependencies
 ```
 
 ### `host/`
@@ -162,7 +165,8 @@ Input is **snapshot‑based**, not event‑based.
 
 - The host collects keyboard state
 - State is packed into a bitmask
-- The mask is passed to the cartridge once per tick
+- Both current and previous frame masks are passed to the cartridge
+- This allows detecting button press vs. hold
 
 Buttons constants:
 
@@ -174,6 +178,17 @@ RIGHT = 1 << 3
 A     = 1 << 4
 B     = 1 << 5
 START = 1 << 6
+```
+
+Detecting button press (not hold):
+
+```ts
+export function update(input: i32, prevInput: i32): void {
+  const pressed = input & ~prevInput;
+  if (pressed & Button.A) {
+    // A was just pressed this frame
+  }
+}
 ```
 
 The cartridge never sees individual key events.
@@ -225,8 +240,9 @@ This also enables:
 A cartridge is a **pure AssemblyScript module** that:
 
 - Imports memory from the host
-- Exports a small, fixed API
+- Exports a small, fixed API (`init`, `update`, `draw`, `WIDTH`, `HEIGHT`)
 - Writes directly to the framebuffer
+- Stores game state in RAM (not module variables)
 
 ### Minimal cartridge
 
@@ -234,20 +250,36 @@ A cartridge is a **pure AssemblyScript module** that:
 @external("env", "memory")
 declare const memory: WebAssembly.Memory;
 
+import { RAM_START } from './memory';
+
 export const WIDTH: i32 = 320;
 export const HEIGHT: i32 = 240;
-export const FB_PTR: usize = 0;
 
-let x: i32 = 160;
-let y: i32 = 120;
+// Game state in RAM
+const X_ADDR: usize = RAM_START;
+const Y_ADDR: usize = RAM_START + 4;
 
-export function update(input: i32): void {
+export function init(): void {
+  cls(0xff000000);
+  store<i32>(X_ADDR, 160);
+  store<i32>(Y_ADDR, 120);
+}
+
+export function update(input: i32, prevInput: i32): void {
+  let x = load<i32>(X_ADDR);
+  let y = load<i32>(Y_ADDR);
+  
   if (input & (1 << 2)) x--; // LEFT
   if (input & (1 << 3)) x++; // RIGHT
+  
+  store<i32>(X_ADDR, x);
+  store<i32>(Y_ADDR, y);
 }
 
 export function draw(): void {
   cls(0xff000000);
+  const x = load<i32>(X_ADDR);
+  const y = load<i32>(Y_ADDR);
   pset(x, y, 0xffffffff);
 }
 
@@ -283,15 +315,23 @@ All interaction happens through memory and exported functions.
 - Node.js
 - AssemblyScript
 
-Install AssemblyScript:
+### Install Dependencies
+
+From the project root:
 
 ```
-npm install -g assemblyscript
+npm install
 ```
 
 ### Build
 
-From the `cart/` directory:
+From the project root:
+
+```
+npm run build
+```
+
+Or manually from the `cart/` directory:
 
 ```
 asc cartridge.ts \
@@ -333,6 +373,9 @@ A VS Code Live Server or any static server also works.
 - No floating‑point math in hot paths
 - Prefer integer arithmetic
 - Think like a software renderer
+- **Store game state in RAM** (using load/store), not module variables
+  - This enables hot reload and save states
+  - Module variables don't persist across WASM reloads
 
 This project intentionally favors **clarity and control** over abstraction.
 
