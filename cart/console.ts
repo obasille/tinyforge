@@ -134,7 +134,7 @@ export function drawNumber(x: i32, y: i32, num: i32, color: u32): void {
   let pattern: u16 = 0;
   
   if (num == 0) pattern = 0b111_101_101_101_111 as u16;      // 0
-  else if (num == 1) pattern = 0b010_010_010_010_010 as u16; // 1
+  else if (num == 1) pattern = 0b010_110_010_010_111 as u16; // 1
   else if (num == 2) pattern = 0b111_001_111_100_111 as u16; // 2
   else if (num == 3) pattern = 0b111_001_111_001_111 as u16; // 3
   else if (num == 4) pattern = 0b101_101_111_001_001 as u16; // 4
@@ -142,6 +142,7 @@ export function drawNumber(x: i32, y: i32, num: i32, color: u32): void {
   else if (num == 6) pattern = 0b111_100_111_101_111 as u16; // 6
   else if (num == 7) pattern = 0b111_001_001_001_001 as u16; // 7
   else if (num == 8) pattern = 0b111_101_111_101_111 as u16; // 8
+  else if (num == 9) pattern = 0b111_101_111_001_111 as u16; // 9
   
   if (pattern == 0 && num != 0) return;
 
@@ -186,9 +187,13 @@ export function drawChar(x: i32, y: i32, char: i32, color: u32): void {
   else if (char == 45) pattern = 0b000_000_111_000_000 as u16; // -
   else if (char == 32) pattern = 0b000_000_000_000_000 as u16; // space
   
-  if (pattern == 0) return;
-
-  draw3x5Pattern(x, y, pattern, color);
+  if (pattern != 0) {
+    draw3x5Pattern(x, y, pattern, color);
+  } else {
+    // Try with digits '0'-'9'
+    const digit = char - 48;
+    drawNumber(x, y, digit, color);
+  }
 }
 
 function draw3x5Pattern(x: i32, y: i32, pattern: u16, color: u32): void {
