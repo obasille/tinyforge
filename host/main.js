@@ -6,12 +6,31 @@ const memory = new WebAssembly.Memory({
   maximum: 16    // fixed, no growth
 });
 
-const wasm = await WebAssembly.instantiateStreaming(
-  fetch("../cart/cartridge.wasm"),
-  {
-    env: { memory }
+const wasm = await (async () => {
+  try {
+    const instance = await WebAssembly.instantiateStreaming(
+      fetch("../cart/cartridge.wasm"),
+      {
+        env: { memory }
+      }
+    );
+    
+    // Validate required exports
+    const required = ['init', 'update', 'draw', 'WIDTH', 'HEIGHT'];
+    const missing = required.filter(name => !instance.instance.exports[name]);
+    
+    if (missing.length > 0) {
+      const error = `Cartridge missing required exports: ${missing.join(', ')}`;
+      document.body.innerHTML = `<pre style="color:red;padding:20px;">${error}</pre>`;
+      throw new Error(error);
+    }
+    
+    return instance;
+  } catch (e) {
+    document.body.innerHTML = `<pre style="color:red;padding:20px;">Failed to load cartridge:\n${e}</pre>`;
+    throw e;
   }
-);
+})();
 
 const { init, update, draw, WIDTH, HEIGHT } =
   wasm.instance.exports;

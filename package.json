@@ -1,0 +1,22 @@
+{
+  "name": "fantasy-console",
+  "version": "0.1.0",
+  "description": "A small, deterministic fantasy console for building simple 2D games on the web",
+  "type": "module",
+  "scripts": {
+    "build": "asc cart/cartridge.ts -o cart/cartridge.wasm -O3 --runtime stub --importMemory",
+    "serve": "python -m http.server 8080",
+    "dev": "npm run build && npm run serve"
+  },
+  "keywords": [
+    "fantasy-console",
+    "webassembly",
+    "assemblyscript",
+    "gamedev"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "assemblyscript": "^0.27.0"
+  }
+}
