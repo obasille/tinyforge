@@ -5,7 +5,6 @@ const memory = new WebAssembly.Memory({
   initial: 16,   // 16 × 64 KB = 1 MB
   maximum: 16    // fixed, no growth
 });
-console.log(memory.buffer.byteLength); // → 1048576
 
 const wasm = await WebAssembly.instantiateStreaming(
   fetch("../cart/cartridge.wasm"),
