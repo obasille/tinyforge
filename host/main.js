@@ -56,6 +56,7 @@ const KEYMAP = {
 };
 
 let inputMask = 0;
+let prevInputMask = 0;
 
 window.addEventListener("keydown", e => {
   if (KEYMAP[e.code]) {
@@ -84,7 +85,8 @@ function frame(now) {
   last = now;
 
   while (acc >= DT) {
-    update(inputMask);
+    update(inputMask, prevInputMask);
+    prevInputMask = inputMask;
     acc -= DT;
   }
 

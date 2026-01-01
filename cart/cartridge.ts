@@ -27,12 +27,16 @@ export function init(): void {
 let px: i32 = 160;
 let py: i32 = 120;
 
-export function update(input: i32): void {
+export function update(input: i32, prevInput: i32): void {
   // game logic
   if (input & Button.LEFT)  px--;
   if (input & Button.RIGHT) px++;
   if (input & Button.UP)    py--;
   if (input & Button.DOWN)  py++;
+  
+  // Example: detect button press (not hold)
+  // const pressed = input & ~prevInput;
+  // if (pressed & Button.A) { /* do something once */ }
 }
 
 export function draw(): void {
