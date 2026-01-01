@@ -4,7 +4,7 @@
     "exportRuntime": false,
     "importMemory": true,
     "lowMemoryLimit": 0,
-    "memoryBase": 307200
+    "memoryBase": 524288
   },
   "targets": {
     "debug": {
