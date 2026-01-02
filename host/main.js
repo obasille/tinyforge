@@ -222,10 +222,21 @@ let fps = 60;
 let frameCount = 0;
 let lastFpsUpdate = performance.now();
 
+// Performance timing
+let avgUpdateTime = 0;
+let avgDrawTime = 0;
+const PERF_SAMPLE_COUNT = 60;  // Average over 60 frames
+let updateTimeSamples = [];
+let drawTimeSamples = [];
+
 const fpsEl = document.getElementById('fps');
+const updateTimeEl = document.getElementById('update-time');
+const drawTimeEl = document.getElementById('draw-time');
 const updatesEl = document.getElementById('updates');
 const accEl = document.getElementById('acc');
 const inputEl = document.getElementById('input');
+const mouseEl = document.getElementById('mouse');
+const mouseButtonsEl = document.getElementById('mouse-buttons');
 
 // Pause game when tab is hidden, resume when visible
 // This stops the animation loop entirely to save CPU when tab is in background
@@ -254,16 +265,23 @@ function frame(now) {
     return;
   }
 
+  // Performance timing
+  const frameTime = now - last;
+
   // Accumulate time since last frame
-  acc += now - last;
+  acc += frameTime;
   last = now;
 
   // Run fixed timestep updates
   // This loop ensures update() is called at exactly TICK_HZ frequency
   // Multiple updates may occur per frame if rendering is slow
   let updates = 0;
+  let totalUpdateTime = 0;
+  
   while (acc >= DT && updates < MAX_UPDATES && !hasAborted) {
     try {
+      const updateStart = performance.now();
+      
       // Write input state to WASM memory
       const inputView = new DataView(memory.buffer);
       
@@ -286,6 +304,8 @@ function frame(now) {
       prevMouseButtons = mouseButtons;   // Track previous mouse state
       acc -= DT;                         // Consume one timestep
       updates++;
+      
+      totalUpdateTime += performance.now() - updateStart;
     } catch (e) {
       addConsoleEntry('ERROR', `Error in update(): ${e.message}`);
       hasAborted = true;
@@ -301,15 +321,27 @@ function frame(now) {
   }
 
   // Render current state (runs at display refresh rate)
+  let drawTime = 0;
   if (!hasAborted) {
     try {
+      const drawStart = performance.now();
       draw();
       ctx.putImageData(image, 0, 0);
+      drawTime = performance.now() - drawStart;
     } catch (e) {
       addConsoleEntry('ERROR', `Error in draw(): ${e.message}`);
       hasAborted = true;
     }
   }
+
+  // Update performance metrics (rolling average)
+  updateTimeSamples.push(totalUpdateTime);
+  if (updateTimeSamples.length > PERF_SAMPLE_COUNT) updateTimeSamples.shift();
+  avgUpdateTime = updateTimeSamples.reduce((a, b) => a + b, 0) / updateTimeSamples.length;
+  
+  drawTimeSamples.push(drawTime);
+  if (drawTimeSamples.length > PERF_SAMPLE_COUNT) drawTimeSamples.shift();
+  avgDrawTime = drawTimeSamples.reduce((a, b) => a + b, 0) / drawTimeSamples.length;
 
   // Update FPS counter
   frameCount++;
@@ -321,9 +353,13 @@ function frame(now) {
 
   // Update dev tools panel
   fpsEl.textContent = fps;
+  updateTimeEl.textContent = avgUpdateTime.toFixed(2);
+  drawTimeEl.textContent = avgDrawTime.toFixed(2);
   updatesEl.textContent = updates;
   accEl.textContent = Math.round(acc);
   inputEl.textContent = '0x' + inputMask.toString(16).padStart(2, '0').toUpperCase();
+  mouseEl.textContent = `${mouseX}, ${mouseY}`;
+  mouseButtonsEl.textContent = '0x' + mouseButtons.toString(16).padStart(2, '0').toUpperCase();
 
   // Continue the loop only if document is still visible and no abort occurred
   if (!document.hidden && !hasAborted) {
