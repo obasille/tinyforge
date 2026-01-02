@@ -28,8 +28,9 @@ enum Direction {
 
 // Game states
 enum GameState {
-  PLAYING = 0,
-  GAME_OVER = 1
+  START_SCREEN = 0,
+  PLAYING = 1,
+  GAME_OVER = 2
 }
 
 // === RAM Layout ===
@@ -198,7 +199,7 @@ export function init(): void {
   
   setU8(Var.SNAKE_DIR, Direction.RIGHT as u8);
   setU8(Var.NEXT_DIR, Direction.RIGHT as u8);
-  setU8(Var.GAME_STATE, GameState.PLAYING as u8);
+  setU8(Var.GAME_STATE, GameState.START_SCREEN as u8);
   setU8(Var.SCORE, 0);
   setU8(Var.SPEED, INITIAL_SPEED);
   setU8(Var.MOVE_TIMER, INITIAL_SPEED);
@@ -215,8 +216,16 @@ export function init(): void {
 export function update(input: i32, prevInput: i32): void {
   const state = getU8(Var.GAME_STATE);
   
+  const pressed = input & ~prevInput;
+  
+  // Start game from start screen
+  if (state == GameState.START_SCREEN && (pressed & Button.START)) {
+    setU8(Var.GAME_STATE, GameState.PLAYING as u8);
+    return;
+  }
+  
   // Restart on START button
-  if (state == GameState.GAME_OVER && (input & Button.START)) {
+  if (state == GameState.GAME_OVER && (pressed & Button.START)) {
     init();
     return;
   }
@@ -225,7 +234,6 @@ export function update(input: i32, prevInput: i32): void {
   
   // Handle input (queue direction change)
   const currentDir = getU8(Var.SNAKE_DIR);
-  const pressed = input & ~prevInput;
   
   if (pressed & Button.UP) {
     if (currentDir != Direction.DOWN) setU8(Var.NEXT_DIR, Direction.UP as u8);
@@ -296,8 +304,10 @@ export function draw(): void {
   drawString(4, 4, "SCORE:", 0xaaaaaa);
   drawNumber(50, 4, score as i32, 0xffffff);
   
-  // Game over message
-  if (state == GameState.GAME_OVER) {
+  // Game messages
+  if (state == GameState.START_SCREEN) {
+    drawGameMessage("SNAKE", 130, 0x1a1a1a, 0x00ff00);
+  } else if (state == GameState.GAME_OVER) {
     fillRect(60, HEIGHT / 2 - 30, 200, 60, 0x000000);
     drawRect(60, HEIGHT / 2 - 30, 200, 60, 0xff0000);
     
@@ -307,5 +317,10 @@ export function draw(): void {
     drawString(80, HEIGHT / 2 + 10, "PRESS START", 0xaaaaaa);
   }
 }
-
+function drawGameMessage(message: string, x: i32, bgColor: u32, fgColor: u32): void {
+  fillRect(60, HEIGHT / 2 - 30, 200, 60, bgColor);
+  drawRect(60, HEIGHT / 2 - 30, 200, 60, fgColor);
+  drawString(x, HEIGHT / 2 - 15, message, fgColor);
+  drawString(85, HEIGHT / 2 + 5, "PRESS START", 0xaaaaaa);
+}
 

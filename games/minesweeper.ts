@@ -25,9 +25,10 @@ enum CellFlag {
 
 // Game states
 enum GameState {
-  PLAYING = 0,
-  WON = 1,
-  LOST = 2
+  START_SCREEN = 0,
+  PLAYING = 1,
+  WON = 2,
+  LOST = 3
 }
 
 // === RAM Layout ===
@@ -167,7 +168,7 @@ export function init(): void {
   // Initialize state
   setI32(Var.CURSOR_X, 5);
   setI32(Var.CURSOR_Y, 5);
-  setU8(Var.GAME_STATE, GameState.PLAYING as u8);
+  setU8(Var.GAME_STATE, GameState.START_SCREEN as u8);
   setU8(Var.REVEALED_COUNT, 0);
   setU8(Var.FLAG_COUNT, 0);
   setI32(Var.RNG_SEED, 12345);
@@ -185,8 +186,14 @@ export function update(input: i32, prevInput: i32): void {
   // Detect button presses
   const pressed = input & ~prevInput;
   
+  // Start game from start screen
+  if (state == GameState.START_SCREEN && (pressed & Button.START)) {
+    setU8(Var.GAME_STATE, GameState.PLAYING as u8);
+    return;
+  }
+  
   // Restart on START button
-  if (state != GameState.PLAYING && (pressed & Button.START)) {
+  if ((state == GameState.WON || state == GameState.LOST) && (pressed & Button.START)) {
     init();
     return;
   }
@@ -274,8 +281,10 @@ export function draw(): void {
     fillCircle(10, 10 + i * 8, 3, 0xff0000);
   }
   
-  // Game over messages
-  if (state == GameState.WON) {
+  // Game messages
+  if (state == GameState.START_SCREEN) {
+    drawGameFinishedMessage("MINESWEEPER", 0x1a1a1a, 0x00ff00);
+  } else if (state == GameState.WON) {
     drawGameFinishedMessage("YOU WIN!", 0x0044aa, 0x00aaff);
   } else if (state == GameState.LOST) {
     drawGameFinishedMessage("GAME OVER", 0xaa5500, 0xffaa00);
