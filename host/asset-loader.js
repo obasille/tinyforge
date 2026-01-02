@@ -8,9 +8,12 @@ export class AssetLoader {
   /**
    * Extract numeric ID from filename (e.g., "0-player.png" -> 0)
    * Supports various separators: dash, underscore, space
+   * Handles paths by extracting basename first
    */
   static extractId(filename) {
-    const match = filename.match(/^(\d+)/);
+    // Extract basename from path (handle both / and \ separators)
+    const basename = filename.split(/[\/\\]/).pop();
+    const match = basename.match(/^(\d+)/);
     return match ? parseInt(match[1], 10) : null;
   }
 
@@ -26,7 +29,8 @@ export class AssetLoader {
     const links = Array.from(doc.querySelectorAll('a'));
     return links
       .map(a => a.getAttribute('href'))
-      .filter(href => href && pattern.test(href));
+      .filter(href => href && pattern.test(href))
+      .map(href => href.split(/[\/\\]/).pop()); // Remove path, keep only filename
   }
 
   /**
