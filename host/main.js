@@ -1,6 +1,7 @@
 import * as loader from '@assemblyscript/loader';
 import { addConsoleEntry } from './console-panel.js';
 import { audioManager } from './audio-manager.js';
+import { spriteManager } from './sprite-manager.js';
 
 const canvas = document.getElementById("screen");
 const ctx = canvas.getContext("2d", { alpha: false });
@@ -15,6 +16,9 @@ const memory = new WebAssembly.Memory({
   initial: 16,   // 16 × 64 KB = 1 MB
   maximum: 16    // fixed, no growth
 });
+
+// Initialize sprite manager with memory
+spriteManager.init(memory);
 
 // Create framebuffer views (persistent across game loads)
 const fb = new Uint8ClampedArray(memory.buffer, 0, WIDTH * HEIGHT * 4);
@@ -121,9 +125,15 @@ const gameSelect = document.getElementById('game-select');
 // Initial load - use dropdown value (persisted by browser on reload)
 let currentGame = gameSelect.value;
 
-// Load audio files on startup
+// Load audio and sprites on startup
 audioManager.loadAudio().then(() => {
   addConsoleEntry('LOG', 'Audio system initialized');
+});
+
+spriteManager.loadSprites().then(() => {
+  const count = spriteManager.getSpriteCount();
+  const size = spriteManager.getDataSize();
+  addConsoleEntry('LOG', `Sprite system initialized: ${count} sprites, ${(size / 1024).toFixed(1)} KB`);
 });
 
 loadGame(currentGame);

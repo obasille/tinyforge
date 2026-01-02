@@ -453,11 +453,10 @@ This project intentionally favors **clarity and control** over abstraction.
 ## Planned / Possible Extensions
 
 - **Build-time allocation detection**
-  - Pre-build linting to catch `new Array()`, `new String()`, etc.
+  - Pre-build linting to catch dynamic allocation such as `new Array()`, `new String()`, etc.
   - TypeScript type deprecation for forbidden constructs
 - Sprite blitter helpers
 - Tilemap helpers
-- Audio (WebAudio command API)
 - Hot reload preserving RAM
 - Save states and replays
 

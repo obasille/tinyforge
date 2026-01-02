@@ -73,6 +73,33 @@ export const MOUSE_BUTTONS_ADDR: usize = MOUSE_ADDR + 4;
 /** Mouse previous button state address (0x0AB015) */
 export const MOUSE_BUTTONS_PREV_ADDR: usize = MOUSE_ADDR + 5;
 
+// === Sprite Memory Map ===
+
+// Sprite data is stored starting at 0x0AB100 (after input memory)
+// Layout for each sprite entry (8 bytes of metadata per sprite):
+//   Sprite N metadata at: SPRITE_METADATA + (N * 8)
+//     +0: u16 width       - Sprite width in pixels
+//     +2: u16 height      - Sprite height in pixels
+//     +4: u32 dataOffset  - Offset to pixel data (relative to SPRITE_DATA)
+//
+// Pixel data starts at SPRITE_DATA and contains RGBA values (4 bytes per pixel)
+// All sprite pixel data is stored sequentially after metadata table
+//
+// Maximum: 256 sprites (IDs 0-255), metadata table = 2048 bytes
+// Sprite data region: ~128 KB available for pixel data
+
+/** Sprite metadata table base address (0x0AB100) */
+export const SPRITE_METADATA: usize = 0x0AB100;
+
+/** Sprite metadata entry size (8 bytes) */
+export const SPRITE_METADATA_SIZE: u32 = 8;
+
+/** Sprite pixel data base address (0x0AB900 - after 256 sprite metadata entries) */
+export const SPRITE_DATA: usize = SPRITE_METADATA + (256 * SPRITE_METADATA_SIZE);
+
+/** Maximum sprite data size (~128 KB) */
+export const SPRITE_DATA_SIZE: usize = 131072;
+
 /**
  * Read a 32-bit signed integer from game RAM
  * @param offset Byte offset from RAM_START

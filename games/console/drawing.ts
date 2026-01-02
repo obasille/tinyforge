@@ -1,7 +1,7 @@
 // Fantasy Console SDK - Drawing Primitives
 // Low-level and high-level drawing functions for rendering graphics
 
-import { WIDTH, HEIGHT } from './memory';
+import { WIDTH, HEIGHT, SPRITE_METADATA, SPRITE_DATA } from './memory';
 
 /**
  * Efficiently clears entire framebuffer using native JS
@@ -199,5 +199,147 @@ export function drawString(x: i32, y: i32, text: string, color: u32): void {
   for (let i: i32 = 0; i < len; i++) {
     const charCode = text.charCodeAt(i);
     drawChar(x + i * 8, y, charCode, color);
+  }
+}
+
+/**
+ * Draw a sprite at the specified position
+ * Supports transparency (alpha < 128 treated as transparent)
+ * @param id Sprite ID (0-255)
+ * @param x X coordinate (top-left)
+ * @param y Y coordinate (top-left)
+ * @example
+ * ```typescript
+ * drawSprite(0, 100, 100); // Draw sprite 0 at (100, 100)
+ * ```
+ */
+export function drawSprite(id: u8, x: i32, y: i32): void {
+  // Read sprite metadata
+  const metadataAddr = SPRITE_METADATA + (id as usize * 8);
+  const width = load<u16>(metadataAddr + 0);
+  const height = load<u16>(metadataAddr + 2);
+  const dataOffset = load<u32>(metadataAddr + 4);
+  
+  // Early exit if sprite has no size (not loaded)
+  if (width == 0 || height == 0) return;
+  
+  // Draw sprite pixels
+  const spriteDataAddr = SPRITE_DATA + dataOffset;
+  
+  for (let dy: i32 = 0; dy < height; dy++) {
+    for (let dx: i32 = 0; dx < width; dx++) {
+      const pixelOffset = ((dy * width + dx) * 4) as usize;
+      const pixelAddr = spriteDataAddr + pixelOffset;
+      
+      const r = load<u8>(pixelAddr + 0);
+      const g = load<u8>(pixelAddr + 1);
+      const b = load<u8>(pixelAddr + 2);
+      const a = load<u8>(pixelAddr + 3);
+      
+      // Skip transparent pixels (alpha < 128)
+      if (a < 128) continue;
+      
+      // Convert RGBA to ABGR and draw
+      const color = (a as u32 << 24) | (b as u32 << 16) | (g as u32 << 8) | (r as u32);
+      pset(x + dx, y + dy, color);
+    }
+  }
+}
+
+/**
+ * Draw a sprite with optional horizontal and vertical flipping
+ * Supports transparency (alpha < 128 treated as transparent)
+ * @param id Sprite ID (0-255)
+ * @param x X coordinate (top-left)
+ * @param y Y coordinate (top-left)
+ * @param flipH Flip horizontally
+ * @param flipV Flip vertically
+ * @example
+ * ```typescript
+ * drawSpriteFlip(0, 100, 100, true, false); // Draw sprite 0 flipped horizontally
+ * ```
+ */
+export function drawSpriteFlip(id: u8, x: i32, y: i32, flipH: bool, flipV: bool): void {
+  // Read sprite metadata
+  const metadataAddr = SPRITE_METADATA + (id as usize * 8);
+  const width = load<u16>(metadataAddr + 0);
+  const height = load<u16>(metadataAddr + 2);
+  const dataOffset = load<u32>(metadataAddr + 4);
+  
+  // Early exit if sprite has no size (not loaded)
+  if (width == 0 || height == 0) return;
+  
+  // Draw sprite pixels with flipping
+  const spriteDataAddr = SPRITE_DATA + dataOffset;
+  
+  for (let dy: i32 = 0; dy < height; dy++) {
+    for (let dx: i32 = 0; dx < width; dx++) {
+      const srcX = flipH ? (width - 1 - dx) : dx;
+      const srcY = flipV ? (height - 1 - dy) : dy;
+      
+      const pixelOffset = ((srcY * width + srcX) * 4) as usize;
+      const pixelAddr = spriteDataAddr + pixelOffset;
+      
+      const r = load<u8>(pixelAddr + 0);
+      const g = load<u8>(pixelAddr + 1);
+      const b = load<u8>(pixelAddr + 2);
+      const a = load<u8>(pixelAddr + 3);
+      
+      // Skip transparent pixels (alpha < 128)
+      if (a < 128) continue;
+      
+      // Convert RGBA to ABGR and draw
+      const color = (a as u32 << 24) | (b as u32 << 16) | (g as u32 << 8) | (r as u32);
+      pset(x + dx, y + dy, color);
+    }
+  }
+}
+
+/**
+ * Draw a scaled sprite (2x upscaling)
+ * Supports transparency (alpha < 128 treated as transparent)
+ * @param id Sprite ID (0-255)
+ * @param x X coordinate (top-left)
+ * @param y Y coordinate (top-left)
+ * @example
+ * ```typescript
+ * drawSprite2x(0, 100, 100); // Draw sprite 0 scaled 2x
+ * ```
+ */
+export function drawSprite2x(id: u8, x: i32, y: i32): void {
+  // Read sprite metadata
+  const metadataAddr = SPRITE_METADATA + (id as usize * 8);
+  const width = load<u16>(metadataAddr + 0);
+  const height = load<u16>(metadataAddr + 2);
+  const dataOffset = load<u32>(metadataAddr + 4);
+  
+  // Early exit if sprite has no size (not loaded)
+  if (width == 0 || height == 0) return;
+  
+  // Draw sprite pixels scaled 2x
+  const spriteDataAddr = SPRITE_DATA + dataOffset;
+  
+  for (let dy: i32 = 0; dy < height; dy++) {
+    for (let dx: i32 = 0; dx < width; dx++) {
+      const pixelOffset = ((dy * width + dx) * 4) as usize;
+      const pixelAddr = spriteDataAddr + pixelOffset;
+      
+      const r = load<u8>(pixelAddr + 0);
+      const g = load<u8>(pixelAddr + 1);
+      const b = load<u8>(pixelAddr + 2);
+      const a = load<u8>(pixelAddr + 3);
+      
+      // Skip transparent pixels (alpha < 128)
+      if (a < 128) continue;
+      
+      // Convert RGBA to ABGR
+      const color = (a as u32 << 24) | (b as u32 << 16) | (g as u32 << 8) | (r as u32);
+      
+      // Draw 2x2 block
+      pset(x + dx * 2, y + dy * 2, color);
+      pset(x + dx * 2 + 1, y + dy * 2, color);
+      pset(x + dx * 2, y + dy * 2 + 1, color);
+      pset(x + dx * 2 + 1, y + dy * 2 + 1, color);
+    }
   }
 }
