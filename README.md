@@ -243,6 +243,123 @@ Each log type appears with a distinct color in the console panel below the game 
 
 ---
 
+## Audio System
+
+The console provides a Web Audio API-based audio system with support for sound effects and background music.
+
+### Audio Files
+
+Audio files are organized in two directories:
+
+```
+assets/
+├─ sfx/           # Sound effects
+│  ├─ 0-tap.wav
+│  ├─ 1-explosion.wav
+│  └─ ...
+└─ music/         # Background music
+   ├─ 0-gameplay.wav
+   └─ ...
+```
+
+Files are **ID-based**: the filename must start with a number (0-255) which becomes the audio ID.
+
+### Audio API
+
+```ts
+import { playSfx, playMusic, stopMusic } from './console';
+
+// Play a sound effect
+playSfx(sfxId: i32, volume: f32);  // volume: 0.0 - 1.0
+
+// Play background music (loops automatically)
+playMusic(musicId: i32, volume: f32);
+
+// Stop background music
+stopMusic();
+```
+
+### Browser Autoplay Policy
+
+**⚠️ CRITICAL:** Browsers prevent audio from playing until after a user interaction (click, key press, etc.).
+
+**This means:**
+- Audio files load during startup
+- Audio **will not play** until the user interacts with the page
+- Calling `playMusic()` in `init()` will fail silently
+
+**Best Practice:**
+
+```ts
+// ❌ WRONG - Called in init(), before user interaction
+export function init(): void {
+  playMusic(0, 0.7);  // Will fail silently
+}
+
+// ✅ CORRECT - Called after user clicks start button
+export function update(input: i32, prevInput: i32): void {
+  if (startButtonPressed) {
+    playMusic(0, 0.7);  // Works!
+  }
+}
+```
+
+**Standard pattern:**
+1. Show a "Press Start" screen in `init()`
+2. Wait for user to click or press a button
+3. Start music in `update()` after detecting the button press
+4. Play sound effects normally during gameplay
+
+### Example Usage
+
+```ts
+import { playSfx, playMusic, stopMusic } from './console';
+
+// Audio IDs
+enum SFX {
+  JUMP = 0,
+  COIN = 1,
+  HIT = 2
+}
+
+enum Music {
+  GAMEPLAY = 0,
+  GAME_OVER = 1
+}
+
+let gameStarted = false;
+
+export function update(input: i32, prevInput: i32): void {
+  // Start music after user presses start
+  if (!gameStarted && (input & Button.START)) {
+    gameStarted = true;
+    playMusic(Music.GAMEPLAY, 0.6);
+  }
+  
+  // Play sound effects during gameplay
+  const pressed = input & ~prevInput;
+  if (pressed & Button.A) {
+    playSfx(SFX.JUMP, 0.5);
+  }
+  
+  // Stop music on game over
+  if (playerDied) {
+    stopMusic();
+    playSfx(SFX.HIT, 0.8);
+  }
+}
+```
+
+### Notes
+
+- Music loops automatically until `stopMusic()` is called
+- Multiple sound effects can play simultaneously
+- Only one music track plays at a time
+- Volume range: `0.0` (silent) to `1.0` (full volume)
+- Audio files are loaded at startup but decoded on-demand after first interaction
+
+---
+
 ## Timing Model
 
 - Fixed timestep: **60 Hz**

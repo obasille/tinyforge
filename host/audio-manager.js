@@ -1,4 +1,12 @@
 // Audio Manager - Handles SFX and Music playback
+//
+// NOTE: Creating the AudioContext in the constructor (before user interaction) 
+// will trigger a browser warning: "AudioContext was not allowed to start."
+// This is expected behavior due to browser autoplay policies.
+// 
+// The audio system will still work correctly - audio simply won't play until
+// after the user interacts with the page (clicks start button, presses a key, etc.).
+// Games should call playMusic() after detecting user input, not in init().
 
 import { AssetLoader } from './asset-loader.js';
 
@@ -9,13 +17,7 @@ class AudioManager {
   #currentMusic = null;
   #musicGain = null;
 
-  /**
-   * Initialize Web Audio API context
-   * Must be called after user interaction due to browser autoplay policies
-   */
-  #init() {
-    if (this.#audioContext) return;
-    
+  constructor() {
     this.#audioContext = new (window.AudioContext || window.webkitAudioContext)();
     this.#musicGain = this.#audioContext.createGain();
     this.#musicGain.connect(this.#audioContext.destination);
@@ -51,8 +53,6 @@ class AudioManager {
    * Load all audio files from assets/sfx/ and assets/music/ folders
    */
   async loadAudio() {
-    this.#init();
-    
     try {
       // Load SFX files
       const sfxAssets = await AssetLoader.scanDirectory(
@@ -97,8 +97,6 @@ class AudioManager {
    * Play a sound effect by ID
    */
   playSfx(id, volume = 1.0) {
-    this.#init();
-    
     const buffer = this.#sfxBuffers.get(id);
     if (!buffer) {
       console.warn(`SFX ${id} not loaded`);
@@ -120,7 +118,6 @@ class AudioManager {
    * Play background music by ID (loops continuously)
    */
   playMusic(id, volume = 1.0) {
-    this.#init();
     this.stopMusic();
     
     const buffer = this.#musicBuffers.get(id);
