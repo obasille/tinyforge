@@ -262,6 +262,6 @@ export function draw(): void {
     } else {
       drawString(80, HEIGHT / 2 - 10, "PLAYER 2 WINS!", 0xff5500);
     }
-    drawString(70, HEIGHT / 2 + 5, "PRESS START", 0xaaaaaa);
+    drawString(80, HEIGHT / 2 + 5, "PRESS START", 0xaaaaaa);
   }
 }

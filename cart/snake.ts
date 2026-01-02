@@ -304,7 +304,7 @@ export function draw(): void {
     drawString(80, HEIGHT / 2 - 20, "GAME OVER!", 0xff0000);
     drawString(80, HEIGHT / 2 - 5, "SCORE:", 0xaaaaaa);
     drawNumber(130, HEIGHT / 2 - 5, score as i32, 0xffffff);
-    drawString(70, HEIGHT / 2 + 10, "PRESS START", 0xaaaaaa);
+    drawString(80, HEIGHT / 2 + 10, "PRESS START", 0xaaaaaa);
   }
 }
 

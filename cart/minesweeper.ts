@@ -181,13 +181,20 @@ export function init(): void {
 
 export function update(input: i32, prevInput: i32): void {
   const state = getU8(Var.GAME_STATE);
+  
+  // Detect button presses
+  const pressed = input & ~prevInput;
+  
+  // Restart on START button
+  if (state != GameState.PLAYING && (pressed & Button.START)) {
+    init();
+    return;
+  }
+  
   if (state != GameState.PLAYING) return;
   
   let cx = getI32(Var.CURSOR_X);
   let cy = getI32(Var.CURSOR_Y);
-  
-  // Detect button presses
-  const pressed = input & ~prevInput;
   
   // Move cursor
   if (pressed & Button.LEFT)  { cx--; if (cx < 0) cx = 0; }
@@ -269,14 +276,15 @@ export function draw(): void {
   
   // Game over messages
   if (state == GameState.WON) {
-    // Draw background frame
-    fillRect(75, 105, 170, 30, 0x0044aa);
-    drawRect(75, 105, 170, 30, 0x00aaff);
-    drawString(120, 115, "YOU WIN!", 0x00aaff);
+    drawGameFinishedMessage("YOU WIN!", 0x0044aa, 0x00aaff);
   } else if (state == GameState.LOST) {
-    // Draw background frame
-    fillRect(75, 105, 170, 30, 0xaa5500);
-    drawRect(75, 105, 170, 30, 0xffaa00);
-    drawString(120, 115, "GAME OVER", 0xffaa00);
+    drawGameFinishedMessage("GAME OVER", 0xaa5500, 0xffaa00);
   }
+}
+
+function drawGameFinishedMessage(message: string, bgColor: u32, fgColor: u32): void {
+  fillRect(75, 95, 170, 50, bgColor);
+  drawRect(75, 95, 170, 50, fgColor);
+  drawString(125, 107, message, fgColor);
+  drawString(115, 122, "PRESS START", 0xaaaaaa);
 }
