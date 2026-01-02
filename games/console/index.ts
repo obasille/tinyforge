@@ -11,3 +11,4 @@ export * from './logging';
 export * from './color';
 export * from './drawing';
 export * from './utility';
+export * from './audio';

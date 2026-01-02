@@ -1,5 +1,6 @@
 import * as loader from '@assemblyscript/loader';
 import { addConsoleEntry } from './console-panel.js';
+import { audioManager } from './audio-manager.js';
 
 const canvas = document.getElementById("screen");
 const ctx = canvas.getContext("2d", { alpha: false });
@@ -66,6 +67,16 @@ async function loadGame(gameName) {
           },
           'console.error': (msg) => {
             addConsoleEntry('ERROR', wasmExports.__getString(msg));
+          },
+          // Audio functions
+          'audio.playSfx': (id, volume) => {
+            audioManager.playSfx(id, volume);
+          },
+          'audio.playMusic': (id, volume) => {
+            audioManager.playMusic(id, volume);
+          },
+          'audio.stopMusic': () => {
+            audioManager.stopMusic();
           }
         }
       }
@@ -109,6 +120,12 @@ const gameSelect = document.getElementById('game-select');
 
 // Initial load - use dropdown value (persisted by browser on reload)
 let currentGame = gameSelect.value;
+
+// Load audio files on startup
+audioManager.loadAudio().then(() => {
+  addConsoleEntry('LOG', 'Audio system initialized');
+});
+
 loadGame(currentGame);
 
 gameSelect.addEventListener('change', () => {
