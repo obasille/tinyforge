@@ -1,4 +1,4 @@
-// Fantasy Console SDK - Input System
+// TinyForge SDK - Input System
 // Keyboard and mouse input via memory-mapped I/O
 //
 // Input State Memory Layout:

@@ -1,7 +1,7 @@
 {
-  "name": "fantasy-console",
+  "name": "tinyforge",
   "version": "0.1.0",
-  "description": "A small, deterministic fantasy console for building simple 2D games on the web",
+  "description": "A simplified game platform for rapidly prototyping and experimenting with 2D game ideas",
   "type": "module",
   "scripts": {
     "build": "npm run build:minesweeper && npm run build:pong && npm run build:snake",
@@ -16,7 +16,8 @@
     "dev": "npm run build && npm run serve"
   },
   "keywords": [
-    "fantasy-console",
+    "tinyforge",
+    "game-platform",
     "webassembly",
     "assemblyscript",
     "gamedev"

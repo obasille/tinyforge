@@ -1,14 +1,7 @@
-// Compiler with asc
-// asc cartridge.ts -o cartridge.wasm -O3 --runtime stub --importMemory
-
-// CONSTRAINT: NO DYNAMIC ALLOCATION
-// This cartridge uses --runtime stub which provides no heap allocator.
-// All data must be stored in the fixed linear memory (RAM).
-// Avoid: new arrays, strings, objects, closures, or any operation that allocates.
-// Use: primitive types (i32, f32, etc.), load/store operations, and stack variables.
+// TinyForge Game Example
 
 // Import console SDK
-import { WIDTH, HEIGHT, clearFramebuffer, pset, Button, buttonDown, buttonPressed, log, warn, getI32, setI32 } from './console';
+import { WIDTH, HEIGHT, clearFramebuffer, pset, Button, buttonDown, buttonPressed, log, warn, getI32, setI32 } from '../sdk';
 
 
 // === RAM Variable System ===

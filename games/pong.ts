@@ -1,7 +1,7 @@
-// PONG - Fantasy Console Game
+// PONG - TinyForge Game
 // Two-player pong with horizontal paddles (top vs bottom)
 
-import { WIDTH, HEIGHT, Button, buttonDown, buttonPressed, log, getI32, setI32, getF32, setF32, getU8, setU8, clearFramebuffer, drawString, drawNumber, drawRect, fillRect, c, drawMessageBox, Vec2i } from './console';
+import { WIDTH, HEIGHT, Button, buttonDown, buttonPressed, log, getI32, setI32, getF32, setF32, getU8, setU8, clearFramebuffer, drawString, drawNumber, drawRect, fillRect, c, drawMessageBox, Vec2i } from '../sdk';
 
 // === Constants ===
 @inline

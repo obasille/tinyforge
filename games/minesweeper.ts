@@ -1,7 +1,7 @@
-// MINESWEEPER - Fantasy Console Game
+// MINESWEEPER - TinyForge Game
 // 10×10 grid, 15 mines, retro terminal aesthetic
 
-import { clearFramebuffer, Button, buttonPressed, log, getI32, setI32, getU8, setU8, drawNumber, drawRect, fillCircle, fillRect, c, random, drawMessageBox, RAM_START, Vec2i, mouseX, mouseY, mousePressed, MouseButton } from './console';
+import { clearFramebuffer, Button, buttonPressed, log, getI32, setI32, getU8, setU8, drawNumber, drawRect, fillCircle, fillRect, c, random, drawMessageBox, RAM_START, Vec2i, mouseX, mouseY, mousePressed, MouseButton } from '../sdk';
 
 // === Constants ===
 @inline

@@ -1,6 +1,6 @@
 # Sprites
 
-This folder contains sprite image files for the fantasy console.
+This folder contains sprite image files for TinyForge.
 
 ## File Naming Convention
 

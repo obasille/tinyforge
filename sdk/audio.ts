@@ -1,4 +1,4 @@
-// Fantasy Console SDK - Audio System
+// TinyForge SDK - Audio System
 // Sound effects and music playback functions
 
 /**

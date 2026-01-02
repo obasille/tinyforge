@@ -1,4 +1,4 @@
-// Fantasy Console SDK
+// TinyForge SDK
 // Main entry point - re-exports all SDK modules
 //
 // IMPORTANT: Cartridges use --runtime stub (no heap allocator)

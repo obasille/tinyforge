@@ -1,4 +1,4 @@
-// Fantasy Console SDK - Color Management
+// TinyForge SDK - Color Management
 // Color format conversion utilities
 
 /**

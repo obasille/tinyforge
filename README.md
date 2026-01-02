@@ -1,8 +1,8 @@
-# Fantasy Console (AssemblyScript + WebAssembly)
+# TinyForge (AssemblyScript + WebAssembly)
 
-A small, **deterministic fantasy console** for building simple 2D games on the web.
+A **simplified game platform** for rapidly prototyping and experimenting with 2D game ideas on the web.
 
-The goal of this project is to provide a **console‑like programming environment** with a fixed resolution, fixed timestep, direct framebuffer access, and a strict separation between **console (host)** and **cartridge (game)**.
+The goal of this project is to provide a **streamlined game development environment** with a fixed resolution, fixed timestep, direct framebuffer access, and a strict separation between **runtime (host)** and **game (cartridge)**.
 
 This is *not* a game engine and not a framework. It is intentionally minimal, opinionated, and low‑level.
 
@@ -38,7 +38,7 @@ This is *not* a game engine and not a framework. It is intentionally minimal, op
 ## What This Is (and Is Not)
 
 ### This **is**:
-- A small fantasy console
+- A simplified game platform for rapid prototyping
 - A learning and experimentation platform
 - A software‑rendered, pixel‑based system
 - Close to retro hardware programming models
@@ -85,18 +85,27 @@ It only sees memory and exported functions.
 ## Project Structure
 
 ```
-fantasy-console/
-├─ host/                # The console (JavaScript + HTML)
+tinyforge/
+├─ host/                # The runtime (JavaScript + HTML)
 │  ├─ index.html        # Canvas and page shell
 │  └─ main.js           # Input, timing, rendering, WASM loader
 │
-├─ games/               # The cartridge (AssemblyScript)
-│  ├─ console.ts        # Console SDK (memory map, constants, input)
-│  ├─ cartridge.ts      # Game code
-│  ├─ asconfig.json     # AssemblyScript configuration
-│  └─ cartridge.wasm   # Compiled output
+├─ sdk/                # The game SDK (AssemblyScript)
+│  ├─ index.ts          # SDK entry point
+│  ├─ memory.ts         # Memory map and constants
+│  ├─ input.ts          # Input functions
+│  ├─ drawing.ts        # Drawing primitives
+│  └─ ...               # Other SDK modules
 │
-└─ package.json         # Build scripts and dependencies
+├─ games/              # Game cartridges (AssemblyScript)
+│  ├─ asconfig.json     # AssemblyScript configuration
+│  ├─ minesweeper.ts    # Game code
+│  └─ ...               # More games
+│
+├─ cartridges/         # Compiled WASM files
+│  └─ minesweeper.wasm
+│
+└─ package.json        # Build scripts and dependencies
 ```
 
 ### `host/`

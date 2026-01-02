@@ -1,4 +1,4 @@
-// Fantasy Console SDK - Utility Functions
+// TinyForge SDK - Utility Functions
 // Helper classes and convenience functions for common game tasks
 
 import { fillRect, drawRect, drawString } from './drawing';

@@ -1,4 +1,4 @@
-// Fantasy Console SDK - Console Logging
+// TinyForge SDK - Console Logging
 // Output functions for debugging and monitoring
 
 /**

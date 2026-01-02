@@ -1,4 +1,4 @@
-// Fantasy Console SDK - Drawing Primitives
+// TinyForge SDK - Drawing Primitives
 // Low-level and high-level drawing functions for rendering graphics
 
 import { WIDTH, HEIGHT, SPRITE_METADATA, SPRITE_DATA } from './memory';

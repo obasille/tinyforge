@@ -2,9 +2,9 @@
 applyTo: "**"
 ---
 
-## Guide for AI Agents: Building Games for This Console
+## Guide for AI Agents: Building Games for TinyForge
 
-This section provides detailed instructions for AI agents tasked with creating games for this fantasy console, based on patterns established in three reference games: **minesweeper.ts**, **pong.ts**, and **snake.ts**.
+This section provides detailed instructions for AI agents tasked with creating games for TinyForge, based on patterns established in three reference games: **minesweeper.ts**, **pong.ts**, and **snake.ts**.
 
 ### Core Architecture Patterns
 

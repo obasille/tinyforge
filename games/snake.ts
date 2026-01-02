@@ -1,7 +1,7 @@
-// SNAKE - Fantasy Console Game
+// SNAKE - TinyForge Game
 // Classic snake game with grid-based movement
 
-import { WIDTH, HEIGHT, Button, buttonPressed, log, getI32, setI32, getU8, setU8, clearFramebuffer, pset, fillRect, drawRect, drawNumber, drawChar, drawString, c, random, drawMessageBox, RAM_START, Vec2i } from './console';
+import { WIDTH, HEIGHT, Button, buttonPressed, log, getI32, setI32, getU8, setU8, clearFramebuffer, pset, fillRect, drawRect, drawNumber, drawChar, drawString, c, random, drawMessageBox, RAM_START, Vec2i } from '../sdk';
 
 // === Constants ===
 @inline

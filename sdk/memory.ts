@@ -1,4 +1,4 @@
-// Fantasy Console SDK - Memory Management
+// TinyForge SDK - Memory Management
 // Defines memory layout, external memory interface, and RAM accessors
 
 /** External WebAssembly memory shared between host and cartridge */
