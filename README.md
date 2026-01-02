@@ -292,34 +292,38 @@ The SDK provides:
 ### Minimal cartridge
 
 ```ts
-import { memory, clearFramebuffer, pset, Button, RAM_START } from './console';
+import { memory, clearFramebuffer, pset, Button, getI32, setI32 } from './console';
 
 // Game state in RAM
-const X_ADDR: usize = RAM_START;
-const Y_ADDR: usize = RAM_START + 4;
+enum Var {
+  X = 0,        // i32 - player x
+  Y = 4,        // i32 - player y
+}
 
 export function init(): void {
   clearFramebuffer(0xff000000);
-  store<i32>(X_ADDR, 160);
-  store<i32>(Y_ADDR, 120);
+  setI32(Var.X, 160);
+  setI32(Var.Y, 120);
 }
 
 export function update(input: i32, prevInput: i32): void {
-  let x = load<i32>(X_ADDR);
-  let y = load<i32>(Y_ADDR);
+  let x = getI32(Var.X);
+  let y = getI32(Var.Y);
   
-  if (input & Button.LEFT) x--;
+  if (input & Button.LEFT)  x--;
   if (input & Button.RIGHT) x++;
+  if (input & Button.UP)    y--;
+  if (input & Button.DOWN)  y++;
   
-  store<i32>(X_ADDR, x);
-  store<i32>(Y_ADDR, y);
+  setI32(Var.X, x);
+  setI32(Var.Y, y);
 }
 
 export function draw(): void {
-  clearFramebuffer(0xff000000);
-  const x = load<i32>(X_ADDR);
-  const y = load<i32>(Y_ADDR);
-  pset(x, y, 0xffffffff);
+  clearFramebuffer(0x000000);
+  const x = getI32(Var.X);
+  const y = getI32(Var.Y);
+  pset(x, y, 0xffffff);
 }
 ```
 
@@ -475,4 +479,3 @@ MIT (or choose your own)
 ---
 
 Happy hacking 🚀
-
