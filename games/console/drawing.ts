@@ -1,105 +1,23 @@
-// Fantasy Console SDK
-// This file defines the console's hardware interface and API
-// All cartridges should import from this file
-//
-// IMPORTANT: Cartridges use --runtime stub (no heap allocator)
-// Do not use: new arrays, strings, objects, or any dynamic allocation
-// Only use: primitives, load/store, and stack variables
+// Fantasy Console SDK - Drawing Primitives
+// Low-level and high-level drawing functions for rendering graphics
 
-// === External Memory ===
-@external("env", "memory")
-export declare const memory: WebAssembly.Memory;
+import { WIDTH, HEIGHT } from './memory';
 
-// === Display Constants ===
-export const WIDTH: i32 = 320;
-export const HEIGHT: i32 = 240;
-
-// === Memory Map ===
-export const FB_START: usize    = 0x000000;  // Framebuffer start
-export const FB_SIZE: usize     = 307200;    // 320×240×4 bytes
-
-export const RAM_START: usize   = 0x04B000;  // Game RAM start
-export const RAM_SIZE: usize    = 262144;    // 256 KB
-
-export const SAVE_START: usize  = 0x08B000;  // Save data start
-export const SAVE_SIZE: usize   = 65536;     // 64 KB
-
-export const DEBUG_START: usize = 0x09B000;  // Debug/tooling start
-export const DEBUG_SIZE: usize  = 65536;     // 64 KB
-
-// === Input Constants ===
-export enum Button {
-  UP    = 1 << 0,
-  DOWN  = 1 << 1,
-  LEFT  = 1 << 2,
-  RIGHT = 1 << 3,
-  A     = 1 << 4,
-  B     = 1 << 5,
-  START = 1 << 6
-}
-
-// === Console Logging ===
-// These functions output to the HTML console panel
-// Note: Accepts string literals only (no allocations)
-@external("env", "console.log")
-export declare function log(msg: string): void;
-
-@external("env", "console.warn")
-export declare function warn(msg: string): void;
-
-@external("env", "console.error")
-export declare function error(msg: string): void;
-
-// === Fast Framebuffer Clear ===
-// Efficiently clears entire framebuffer using native JS (much faster than WASM loop)
+/**
+ * Efficiently clears entire framebuffer using native JS
+ * Much faster than a WASM loop for clearing the full screen
+ * @param color ABGR color to fill the framebuffer with
+ */
 @external("env", "clearFramebuffer")
 export declare function clearFramebuffer(color: u32): void;
 
-
-// Generic RAM accessors
-@inline
-export function getI32(offset: u32): i32 {
-  return load<i32>(RAM_START + offset);
-}
-
-@inline
-export function setI32(offset: u32, value: i32): void {
-  store<i32>(RAM_START + offset, value);
-}
-
-@inline
-export function getF32(offset: u32): f32 {
-  return load<f32>(RAM_START + offset);
-}
-
-@inline
-export function setF32(offset: u32, value: f32): void {
-  store<f32>(RAM_START + offset, value);
-}
-
-@inline
-export function getU8(offset: u32): u8 {
-  return load<u8>(RAM_START + offset);
-}
-
-@inline
-export function setU8(offset: u32, value: u8): void {
-  store<u8>(RAM_START + offset, value);
-}
-
-// === Color Helper ===
-// Convert RGB (0xRRGGBB) to ABGR (0xAABBGGRR) with full alpha
-@inline
-export function c(rgb: u32): u32 {
-  const r = (rgb >> 16) & 0xFF;
-  const g = rgb & 0x00FF00;
-  const b = (rgb & 0xFF) << 16;
-  return 0xFF000000 | b | g | r;
-}
-
-// === Drawing Helpers ===
-
-
+/**
+ * Set a single pixel in the framebuffer
+ * Coordinates are clipped to screen bounds
+ * @param x X coordinate (0-319)
+ * @param y Y coordinate (0-239)
+ * @param color ABGR color value
+ */
 @inline
 export function pset(x: i32, y: i32, color: u32): void {
   if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) return;
@@ -107,6 +25,14 @@ export function pset(x: i32, y: i32, color: u32): void {
   store<u32>(i, color | 0xFF000000);
 }
 
+/**
+ * Draw a filled rectangle
+ * @param x Top-left X coordinate
+ * @param y Top-left Y coordinate
+ * @param w Width in pixels
+ * @param h Height in pixels
+ * @param color ABGR color value
+ */
 export function fillRect(x: i32, y: i32, w: i32, h: i32, color: u32): void {
   for (let dy: i32 = 0; dy < h; dy++) {
     for (let dx: i32 = 0; dx < w; dx++) {
@@ -115,6 +41,14 @@ export function fillRect(x: i32, y: i32, w: i32, h: i32, color: u32): void {
   }
 }
 
+/**
+ * Draw a rectangle outline
+ * @param x Top-left X coordinate
+ * @param y Top-left Y coordinate
+ * @param w Width in pixels
+ * @param h Height in pixels
+ * @param color ABGR color value
+ */
 export function drawRect(x: i32, y: i32, w: i32, h: i32, color: u32): void {
   for (let i: i32 = 0; i < w; i++) {
     pset(x + i, y, color);
@@ -126,6 +60,13 @@ export function drawRect(x: i32, y: i32, w: i32, h: i32, color: u32): void {
   }
 }
 
+/**
+ * Draw a filled circle using midpoint algorithm
+ * @param cx Center X coordinate
+ * @param cy Center Y coordinate
+ * @param r Radius in pixels
+ * @param color ABGR color value
+ */
 export function fillCircle(cx: i32, cy: i32, r: i32, color: u32): void {
   const r2 = r * r;
   for (let dy: i32 = -r; dy <= r; dy++) {
@@ -137,6 +78,14 @@ export function fillCircle(cx: i32, cy: i32, r: i32, color: u32): void {
   }
 }
 
+/**
+ * Draw a single digit (0-9) using 3×5 bitmap patterns
+ * Each pixel is rendered as a 2×2 block for better visibility
+ * @param x Top-left X coordinate
+ * @param y Top-left Y coordinate
+ * @param num Digit to draw (0-9)
+ * @param color ABGR color value
+ */
 export function drawNumber(x: i32, y: i32, num: i32, color: u32): void {
   // Simple 3×5 digit patterns (5 rows, 3 columns each = 15 bits)
   // Each pattern is: row0_row1_row2_row3_row4 (3 bits per row)
@@ -158,6 +107,15 @@ export function drawNumber(x: i32, y: i32, num: i32, color: u32): void {
   draw3x5Pattern(x, y, pattern, color);
 }
 
+/**
+ * Draw a single character using 3×5 bitmap patterns
+ * Supports uppercase letters (A-Z), digits (0-9), and basic punctuation
+ * Each pixel is rendered as a 2×2 block, resulting in 6×10 pixel characters
+ * @param x Top-left X coordinate
+ * @param y Top-left Y coordinate
+ * @param char ASCII character code
+ * @param color ABGR color value
+ */
 export function drawChar(x: i32, y: i32, char: i32, color: u32): void {
   // 3×5 character patterns for uppercase letters and symbols
   let pattern: u16 = 0;
@@ -205,6 +163,14 @@ export function drawChar(x: i32, y: i32, char: i32, color: u32): void {
   }
 }
 
+/**
+ * Draw a 3×5 bitmap pattern with each bit rendered as a 2×2 pixel block
+ * Used internally by drawChar and drawNumber
+ * @param x Top-left X coordinate
+ * @param y Top-left Y coordinate
+ * @param pattern 15-bit pattern (3 bits × 5 rows)
+ * @param color ABGR color value
+ */
 function draw3x5Pattern(x: i32, y: i32, pattern: u16, color: u32): void {
   for (let dy: i32 = 0; dy < 5; dy++) {
     for (let dx: i32 = 0; dx < 3; dx++) {
@@ -220,57 +186,18 @@ function draw3x5Pattern(x: i32, y: i32, pattern: u16, color: u32): void {
   }
 }
 
+/**
+ * Draw a string of text using bitmap font
+ * Characters are spaced 8 pixels apart horizontally
+ * @param x Starting X coordinate
+ * @param y Starting Y coordinate
+ * @param text String to draw
+ * @param color ABGR color value
+ */
 export function drawString(x: i32, y: i32, text: string, color: u32): void {
   const len = text.length;
   for (let i: i32 = 0; i < len; i++) {
     const charCode = text.charCodeAt(i);
     drawChar(x + i * 8, y, charCode, color);
-  }
-}
-
-// === Utility Functions ===
-
-// PRNG using LCG algorithm
-// Seed is stored at the given RAM offset
-export function random(seedVar: usize): i32 {
-  let seed = load<i32>(seedVar);
-  seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-  store<i32>(seedVar, seed);
-  return seed;
-}
-
-@unmanaged
-export class Vec2i {
-  x: i32;
-  y: i32;
-
-  constructor(x: i32 = 0, y: i32 = 0) {
-    this.x = x;
-    this.y = y;
-  }
-
-  set(x: i32, y: i32): void {
-    this.x = x;
-    this.y = y;
-  }
-
-  copy(): Vec2i {
-    return new Vec2i(this.x, this.y);
-  }
-}
-
-// Draw a message box with title and optional subtitle
-// titleOffset and subtitleOffset are relative to box corner
-export function drawMessageBox(
-  pos: Vec2i, size: Vec2i,
-  title: string, titleOffset: Vec2i,
-  subtitle: string, subtitleOffset: Vec2i,
-  bgColor: u32, fgColor: u32
-): void {
-  fillRect(pos.x, pos.y, size.x, size.y, bgColor);
-  drawRect(pos.x, pos.y, size.x, size.y, fgColor);
-  drawString(pos.x + titleOffset.x, pos.y + titleOffset.y, title, fgColor);
-  if (subtitle.length > 0) {
-    drawString(pos.x + subtitleOffset.x, pos.y + subtitleOffset.y, subtitle, c(0xaaaaaa));
   }
 }
