@@ -1,7 +1,7 @@
 // MINESWEEPER - Fantasy Console Game
 // 10×10 grid, 15 mines, retro terminal aesthetic
 
-import { clearFramebuffer, Button, log, getI32, setI32, getU8, setU8, drawNumber, drawString, drawRect, fillCircle, fillRect, c, random, drawMessageBox, RAM_START, Vec2i } from './console';
+import { clearFramebuffer, Button, buttonPressed, log, getI32, setI32, getU8, setU8, drawNumber, drawString, drawRect, fillCircle, fillRect, c, random, drawMessageBox, RAM_START, Vec2i } from './console';
 
 // === Constants ===
 @inline
@@ -173,20 +173,17 @@ export function init(): void {
   log("Minesweeper ready!");
 }
 
-export function update(input: i32, prevInput: i32): void {
+export function update(): void {
   const state = getU8(Var.GAME_STATE);
   
-  // Detect button presses
-  const pressed = input & ~prevInput;
-  
   // Start game from start screen
-  if (state == GameState.START_SCREEN && (pressed & Button.START)) {
+  if (state == GameState.START_SCREEN && buttonPressed(Button.START)) {
     setU8(Var.GAME_STATE, GameState.PLAYING as u8);
     return;
   }
   
   // Restart on START button
-  if ((state == GameState.WON || state == GameState.LOST) && (pressed & Button.START)) {
+  if ((state == GameState.WON || state == GameState.LOST) && buttonPressed(Button.START)) {
     init();
     return;
   }
@@ -197,21 +194,21 @@ export function update(input: i32, prevInput: i32): void {
   let cy = getI32(Var.CURSOR_Y);
   
   // Move cursor
-  if (pressed & Button.LEFT)  { cx--; if (cx < 0) cx = 0; }
-  if (pressed & Button.RIGHT) { cx++; if (cx >= GRID_SIZE) cx = GRID_SIZE - 1; }
-  if (pressed & Button.UP)    { cy--; if (cy < 0) cy = 0; }
-  if (pressed & Button.DOWN)  { cy++; if (cy >= GRID_SIZE) cy = GRID_SIZE - 1; }
+  if (buttonPressed(Button.LEFT))  { cx--; if (cx < 0) cx = 0; }
+  if (buttonPressed(Button.RIGHT)) { cx++; if (cx >= GRID_SIZE) cx = GRID_SIZE - 1; }
+  if (buttonPressed(Button.UP))    { cy--; if (cy < 0) cy = 0; }
+  if (buttonPressed(Button.DOWN))  { cy++; if (cy >= GRID_SIZE) cy = GRID_SIZE - 1; }
   
   setI32(Var.CURSOR_X, cx);
   setI32(Var.CURSOR_Y, cy);
   
   // Actions
-  if (pressed & Button.A) {
+  if (buttonPressed(Button.A)) {
     revealCell(cx, cy);
     checkWin();
   }
   
-  if (pressed & Button.B) {
+  if (buttonPressed(Button.B)) {
     toggleFlag(cx, cy);
   }
 }

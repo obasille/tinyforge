@@ -35,28 +35,43 @@ export const DEBUG_START: usize = 0x09B000;
 /** Debug/tooling size in bytes (64 KB) */
 export const DEBUG_SIZE: usize = 65536;
 
-// === Mouse Input Memory Map ===
-// Mouse state is stored at 0x0AB000 with the following layout:
+// === Input Memory Map ===
+
+// Keyboard state is stored at 0x0AB000 with the following layout:
+//   +0: u8  buttons    - Current button state (bitmask)
+//   +1: u8  prevButtons - Previous button state (for edge detection)
+// Access via buttonDown(), buttonPressed() in input.ts
+
+/** Keyboard input base address (0x0AB000) */
+export const INPUT_ADDR: usize = 0x0AB000;
+
+/** Keyboard current button state address (0x0AB000) */
+export const INPUT_BUTTONS: usize = INPUT_ADDR + 0;
+
+/** Keyboard previous button state address (0x0AB001) */
+export const INPUT_BUTTONS_PREV: usize = INPUT_ADDR + 1;
+
+// Mouse state is stored at 0x0AB010 with the following layout:
 //   +0: i16 x          - Mouse X coordinate (0-319, or -1 if outside canvas)
 //   +2: i16 y          - Mouse Y coordinate (0-239, or -1 if outside canvas)
 //   +4: u8  buttons    - Current button state (bit 0=left, 1=right, 2=middle)
 //   +5: u8  prevButtons - Previous button state (for edge detection)
 // Access via mouseX(), mouseY(), mouseDown(), mousePressed() in input.ts
 
-/** Mouse state address (0x0AB000) */
-export const MOUSE_ADDR: usize = 0x0AB000;
+/** Mouse state base address (0x0AB010) */
+export const MOUSE_ADDR: usize = 0x0AB010;
 
-/** Mouse X position offset (i16) */
-export const MOUSE_X: u32 = 0;
+/** Mouse X coordinate address (0x0AB010) */
+export const MOUSE_X_ADDR: usize = MOUSE_ADDR + 0;
 
-/** Mouse Y position offset (i16) */
-export const MOUSE_Y: u32 = 2;
+/** Mouse Y coordinate address (0x0AB012) */
+export const MOUSE_Y_ADDR: usize = MOUSE_ADDR + 2;
 
-/** Mouse buttons bitmask offset (u8) */
-export const MOUSE_BUTTONS: u32 = 4;
+/** Mouse current button state address (0x0AB014) */
+export const MOUSE_BUTTONS_ADDR: usize = MOUSE_ADDR + 4;
 
-/** Previous mouse buttons bitmask offset (u8) */
-export const MOUSE_BUTTONS_PREV: u32 = 5;
+/** Mouse previous button state address (0x0AB015) */
+export const MOUSE_BUTTONS_PREV_ADDR: usize = MOUSE_ADDR + 5;
 
 /**
  * Read a 32-bit signed integer from game RAM

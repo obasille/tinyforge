@@ -264,16 +264,24 @@ function frame(now) {
   let updates = 0;
   while (acc >= DT && updates < MAX_UPDATES && !hasAborted) {
     try {
-      // Write mouse state to WASM memory at 0x0AB000 (MOUSE_ADDR)
-      // Layout: [i16 x][i16 y][u8 buttons][u8 prev_buttons]
-      // Games access this via mouseX(), mouseY(), mouseDown(), mousePressed()
-      const mouseView = new DataView(memory.buffer, 0x0AB000);
-      mouseView.setInt16(0, mouseX, true);       // Mouse X (little-endian)
-      mouseView.setInt16(2, mouseY, true);       // Mouse Y (little-endian)
-      mouseView.setUint8(4, mouseButtons);       // Current buttons
-      mouseView.setUint8(5, prevMouseButtons);   // Previous buttons
+      // Write input state to WASM memory
+      const inputView = new DataView(memory.buffer);
       
-      update(inputMask, prevInputMask);  // Game logic update
+      // Keyboard input at 0x0AB000 (INPUT_ADDR)
+      // Layout: [u8 buttons][u8 prev_buttons]
+      // Games access via buttonDown(), buttonPressed()
+      inputView.setUint8(0x0AB000, inputMask);        // Current buttons
+      inputView.setUint8(0x0AB001, prevInputMask);    // Previous buttons
+      
+      // Mouse input at 0x0AB010 (MOUSE_ADDR)
+      // Layout: [i16 x][i16 y][u8 buttons][u8 prev_buttons]
+      // Games access via mouseX(), mouseY(), mouseDown(), mousePressed()
+      inputView.setInt16(0x0AB010, mouseX, true);     // Mouse X (little-endian)
+      inputView.setInt16(0x0AB012, mouseY, true);     // Mouse Y (little-endian)
+      inputView.setUint8(0x0AB014, mouseButtons);     // Current buttons
+      inputView.setUint8(0x0AB015, prevMouseButtons); // Previous buttons
+      
+      update();                          // Game logic update
       prevInputMask = inputMask;         // Track previous input state
       prevMouseButtons = mouseButtons;   // Track previous mouse state
       acc -= DT;                         // Consume one timestep

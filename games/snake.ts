@@ -1,7 +1,7 @@
 // SNAKE - Fantasy Console Game
 // Classic snake game with grid-based movement
 
-import { WIDTH, HEIGHT, Button, log, getI32, setI32, getU8, setU8, clearFramebuffer, pset, fillRect, drawRect, drawNumber, drawChar, drawString, c, random, drawMessageBox, RAM_START, Vec2i } from './console';
+import { WIDTH, HEIGHT, Button, buttonPressed, log, getI32, setI32, getU8, setU8, clearFramebuffer, pset, fillRect, drawRect, drawNumber, drawChar, drawString, c, random, drawMessageBox, RAM_START, Vec2i } from './console';
 
 // === Constants ===
 @inline
@@ -207,19 +207,17 @@ export function init(): void {
   log("Snake ready!");
 }
 
-export function update(input: i32, prevInput: i32): void {
+export function update(): void {
   const state = getU8(Var.GAME_STATE);
   
-  const pressed = input & ~prevInput;
-  
   // Start game from start screen
-  if (state == GameState.START_SCREEN && (pressed & Button.START)) {
+  if (state == GameState.START_SCREEN && buttonPressed(Button.START)) {
     setU8(Var.GAME_STATE, GameState.PLAYING as u8);
     return;
   }
   
   // Restart on START button
-  if (state == GameState.GAME_OVER && (pressed & Button.START)) {
+  if (state == GameState.GAME_OVER && buttonPressed(Button.START)) {
     init();
     return;
   }
@@ -229,13 +227,13 @@ export function update(input: i32, prevInput: i32): void {
   // Handle input (queue direction change)
   const currentDir = getU8(Var.SNAKE_DIR);
   
-  if (pressed & Button.UP) {
+  if (buttonPressed(Button.UP)) {
     if (currentDir != Direction.DOWN) setU8(Var.NEXT_DIR, Direction.UP as u8);
-  } else if (pressed & Button.DOWN) {
+  } else if (buttonPressed(Button.DOWN)) {
     if (currentDir != Direction.UP) setU8(Var.NEXT_DIR, Direction.DOWN as u8);
-  } else if (pressed & Button.LEFT) {
+  } else if (buttonPressed(Button.LEFT)) {
     if (currentDir != Direction.RIGHT) setU8(Var.NEXT_DIR, Direction.LEFT as u8);
-  } else if (pressed & Button.RIGHT) {
+  } else if (buttonPressed(Button.RIGHT)) {
     if (currentDir != Direction.LEFT) setU8(Var.NEXT_DIR, Direction.RIGHT as u8);
   }
   

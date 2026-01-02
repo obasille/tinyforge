@@ -8,7 +8,7 @@
 // Use: primitive types (i32, f32, etc.), load/store operations, and stack variables.
 
 // Import console SDK
-import { WIDTH, HEIGHT, clearFramebuffer, pset, Button, log, warn, getI32, setI32 } from './console';
+import { WIDTH, HEIGHT, clearFramebuffer, pset, Button, buttonDown, buttonPressed, log, warn, getI32, setI32 } from './console';
 
 
 // === RAM Variable System ===
@@ -54,24 +54,23 @@ export function init(): void {
   log("Game started!");
 }
 
-export function update(input: i32, prevInput: i32): void {
+export function update(): void {
   // Load player position from RAM
   let px = getPX();
   let py = getPY();
   
-  // game logic
-  if (input & Button.LEFT)  px--;
-  if (input & Button.RIGHT) px++;
-  if (input & Button.UP)    py--;
-  if (input & Button.DOWN)  py++;
+  // Movement logic - use buttonDown() for continuous movement
+  if (buttonDown(Button.LEFT))  px--;
+  if (buttonDown(Button.RIGHT)) px++;
+  if (buttonDown(Button.UP))    py--;
+  if (buttonDown(Button.DOWN))  py++;
   
   // Store updated position back to RAM
   setPX(px);
   setPY(py);
   
-  // Example: detect button press (not hold)
-  // const pressed = input & ~prevInput;
-  // if (pressed & Button.A) { /* do something once */ }
+  // Example: detect button press (not hold) - use buttonPressed() for one-time actions
+  // if (buttonPressed(Button.A)) { /* do something once */ }
 }
 
 export function draw(): void {

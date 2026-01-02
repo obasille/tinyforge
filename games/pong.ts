@@ -1,7 +1,7 @@
 // PONG - Fantasy Console Game
 // Two-player pong with horizontal paddles (top vs bottom)
 
-import { WIDTH, HEIGHT, Button, log, getI32, setI32, getF32, setF32, getU8, setU8, clearFramebuffer, drawString, drawNumber, drawRect, fillRect, c, drawMessageBox, Vec2i } from './console';
+import { WIDTH, HEIGHT, Button, buttonDown, buttonPressed, log, getI32, setI32, getF32, setF32, getU8, setU8, clearFramebuffer, drawString, drawNumber, drawRect, fillRect, c, drawMessageBox, Vec2i } from './console';
 
 // === Constants ===
 @inline
@@ -177,19 +177,17 @@ export function init(): void {
   log("Pong ready! First to 5 wins!");
 }
 
-export function update(input: i32, prevInput: i32): void {
+export function update(): void {
   const state = getU8(Var.GAME_STATE);
   
-  const pressed = input & ~prevInput;
-  
   // Start game from start screen
-  if (state == GameState.START_SCREEN && (pressed & Button.START)) {
+  if (state == GameState.START_SCREEN && buttonPressed(Button.START)) {
     setU8(Var.GAME_STATE, GameState.PLAYING as u8);
     return;
   }
   
   // Restart on START button
-  if (state == GameState.GAME_OVER && (pressed & Button.START)) {
+  if (state == GameState.GAME_OVER && buttonPressed(Button.START)) {
     init();
     return;
   }
@@ -198,11 +196,11 @@ export function update(input: i32, prevInput: i32): void {
   
   // Player 1 (top paddle) - A & B buttons
   let p1X = getF32(Var.P1_X);
-  if (input & Button.A) {
+  if (buttonDown(Button.A)) {
     p1X -= PADDLE_SPEED;
     if (p1X < 0.0) p1X = 0.0;
   }
-  if (input & Button.B) {
+  if (buttonDown(Button.B)) {
     p1X += PADDLE_SPEED;
     if (p1X > ((WIDTH - PADDLE_WIDTH) as f32)) p1X = ((WIDTH - PADDLE_WIDTH) as f32);
   }
@@ -210,11 +208,11 @@ export function update(input: i32, prevInput: i32): void {
   
   // Player 2 (bottom paddle) - Left & Right arrows
   let p2X = getF32(Var.P2_X);
-  if (input & Button.LEFT) {
+  if (buttonDown(Button.LEFT)) {
     p2X -= PADDLE_SPEED;
     if (p2X < 0.0) p2X = 0.0;
   }
-  if (input & Button.RIGHT) {
+  if (buttonDown(Button.RIGHT)) {
     p2X += PADDLE_SPEED;
     if (p2X > ((WIDTH - PADDLE_WIDTH) as f32)) p2X = ((WIDTH - PADDLE_WIDTH) as f32);
   }
