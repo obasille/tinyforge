@@ -25,3 +25,26 @@ export function c(rgb: u32): u32 {
   const b = (rgb & 0xff) << 16;
   return 0xff000000 | b | g | r;
 }
+
+/**
+ * Convert individual RGBA components to ABGR format
+ *
+ * Takes separate red, green, blue, and alpha values and combines them
+ * into a single 32-bit color value in ABGR format used by the framebuffer.
+ *
+ * @param r Red component (0-255)
+ * @param g Green component (0-255)
+ * @param b Blue component (0-255)
+ * @param a Alpha component (0-255)
+ * @returns Color in ABGR format (0xAABBGGRR)
+ *
+ * @example
+ * ```ts
+ * const red = toColor(255, 0, 0, 255);      // Opaque red
+ * const semiTransparent = toColor(255, 128, 64, 128); // Semi-transparent orange
+ * ```
+ */
+@inline
+export function toColor(r: u8, g: u8, b: u8, a: u8): u32 {
+  return ((a as u32) << 24) | ((b as u32) << 16) | ((g as u32) << 8) | (r as u32);
+}

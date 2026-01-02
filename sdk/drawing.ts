@@ -1,6 +1,7 @@
 // TinyForge SDK - Drawing Primitives
 // Low-level and high-level drawing functions for rendering graphics
 
+import { toColor } from "./color";
 import { WIDTH, HEIGHT, SPRITE_METADATA, SPRITE_DATA } from "./memory";
 
 /**
@@ -281,8 +282,7 @@ export function drawSprite(id: u8, x: i32, y: i32): void {
       if (a < 128) continue;
 
       // Convert RGBA to ABGR and draw
-      const color = (a as u32 << 24) | (b as u32 << 16) | (g as u32 << 8) | (r as u32);
-      pset(x + dx, y + dy, color);
+      pset(x + dx, y + dy, toColor(r, g, b, a));
     }
   }
 }
@@ -336,8 +336,7 @@ export function drawSpriteFlip(
       if (a < 128) continue;
 
       // Convert RGBA to ABGR and draw
-      const color = (a as u32 << 24) | (b as u32 << 16) | (g as u32 << 8) | (r as u32);
-      pset(x + dx, y + dy, color);
+      pset(x + dx, y + dy, toColor(r, g, b, a));
     }
   }
 }
@@ -380,7 +379,7 @@ export function drawSprite2x(id: u8, x: i32, y: i32): void {
       if (a < 128) continue;
 
       // Convert RGBA to ABGR
-      const color = (a as u32 << 24) | (b as u32 << 16) | (g as u32 << 8) | (r as u32);
+      const color = toColor(r, g, b, a);
 
       // Draw 2x2 block
       pset(x + dx * 2, y + dy * 2, color);
