@@ -23,6 +23,9 @@ import {
   mouseY,
   mousePressed,
   MouseButton,
+  playSfx,
+  playMusic,
+  stopMusic,
 } from "../sdk";
 
 // === Constants ===
@@ -36,6 +39,18 @@ const CELL_SIZE: i32 = 24;
 const GRID_OFFSET_X: i32 = 40; // Center 240px grid in 320px width
 @inline
 const GRID_OFFSET_Y: i32 = 0;
+
+// Audio IDs
+enum SFX {
+  FLAG = 0,      // Flag placement/removal
+  EXPLODE = 1,   // Mine explosion
+  WIN = 2,       // Victory sound
+  REVEAL = 4,    // Cell reveal sound
+}
+
+enum Music {
+  GAMEPLAY = 0,  // Background music
+}
 
 // Cell bit flags
 enum CellFlag {
@@ -131,9 +146,14 @@ function revealCell(x: i32, y: i32): void {
   // If mine, game over
   if (cell & CellFlag.MINE) {
     setU8(Var.GAME_STATE, GameState.LOST as u8);
+    playSfx(SFX.EXPLODE, 0.8);
+    stopMusic();
     log("Game Over!");
     return;
   }
+
+  // Play reveal sound
+  playSfx(SFX.REVEAL, 0.3);
 
   // If zero mines adjacent, flood fill (iterative)
   if ((cell & CellFlag.COUNT_MASK) == 0) {
@@ -153,9 +173,11 @@ function toggleFlag(x: i32, y: i32): void {
   if (cell & CellFlag.FLAGGED) {
     cell &= ~(CellFlag.FLAGGED as u8);
     setU8(Var.FLAG_COUNT, getU8(Var.FLAG_COUNT) - 1);
+    playSfx(SFX.FLAG, 0.4);
   } else if ((getU8(Var.FLAG_COUNT) as i32) < MINE_COUNT) {
     cell |= CellFlag.FLAGGED as u8;
     setU8(Var.FLAG_COUNT, getU8(Var.FLAG_COUNT) + 1);
+    playSfx(SFX.FLAG, 0.4);
   }
   setCellData(x, y, cell);
 }
@@ -165,6 +187,8 @@ function checkWin(): void {
   const target = GRID_SIZE * GRID_SIZE - MINE_COUNT;
   if (revealed >= target) {
     setU8(Var.GAME_STATE, GameState.WON as u8);
+    playSfx(SFX.WIN, 0.8);
+    stopMusic();
     log("You Win!");
   }
 }
@@ -204,6 +228,8 @@ export function update(): void {
       mousePressed(MouseButton.RIGHT))
   ) {
     setU8(Var.GAME_STATE, GameState.PLAYING as u8);
+    // Start music after user interaction
+    playMusic(Music.GAMEPLAY, 0.5);
     return;
   }
 
