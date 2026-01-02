@@ -1,5 +1,7 @@
 // Audio Manager - Handles SFX and Music playback
 
+import { AssetLoader } from './asset-loader.js';
+
 class AudioManager {
   #audioContext = null;
   #sfxBuffers = new Map();
@@ -21,11 +23,28 @@ class AudioManager {
   }
 
   /**
-   * Extract numeric ID from filename (e.g., "0-jump.wav" -> 0)
+   * Get total sprite data size in bytes
+   * @returns {number}
    */
-  #extractId(filename) {
-    const match = filename.match(/^(\d+)/);
-    return match ? parseInt(match[1], 10) : null;
+  getDataSize() {
+    return [...this.#sfxBuffers.values(), ...this.#musicBuffers.values()]
+      .reduce((sum, buf) => sum + buf.length * buf.numberOfChannels * 4, 0);
+  }
+
+  /**
+   * Get number of loaded sound effects
+   * @returns {number}
+   */
+  getSfxCount() {
+    return this.#sfxBuffers.size;
+  }
+
+  /**
+   * Get number of loaded music tracks
+   * @returns {number}
+   */
+  getMusicCount() {
+    return this.#musicBuffers.size;
   }
 
   /**
@@ -36,47 +55,27 @@ class AudioManager {
     
     try {
       // Load SFX files
-      const sfxResponse = await fetch('../assets/sfx/');
-      if (sfxResponse.ok) {
-        const sfxHtml = await sfxResponse.text();
-        const sfxFiles = this.#parseDirectoryListing(sfxHtml, /\.(wav|mp3|ogg)$/i);
-        
-        for (const file of sfxFiles) {
-          const id = this.#extractId(file);
-          if (id !== null) {
-            await this.#loadAudioFile(this.#sfxBuffers, id, `../assets/sfx/${file}`, 'SFX');
-          }
-        }
+      const sfxAssets = await AssetLoader.scanDirectory(
+        '../assets/sfx/',
+        /\.(wav|mp3|ogg)$/i
+      );
+      
+      for (const asset of sfxAssets) {
+        await this.#loadAudioFile(this.#sfxBuffers, asset.id, asset.url, 'SFX');
       }
 
       // Load music files
-      const musicResponse = await fetch('../assets/music/');
-      if (musicResponse.ok) {
-        const musicHtml = await musicResponse.text();
-        const musicFiles = this.#parseDirectoryListing(musicHtml, /\.(wav|mp3|ogg)$/i);
-        
-        for (const file of musicFiles) {
-          const id = this.#extractId(file);
-          if (id !== null) {
-            await this.#loadAudioFile(this.#musicBuffers, id, `../assets/music/${file}`, 'Music');
-          }
-        }
+      const musicAssets = await AssetLoader.scanDirectory(
+        '../assets/music/',
+        /\.(wav|mp3|ogg)$/i
+      );
+      
+      for (const asset of musicAssets) {
+        await this.#loadAudioFile(this.#musicBuffers, asset.id, asset.url, 'Music');
       }
     } catch (e) {
-      console.warn('Audio loading failed (folders may not exist yet):', e.message);
+      console.warn('Audio loading failed:', e.message);
     }
-  }
-
-  /**
-   * Parse directory listing HTML to extract filenames
-   */
-  #parseDirectoryListing(html, pattern) {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
-    const links = Array.from(doc.querySelectorAll('a'));
-    return links
-      .map(a => a.getAttribute('href'))
-      .filter(href => href && pattern.test(href));
   }
 
   /**
@@ -84,11 +83,9 @@ class AudioManager {
    */
   async #loadAudioFile(bufferMap, id, url, type) {
     try {
-      if (bufferMap.has(id)) {
-        console.warn(`${type} ID ${id} already loaded, overwriting with ${url}`);
-      }
-      const response = await fetch(url);
-      const arrayBuffer = await response.arrayBuffer();
+      AssetLoader.checkDuplicate(bufferMap, id, url, type);
+      
+      const arrayBuffer = await AssetLoader.fetchBinary(url);
       const audioBuffer = await this.#audioContext.decodeAudioData(arrayBuffer);
       bufferMap.set(id, audioBuffer);
     } catch (e) {

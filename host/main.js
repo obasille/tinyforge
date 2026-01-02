@@ -127,7 +127,10 @@ let currentGame = gameSelect.value;
 
 // Load audio and sprites on startup
 audioManager.loadAudio().then(() => {
-  addConsoleEntry('LOG', 'Audio system initialized');
+  const sfxCount = audioManager.getSfxCount();
+  const musicCount = audioManager.getMusicCount();
+  const size = audioManager.getDataSize();
+  addConsoleEntry('LOG', `Audio system initialized: ${sfxCount} SFX, ${musicCount} music tracks, ${(size / 1024).toFixed(1)} KB`);
 });
 
 spriteManager.loadSprites().then(() => {

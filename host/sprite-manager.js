@@ -1,5 +1,7 @@
 // Sprite Manager - Handles sprite loading and memory management
 
+import { AssetLoader } from './asset-loader.js';
+
 class SpriteManager {
   #memory = null;
   #sprites = new Map(); // id -> {width, height, data: Uint8Array (RGBA)}
@@ -13,11 +15,19 @@ class SpriteManager {
   }
 
   /**
-   * Extract numeric ID from filename (e.g., "0-player.png" -> 0)
+   * Get sprite count
+   * @returns {number}
    */
-  #extractId(filename) {
-    const match = filename.match(/^(\d+)/);
-    return match ? parseInt(match[1], 10) : null;
+  getSpriteCount() {
+    return this.#sprites.size;
+  }
+
+  /**
+   * Get total sprite data size in bytes
+   * @returns {number}
+   */
+  getDataSize() {
+    return this.#nextDataOffset;
   }
 
   /**
@@ -30,41 +40,22 @@ class SpriteManager {
     }
 
     try {
-      const response = await fetch('../assets/sprites/');
-      if (!response.ok) {
-        console.warn('Sprites folder not accessible, skipping sprite loading');
-        return;
-      }
+      const spriteAssets = await AssetLoader.scanDirectory(
+        '../assets/sprites/',
+        /\.(png|jpg|jpeg)$/i,
+        0,
+        255
+      );
 
-      const html = await response.text();
-      const spriteFiles = this.#parseDirectoryListing(html, /\.(png|jpg|jpeg)$/i);
-
-      for (const file of spriteFiles) {
-        const id = this.#extractId(file);
-        if (id !== null && id >= 0 && id < 256) {
-          await this.#loadSprite(id, `../assets/sprites/${file}`);
-        }
+      for (const asset of spriteAssets) {
+        await this.#loadSprite(asset.id, asset.url);
       }
 
       // Write all loaded sprites to WASM memory
       this.#writeSpritesToMemory();
-      
-      console.log(`Loaded ${this.#sprites.size} sprites`);
     } catch (e) {
       console.warn('Sprite loading failed:', e.message);
     }
-  }
-
-  /**
-   * Parse directory listing HTML to extract filenames
-   */
-  #parseDirectoryListing(html, pattern) {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
-    const links = Array.from(doc.querySelectorAll('a'));
-    return links
-      .map(a => a.getAttribute('href'))
-      .filter(href => href && pattern.test(href));
   }
 
   /**
@@ -72,12 +63,10 @@ class SpriteManager {
    */
   async #loadSprite(id, url) {
     try {
-      if (this.#sprites.has(id)) {
-        console.warn(`Sprite ID ${id} already loaded, overwriting with ${url}`);
-      }
+      AssetLoader.checkDuplicate(this.#sprites, id, url, 'Sprite');
 
       // Load image
-      const img = await this.#loadImage(url);
+      const img = await AssetLoader.loadImage(url);
       
       // Create canvas to extract pixel data
       const canvas = document.createElement('canvas');
@@ -99,18 +88,6 @@ class SpriteManager {
     } catch (e) {
       console.warn(`Failed to load sprite ${id} from ${url}:`, e.message);
     }
-  }
-
-  /**
-   * Load image as promise
-   */
-  #loadImage(url) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
-      img.src = url;
-    });
   }
 
   /**
@@ -150,20 +127,6 @@ class SpriteManager {
     if (this.#nextDataOffset > 131072) { // ~128 KB limit
       console.warn(`Sprite data exceeds allocated memory: ${this.#nextDataOffset} bytes`);
     }
-  }
-
-  /**
-   * Get sprite count
-   */
-  getSpriteCount() {
-    return this.#sprites.size;
-  }
-
-  /**
-   * Get total sprite data size in bytes
-   */
-  getDataSize() {
-    return this.#nextDataOffset;
   }
 }
 
