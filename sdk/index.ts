@@ -5,10 +5,10 @@
 // Do not use: new arrays, strings, objects, or any dynamic allocation
 // Only use: primitives, load/store, and stack variables
 
-export * from './memory';
-export * from './input';
-export * from './logging';
-export * from './color';
-export * from './drawing';
-export * from './utility';
-export * from './audio';
+export * from "./memory";
+export * from "./input";
+export * from "./logging";
+export * from "./color";
+export * from "./drawing";
+export * from "./utility";
+export * from "./audio";

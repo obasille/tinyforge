@@ -18,19 +18,19 @@ export const FB_START: usize = 0x000000;
 export const FB_SIZE: usize = 307200;
 
 /** Game RAM start address (0x04B000) */
-export const RAM_START: usize = 0x04B000;
+export const RAM_START: usize = 0x04b000;
 
 /** Game RAM size in bytes (256 KB) */
 export const RAM_SIZE: usize = 262144;
 
 /** Save data start address (0x08B000) */
-export const SAVE_START: usize = 0x08B000;
+export const SAVE_START: usize = 0x08b000;
 
 /** Save data size in bytes (64 KB) */
 export const SAVE_SIZE: usize = 65536;
 
 /** Debug/tooling start address (0x09B000) */
-export const DEBUG_START: usize = 0x09B000;
+export const DEBUG_START: usize = 0x09b000;
 
 /** Debug/tooling size in bytes (64 KB) */
 export const DEBUG_SIZE: usize = 65536;
@@ -43,7 +43,7 @@ export const DEBUG_SIZE: usize = 65536;
 // Access via buttonDown(), buttonPressed() in input.ts
 
 /** Keyboard input base address (0x0AB000) */
-export const INPUT_ADDR: usize = 0x0AB000;
+export const INPUT_ADDR: usize = 0x0ab000;
 
 /** Keyboard current button state address (0x0AB000) */
 export const INPUT_BUTTONS: usize = INPUT_ADDR + 0;
@@ -59,7 +59,7 @@ export const INPUT_BUTTONS_PREV: usize = INPUT_ADDR + 1;
 // Access via mouseX(), mouseY(), mouseDown(), mousePressed() in input.ts
 
 /** Mouse state base address (0x0AB010) */
-export const MOUSE_ADDR: usize = 0x0AB010;
+export const MOUSE_ADDR: usize = 0x0ab010;
 
 /** Mouse X coordinate address (0x0AB010) */
 export const MOUSE_X_ADDR: usize = MOUSE_ADDR + 0;
@@ -89,13 +89,13 @@ export const MOUSE_BUTTONS_PREV_ADDR: usize = MOUSE_ADDR + 5;
 // Sprite data region: ~128 KB available for pixel data
 
 /** Sprite metadata table base address (0x0AB100) */
-export const SPRITE_METADATA: usize = 0x0AB100;
+export const SPRITE_METADATA: usize = 0x0ab100;
 
 /** Sprite metadata entry size (8 bytes) */
 export const SPRITE_METADATA_SIZE: u32 = 8;
 
 /** Sprite pixel data base address (0x0AB900 - after 256 sprite metadata entries) */
-export const SPRITE_DATA: usize = SPRITE_METADATA + (256 * SPRITE_METADATA_SIZE);
+export const SPRITE_DATA: usize = SPRITE_METADATA + 256 * SPRITE_METADATA_SIZE;
 
 /** Maximum sprite data size (~128 KB) */
 export const SPRITE_DATA_SIZE: usize = 131072;

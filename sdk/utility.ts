@@ -1,13 +1,13 @@
 // TinyForge SDK - Utility Functions
 // Helper classes and convenience functions for common game tasks
 
-import { fillRect, drawRect, drawString } from './drawing';
-import { c } from './color';
+import { fillRect, drawRect, drawString } from "./drawing";
+import { c } from "./color";
 
 /**
  * 2D integer vector class for coordinate pairs and offsets
  * Uses @unmanaged to work with stub runtime (no heap allocation)
- * 
+ *
  * @example
  * ```ts
  * const pos = new Vec2i(10, 20);
@@ -19,7 +19,7 @@ import { c } from './color';
 export class Vec2i {
   /** X coordinate */
   x: i32;
-  
+
   /** Y coordinate */
   y: i32;
 
@@ -55,17 +55,17 @@ export class Vec2i {
 /**
  * Generate a pseudo-random integer using Linear Congruential Generator (LCG)
  * The seed is stored in RAM at the provided offset and updated on each call
- * 
+ *
  * @param seedVar Memory address where the seed is stored (typically RAM_START + offset)
  * @returns Random i32 value in range [0, 0x7fffffff]
- * 
+ *
  * @example
  * ```ts
  * // In your game's Var enum:
  * enum Var {
  *   RNG_SEED = 0,  // 4 bytes
  * }
- * 
+ *
  * // Generate random number between 0-9:
  * const roll = random(RAM_START + Var.RNG_SEED) % 10;
  * ```
@@ -80,7 +80,7 @@ export function random(seedVar: usize): i32 {
 /**
  * Draw a styled message box with title and optional subtitle
  * All text positions are specified as offsets relative to the box corner
- * 
+ *
  * @param pos Top-left corner of the box
  * @param size Width and height of the box
  * @param title Main text to display
@@ -89,7 +89,7 @@ export function random(seedVar: usize): i32 {
  * @param subtitleOffset Position of subtitle relative to box corner
  * @param bgColor Background fill color (ABGR format)
  * @param fgColor Border and text color (ABGR format)
- * 
+ *
  * @example
  * ```ts
  * // Draw a centered game over message:
@@ -102,15 +102,24 @@ export function random(seedVar: usize): i32 {
  * ```
  */
 export function drawMessageBox(
-  pos: Vec2i, size: Vec2i,
-  title: string, titleOffset: Vec2i,
-  subtitle: string, subtitleOffset: Vec2i,
-  bgColor: u32, fgColor: u32
+  pos: Vec2i,
+  size: Vec2i,
+  title: string,
+  titleOffset: Vec2i,
+  subtitle: string,
+  subtitleOffset: Vec2i,
+  bgColor: u32,
+  fgColor: u32,
 ): void {
   fillRect(pos.x, pos.y, size.x, size.y, bgColor);
   drawRect(pos.x, pos.y, size.x, size.y, fgColor);
   drawString(pos.x + titleOffset.x, pos.y + titleOffset.y, title, fgColor);
   if (subtitle.length > 0) {
-    drawString(pos.x + subtitleOffset.x, pos.y + subtitleOffset.y, subtitle, c(0xaaaaaa));
+    drawString(
+      pos.x + subtitleOffset.x,
+      pos.y + subtitleOffset.y,
+      subtitle,
+      c(0xaaaaaa),
+    );
   }
 }

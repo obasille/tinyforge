@@ -1,7 +1,7 @@
 // TinyForge SDK - Drawing Primitives
 // Low-level and high-level drawing functions for rendering graphics
 
-import { WIDTH, HEIGHT, SPRITE_METADATA, SPRITE_DATA } from './memory';
+import { WIDTH, HEIGHT, SPRITE_METADATA, SPRITE_DATA } from "./memory";
 
 /**
  * Efficiently clears entire framebuffer using native JS
@@ -22,7 +22,7 @@ export declare function clearFramebuffer(color: u32): void;
 export function pset(x: i32, y: i32, color: u32): void {
   if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) return;
   const i = (y * WIDTH + x) << 2;
-  store<u32>(i, color | 0xFF000000);
+  store<u32>(i, color | 0xff000000);
 }
 
 /**
@@ -90,18 +90,27 @@ export function drawNumber(x: i32, y: i32, num: i32, color: u32): void {
   // Simple 3×5 digit patterns (5 rows, 3 columns each = 15 bits)
   // Each pattern is: row0_row1_row2_row3_row4 (3 bits per row)
   let pattern: u16 = 0;
-  
-  if (num == 0) pattern = 0b111_101_101_101_111 as u16;      // 0
-  else if (num == 1) pattern = 0b010_110_010_010_111 as u16; // 1
-  else if (num == 2) pattern = 0b111_001_111_100_111 as u16; // 2
-  else if (num == 3) pattern = 0b111_001_111_001_111 as u16; // 3
-  else if (num == 4) pattern = 0b101_101_111_001_001 as u16; // 4
-  else if (num == 5) pattern = 0b111_100_111_001_111 as u16; // 5
-  else if (num == 6) pattern = 0b111_100_111_101_111 as u16; // 6
-  else if (num == 7) pattern = 0b111_001_001_001_001 as u16; // 7
-  else if (num == 8) pattern = 0b111_101_111_101_111 as u16; // 8
+
+  if (num == 0)
+    pattern = 0b111_101_101_101_111 as u16; // 0
+  else if (num == 1)
+    pattern = 0b010_110_010_010_111 as u16; // 1
+  else if (num == 2)
+    pattern = 0b111_001_111_100_111 as u16; // 2
+  else if (num == 3)
+    pattern = 0b111_001_111_001_111 as u16; // 3
+  else if (num == 4)
+    pattern = 0b101_101_111_001_001 as u16; // 4
+  else if (num == 5)
+    pattern = 0b111_100_111_001_111 as u16; // 5
+  else if (num == 6)
+    pattern = 0b111_100_111_101_111 as u16; // 6
+  else if (num == 7)
+    pattern = 0b111_001_001_001_001 as u16; // 7
+  else if (num == 8)
+    pattern = 0b111_101_111_101_111 as u16; // 8
   else if (num == 9) pattern = 0b111_101_111_001_111 as u16; // 9
-  
+
   if (pattern == 0 && num != 0) return;
 
   draw3x5Pattern(x, y, pattern, color);
@@ -119,41 +128,73 @@ export function drawNumber(x: i32, y: i32, num: i32, color: u32): void {
 export function drawChar(x: i32, y: i32, char: i32, color: u32): void {
   // 3×5 character patterns for uppercase letters and symbols
   let pattern: u16 = 0;
-  
-  if (char == 65) pattern = 0b111_101_111_101_101 as u16;      // A
-  else if (char == 66) pattern = 0b110_101_110_101_110 as u16; // B
-  else if (char == 67) pattern = 0b111_100_100_100_111 as u16; // C
-  else if (char == 68) pattern = 0b110_101_101_101_110 as u16; // D
-  else if (char == 69) pattern = 0b111_100_111_100_111 as u16; // E
-  else if (char == 70) pattern = 0b111_100_111_100_100 as u16; // F
-  else if (char == 71) pattern = 0b111_100_101_101_111 as u16; // G
-  else if (char == 72) pattern = 0b101_101_111_101_101 as u16; // H
-  else if (char == 73) pattern = 0b111_010_010_010_111 as u16; // I
-  else if (char == 74) pattern = 0b111_001_001_101_111 as u16; // J
-  else if (char == 75) pattern = 0b101_101_110_101_101 as u16; // K
-  else if (char == 76) pattern = 0b100_100_100_100_111 as u16; // L
-  else if (char == 77) pattern = 0b101_111_101_101_101 as u16; // M
-  else if (char == 78) pattern = 0b101_111_111_111_101 as u16; // N
-  else if (char == 79) pattern = 0b111_101_101_101_111 as u16; // O
-  else if (char == 80) pattern = 0b111_101_111_100_100 as u16; // P
-  else if (char == 81) pattern = 0b111_101_101_111_001 as u16; // Q
-  else if (char == 82) pattern = 0b110_101_110_101_101 as u16; // R
-  else if (char == 83) pattern = 0b111_100_111_001_111 as u16; // S
-  else if (char == 84) pattern = 0b111_010_010_010_010 as u16; // T
-  else if (char == 85) pattern = 0b101_101_101_101_111 as u16; // U
-  else if (char == 86) pattern = 0b101_101_101_101_010 as u16; // V
-  else if (char == 87) pattern = 0b101_101_101_111_101 as u16; // W
-  else if (char == 88) pattern = 0b101_101_010_101_101 as u16; // X
-  else if (char == 89) pattern = 0b101_101_111_010_010 as u16; // Y
-  else if (char == 90) pattern = 0b111_001_010_100_111 as u16; // Z
-  else if (char == 33) pattern = 0b010_010_010_000_010 as u16; // !
-  else if (char == 63) pattern = 0b111_001_010_000_010 as u16; // ?
-  else if (char == 46) pattern = 0b000_000_000_000_010 as u16; // .
-  else if (char == 44) pattern = 0b000_000_000_010_100 as u16; // ,
-  else if (char == 58) pattern = 0b000_010_000_010_000 as u16; // :
-  else if (char == 45) pattern = 0b000_000_111_000_000 as u16; // -
+
+  if (char == 65)
+    pattern = 0b111_101_111_101_101 as u16; // A
+  else if (char == 66)
+    pattern = 0b110_101_110_101_110 as u16; // B
+  else if (char == 67)
+    pattern = 0b111_100_100_100_111 as u16; // C
+  else if (char == 68)
+    pattern = 0b110_101_101_101_110 as u16; // D
+  else if (char == 69)
+    pattern = 0b111_100_111_100_111 as u16; // E
+  else if (char == 70)
+    pattern = 0b111_100_111_100_100 as u16; // F
+  else if (char == 71)
+    pattern = 0b111_100_101_101_111 as u16; // G
+  else if (char == 72)
+    pattern = 0b101_101_111_101_101 as u16; // H
+  else if (char == 73)
+    pattern = 0b111_010_010_010_111 as u16; // I
+  else if (char == 74)
+    pattern = 0b111_001_001_101_111 as u16; // J
+  else if (char == 75)
+    pattern = 0b101_101_110_101_101 as u16; // K
+  else if (char == 76)
+    pattern = 0b100_100_100_100_111 as u16; // L
+  else if (char == 77)
+    pattern = 0b101_111_101_101_101 as u16; // M
+  else if (char == 78)
+    pattern = 0b101_111_111_111_101 as u16; // N
+  else if (char == 79)
+    pattern = 0b111_101_101_101_111 as u16; // O
+  else if (char == 80)
+    pattern = 0b111_101_111_100_100 as u16; // P
+  else if (char == 81)
+    pattern = 0b111_101_101_111_001 as u16; // Q
+  else if (char == 82)
+    pattern = 0b110_101_110_101_101 as u16; // R
+  else if (char == 83)
+    pattern = 0b111_100_111_001_111 as u16; // S
+  else if (char == 84)
+    pattern = 0b111_010_010_010_010 as u16; // T
+  else if (char == 85)
+    pattern = 0b101_101_101_101_111 as u16; // U
+  else if (char == 86)
+    pattern = 0b101_101_101_101_010 as u16; // V
+  else if (char == 87)
+    pattern = 0b101_101_101_111_101 as u16; // W
+  else if (char == 88)
+    pattern = 0b101_101_010_101_101 as u16; // X
+  else if (char == 89)
+    pattern = 0b101_101_111_010_010 as u16; // Y
+  else if (char == 90)
+    pattern = 0b111_001_010_100_111 as u16; // Z
+  else if (char == 33)
+    pattern = 0b010_010_010_000_010 as u16; // !
+  else if (char == 63)
+    pattern = 0b111_001_010_000_010 as u16; // ?
+  else if (char == 46)
+    pattern = 0b000_000_000_000_010 as u16; // .
+  else if (char == 44)
+    pattern = 0b000_000_000_010_100 as u16; // ,
+  else if (char == 58)
+    pattern = 0b000_010_000_010_000 as u16; // :
+  else if (char == 45)
+    pattern = 0b000_000_111_000_000 as u16; // -
   else if (char == 32) pattern = 0b000_000_000_000_000 as u16; // space
-  
+
   if (pattern != 0) {
     draw3x5Pattern(x, y, pattern, color);
   } else {
@@ -215,30 +256,30 @@ export function drawString(x: i32, y: i32, text: string, color: u32): void {
  */
 export function drawSprite(id: u8, x: i32, y: i32): void {
   // Read sprite metadata
-  const metadataAddr = SPRITE_METADATA + (id as usize * 8);
+  const metadataAddr = SPRITE_METADATA + (id as usize) * 8;
   const width = load<u16>(metadataAddr + 0);
   const height = load<u16>(metadataAddr + 2);
   const dataOffset = load<u32>(metadataAddr + 4);
-  
+
   // Early exit if sprite has no size (not loaded)
   if (width == 0 || height == 0) return;
-  
+
   // Draw sprite pixels
   const spriteDataAddr = SPRITE_DATA + dataOffset;
-  
+
   for (let dy: i32 = 0; dy < height; dy++) {
     for (let dx: i32 = 0; dx < width; dx++) {
       const pixelOffset = ((dy * width + dx) * 4) as usize;
       const pixelAddr = spriteDataAddr + pixelOffset;
-      
+
       const r = load<u8>(pixelAddr + 0);
       const g = load<u8>(pixelAddr + 1);
       const b = load<u8>(pixelAddr + 2);
       const a = load<u8>(pixelAddr + 3);
-      
+
       // Skip transparent pixels (alpha < 128)
       if (a < 128) continue;
-      
+
       // Convert RGBA to ABGR and draw
       const color = (a as u32 << 24) | (b as u32 << 16) | (g as u32 << 8) | (r as u32);
       pset(x + dx, y + dy, color);
@@ -259,35 +300,41 @@ export function drawSprite(id: u8, x: i32, y: i32): void {
  * drawSpriteFlip(0, 100, 100, true, false); // Draw sprite 0 flipped horizontally
  * ```
  */
-export function drawSpriteFlip(id: u8, x: i32, y: i32, flipH: bool, flipV: bool): void {
+export function drawSpriteFlip(
+  id: u8,
+  x: i32,
+  y: i32,
+  flipH: bool,
+  flipV: bool,
+): void {
   // Read sprite metadata
-  const metadataAddr = SPRITE_METADATA + (id as usize * 8);
+  const metadataAddr = SPRITE_METADATA + (id as usize) * 8;
   const width = load<u16>(metadataAddr + 0);
   const height = load<u16>(metadataAddr + 2);
   const dataOffset = load<u32>(metadataAddr + 4);
-  
+
   // Early exit if sprite has no size (not loaded)
   if (width == 0 || height == 0) return;
-  
+
   // Draw sprite pixels with flipping
   const spriteDataAddr = SPRITE_DATA + dataOffset;
-  
+
   for (let dy: i32 = 0; dy < height; dy++) {
     for (let dx: i32 = 0; dx < width; dx++) {
-      const srcX = flipH ? (width - 1 - dx) : dx;
-      const srcY = flipV ? (height - 1 - dy) : dy;
-      
+      const srcX = flipH ? width - 1 - dx : dx;
+      const srcY = flipV ? height - 1 - dy : dy;
+
       const pixelOffset = ((srcY * width + srcX) * 4) as usize;
       const pixelAddr = spriteDataAddr + pixelOffset;
-      
+
       const r = load<u8>(pixelAddr + 0);
       const g = load<u8>(pixelAddr + 1);
       const b = load<u8>(pixelAddr + 2);
       const a = load<u8>(pixelAddr + 3);
-      
+
       // Skip transparent pixels (alpha < 128)
       if (a < 128) continue;
-      
+
       // Convert RGBA to ABGR and draw
       const color = (a as u32 << 24) | (b as u32 << 16) | (g as u32 << 8) | (r as u32);
       pset(x + dx, y + dy, color);
@@ -308,33 +355,33 @@ export function drawSpriteFlip(id: u8, x: i32, y: i32, flipH: bool, flipV: bool)
  */
 export function drawSprite2x(id: u8, x: i32, y: i32): void {
   // Read sprite metadata
-  const metadataAddr = SPRITE_METADATA + (id as usize * 8);
+  const metadataAddr = SPRITE_METADATA + (id as usize) * 8;
   const width = load<u16>(metadataAddr + 0);
   const height = load<u16>(metadataAddr + 2);
   const dataOffset = load<u32>(metadataAddr + 4);
-  
+
   // Early exit if sprite has no size (not loaded)
   if (width == 0 || height == 0) return;
-  
+
   // Draw sprite pixels scaled 2x
   const spriteDataAddr = SPRITE_DATA + dataOffset;
-  
+
   for (let dy: i32 = 0; dy < height; dy++) {
     for (let dx: i32 = 0; dx < width; dx++) {
       const pixelOffset = ((dy * width + dx) * 4) as usize;
       const pixelAddr = spriteDataAddr + pixelOffset;
-      
+
       const r = load<u8>(pixelAddr + 0);
       const g = load<u8>(pixelAddr + 1);
       const b = load<u8>(pixelAddr + 2);
       const a = load<u8>(pixelAddr + 3);
-      
+
       // Skip transparent pixels (alpha < 128)
       if (a < 128) continue;
-      
+
       // Convert RGBA to ABGR
       const color = (a as u32 << 24) | (b as u32 << 16) | (g as u32 << 8) | (r as u32);
-      
+
       // Draw 2x2 block
       pset(x + dx * 2, y + dy * 2, color);
       pset(x + dx * 2 + 1, y + dy * 2, color);

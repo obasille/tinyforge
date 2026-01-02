@@ -16,25 +16,32 @@
 //   - Use buttonDown() / mouseDown() for continuous actions (held buttons)
 //   - Use buttonPressed() / mousePressed() for one-time actions (button just pressed)
 
-import { INPUT_BUTTONS, INPUT_BUTTONS_PREV, MOUSE_X_ADDR, MOUSE_Y_ADDR, MOUSE_BUTTONS_ADDR, MOUSE_BUTTONS_PREV_ADDR } from './memory';
+import {
+  INPUT_BUTTONS,
+  INPUT_BUTTONS_PREV,
+  MOUSE_X_ADDR,
+  MOUSE_Y_ADDR,
+  MOUSE_BUTTONS_ADDR,
+  MOUSE_BUTTONS_PREV_ADDR,
+} from "./memory";
 
 /** Button bit flags for keyboard input */
 export enum Button {
-  UP    = 1 << 0,
-  DOWN  = 1 << 1,
-  LEFT  = 1 << 2,
+  UP = 1 << 0,
+  DOWN = 1 << 1,
+  LEFT = 1 << 2,
   RIGHT = 1 << 3,
-  A     = 1 << 4,  // Mapped to Z key
-  B     = 1 << 5,  // Mapped to X key
-  START = 1 << 6   // Mapped to Enter key
+  A = 1 << 4, // Mapped to Z key
+  B = 1 << 5, // Mapped to X key
+  START = 1 << 6, // Mapped to Enter key
 }
 
 /**
  * Mouse button bit flags
- * 
+ *
  * Mouse buttons are tracked as a bitmask where each bit represents a button state.
  * Use with mouseDown() and mousePressed() functions.
- * 
+ *
  * @example
  * ```typescript
  * if (mousePressed(MouseButton.LEFT)) {
@@ -43,9 +50,9 @@ export enum Button {
  * ```
  */
 export enum MouseButton {
-  LEFT   = 1 << 0,  // Bit 0: Left mouse button
-  RIGHT  = 1 << 1,  // Bit 1: Right mouse button
-  MIDDLE = 1 << 2   // Bit 2: Middle mouse button (wheel click)
+  LEFT = 1 << 0, // Bit 0: Left mouse button
+  RIGHT = 1 << 1, // Bit 1: Right mouse button
+  MIDDLE = 1 << 2, // Bit 2: Middle mouse button (wheel click)
 }
 
 /**

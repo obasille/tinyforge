@@ -25,6 +25,7 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "assemblyscript": "^0.28.9"
+    "assemblyscript": "^0.28.9",
+    "prettier": "3.7.4"
   }
 }
