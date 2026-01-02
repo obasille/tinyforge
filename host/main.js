@@ -150,6 +150,15 @@ const KEYMAP = {
 let inputMask = 0;
 let prevInputMask = 0;
 
+// Mouse state
+// Coordinates are in virtual screen space (0-319, 0-239)
+// Set to -1 when mouse is outside canvas
+let mouseX = -1;
+let mouseY = -1;
+// Mouse buttons bitmask: bit 0=left, bit 1=right, bit 2=middle
+let mouseButtons = 0;
+let prevMouseButtons = 0;
+
 window.addEventListener("keydown", e => {
   if (KEYMAP[e.code]) {
     inputMask |= KEYMAP[e.code];
@@ -162,6 +171,40 @@ window.addEventListener("keyup", e => {
     inputMask &= ~KEYMAP[e.code];
     e.preventDefault();
   }
+});
+
+// Mouse input
+// Tracks mouse position and button state, scaled to virtual 320×240 coordinates
+
+// Update mouse position when cursor moves over canvas
+canvas.addEventListener("mousemove", e => {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = WIDTH / rect.width;
+  const scaleY = HEIGHT / rect.height;
+  mouseX = Math.floor((e.clientX - rect.left) * scaleX);
+  mouseY = Math.floor((e.clientY - rect.top) * scaleY);
+});
+
+// Set coordinates to -1 when mouse leaves canvas
+canvas.addEventListener("mouseleave", () => {
+  mouseX = -1;
+  mouseY = -1;
+});
+
+// Track button presses (bit 0=left, bit 1=right, bit 2=middle)
+canvas.addEventListener("mousedown", e => {
+  mouseButtons |= (1 << e.button);
+  e.preventDefault();
+});
+
+canvas.addEventListener("mouseup", e => {
+  mouseButtons &= ~(1 << e.button);
+  e.preventDefault();
+});
+
+// Prevent context menu on right-click
+canvas.addEventListener("contextmenu", e => {
+  e.preventDefault();
 });
 
 // === Fixed Timestep Loop ===
@@ -221,8 +264,18 @@ function frame(now) {
   let updates = 0;
   while (acc >= DT && updates < MAX_UPDATES && !hasAborted) {
     try {
+      // Write mouse state to WASM memory at 0x0AB000 (MOUSE_ADDR)
+      // Layout: [i16 x][i16 y][u8 buttons][u8 prev_buttons]
+      // Games access this via mouseX(), mouseY(), mouseDown(), mousePressed()
+      const mouseView = new DataView(memory.buffer, 0x0AB000);
+      mouseView.setInt16(0, mouseX, true);       // Mouse X (little-endian)
+      mouseView.setInt16(2, mouseY, true);       // Mouse Y (little-endian)
+      mouseView.setUint8(4, mouseButtons);       // Current buttons
+      mouseView.setUint8(5, prevMouseButtons);   // Previous buttons
+      
       update(inputMask, prevInputMask);  // Game logic update
       prevInputMask = inputMask;         // Track previous input state
+      prevMouseButtons = mouseButtons;   // Track previous mouse state
       acc -= DT;                         // Consume one timestep
       updates++;
     } catch (e) {
