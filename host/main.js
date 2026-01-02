@@ -125,21 +125,24 @@ const gameSelect = document.getElementById('game-select');
 // Initial load - use dropdown value (persisted by browser on reload)
 let currentGame = gameSelect.value;
 
-// Load audio and sprites on startup
-audioManager.loadAudio().then(() => {
-  const sfxCount = audioManager.getSfxCount();
-  const musicCount = audioManager.getMusicCount();
-  const size = audioManager.getDataSize();
-  addConsoleEntry('LOG', `Audio system initialized: ${sfxCount} SFX, ${musicCount} music tracks, ${(size / 1024).toFixed(1)} KB`);
+// Load audio and sprites, then load the game
+Promise.all([
+  audioManager.loadAudio().then(() => {
+    const sfxCount = audioManager.getSfxCount();
+    const musicCount = audioManager.getMusicCount();
+    const size = audioManager.getDataSize();
+    addConsoleEntry('LOG', `Audio system initialized: ${sfxCount} SFX, ${musicCount} music tracks, ${(size / 1024).toFixed(1)} KB`);
+  }),
+  spriteManager.loadSprites().then(() => {
+    const count = spriteManager.getSpriteCount();
+    const size = spriteManager.getDataSize();
+    addConsoleEntry('LOG', `Sprite system initialized: ${count} sprites, ${(size / 1024).toFixed(1)} KB`);
+  })
+]).then(() => {
+  // Load game after all assets are ready
+  addConsoleEntry('LOG', 'All assets loaded, starting game...');
+  loadGame(currentGame);
 });
-
-spriteManager.loadSprites().then(() => {
-  const count = spriteManager.getSpriteCount();
-  const size = spriteManager.getDataSize();
-  addConsoleEntry('LOG', `Sprite system initialized: ${count} sprites, ${(size / 1024).toFixed(1)} KB`);
-});
-
-loadGame(currentGame);
 
 gameSelect.addEventListener('change', () => {
   const selectedGame = gameSelect.value;
