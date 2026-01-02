@@ -29,14 +29,6 @@ export enum Button {
   START = 1 << 6   // Mapped to Enter key
 }
 
-/** Gamepad identifiers */
-export enum Gamepad {
-  ONE = 0,
-  TWO = 1,
-  THREE = 2,
-  FOUR = 3
-}
-
 /**
  * Mouse button bit flags
  * 
@@ -87,16 +79,6 @@ export function buttonPressed(button: Button): bool {
   const prev = load<u8>(INPUT_BUTTONS_PREV);
   return (current & button) != 0 && (prev & button) == 0;
 }
-
-/**
- * Check if a button was just pressed this frame (rising edge) - deprecated
- * @deprecated Use buttonPressed() instead
- * @param pad Gamepad identifier (0-3)
- * @param button Button bit flag to check
- * @returns true if the button was pressed this frame
- */
-@external("env", "gamepad.pressed")
-export declare function gamepadPressed(pad: Gamepad, button: Button): bool;
 
 /**
  * Get mouse X position (screen coordinates)

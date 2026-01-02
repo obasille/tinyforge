@@ -204,15 +204,26 @@ canvas.addEventListener("mouseleave", () => {
   mouseY = -1;
 });
 
+function mapMouseButton(button) {
+  if (button < 0 || button > 2) return -1;
+  return button === 2 ? 1 : button === 1 ? 2 : 0; // Map right button to bit 1
+}
+
 // Track button presses (bit 0=left, bit 1=right, bit 2=middle)
 canvas.addEventListener("mousedown", e => {
-  mouseButtons |= (1 << e.button);
-  e.preventDefault();
+  const btn = mapMouseButton(e.button);
+  if (btn !== -1) {
+    mouseButtons |= (1 << btn);
+    e.preventDefault();
+  }
 });
 
 canvas.addEventListener("mouseup", e => {
-  mouseButtons &= ~(1 << e.button);
-  e.preventDefault();
+  const btn = mapMouseButton(e.button);
+  if (btn !== -1) {
+    mouseButtons &= ~(1 << btn);
+    e.preventDefault();
+  }
 });
 
 // Prevent context menu on right-click
