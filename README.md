@@ -360,6 +360,88 @@ export function update(input: i32, prevInput: i32): void {
 
 ---
 
+## Sprite System
+
+The console provides a sprite system for drawing images with transparency and alpha blending support.
+
+### Sprite Files
+
+Sprite images are stored in the `assets/sprites/` directory:
+
+```
+assets/
+└─ sprites/         # Sprite images
+   ├─ 0-flag.png
+   ├─ 1-player.png
+   └─ ...
+```
+
+Files are **ID-based**: the filename must start with a number (0-255) which becomes the sprite ID.
+
+**Supported formats:**
+- PNG (with transparency)
+- JPG (no transparency)
+
+### Sprite API
+
+```ts
+import { drawSprite, drawSpriteFlip, drawSprite2x } from './console';
+
+// Draw sprite at position
+drawSprite(id: u32, x: i32, y: i32);
+
+// Draw sprite with flipping
+drawSpriteFlip(id: u8, x: i32, y: i32, flipH: bool, flipV: bool);
+
+// Draw sprite scaled 2x
+drawSprite2x(id: u8, x: i32, y: i32);
+```
+
+### Alpha Blending
+
+The sprite system supports full alpha blending:
+
+- **Fully transparent** (alpha = 0): Pixel is skipped
+- **Fully opaque** (alpha = 255): Pixel is drawn directly (no blending)
+- **Semi-transparent** (0 < alpha < 255): Pixel is alpha-blended with framebuffer
+
+The blending formula is: `result = src * alpha + dst * (1 - alpha)`
+
+All pixels written to the framebuffer have alpha = 255 (fully opaque).
+
+### Performance Optimization
+
+`drawSprite()` is optimized for performance:
+- Calculates visible region once before drawing
+- Only iterates over pixels that are on-screen
+- Early exit if sprite is completely off-screen
+- Skips per-pixel bounds checking in the loop
+
+### Example Usage
+
+```ts
+import { drawSprite, drawSpriteFlip } from './console';
+
+// Draw a flag sprite
+drawSprite(0, 100, 100);
+
+// Draw a player sprite facing left
+drawSpriteFlip(1, 50, 50, true, false);
+
+// Sprites with semi-transparent pixels will blend smoothly
+drawSprite(2, 200, 150); // Shadow sprite with alpha = 128
+```
+
+### Notes
+
+- Sprites are loaded at startup from `assets/sprites/`
+- Maximum sprite ID: 255
+- Sprite data is stored in dedicated memory region
+- Transparency is handled automatically
+- Alpha blending works with any alpha value (0-255)
+
+---
+
 ## Timing Model
 
 - Fixed timestep: **60 Hz**

@@ -246,8 +246,8 @@ export function drawString(x: i32, y: i32, text: string, color: u32): void {
 
 /**
  * Draw a sprite at the specified position
- * Supports transparency (alpha < 128 treated as transparent)
- * @param id Sprite ID (0-255)
+ * Supports alpha blending for semi-transparent sprites
+ * @param id Sprite ID
  * @param x X coordinate (top-left)
  * @param y Y coordinate (top-left)
  * @example
@@ -255,34 +255,67 @@ export function drawString(x: i32, y: i32, text: string, color: u32): void {
  * drawSprite(0, 100, 100); // Draw sprite 0 at (100, 100)
  * ```
  */
-export function drawSprite(id: u8, x: i32, y: i32): void {
+export function drawSprite(id: u32, x: i32, y: i32): void {
   // Read sprite metadata
   const metadataAddr = SPRITE_METADATA + (id as usize) * 8;
-  const width = load<u16>(metadataAddr + 0);
-  const height = load<u16>(metadataAddr + 2);
+  const width = load<u16>(metadataAddr + 0) as i32;
+  const height = load<u16>(metadataAddr + 2) as i32;
   const dataOffset = load<u32>(metadataAddr + 4);
 
   // Early exit if sprite has no size (not loaded)
   if (width == 0 || height == 0) return;
 
-  // Draw sprite pixels
+  // Calculate visible region (clip to screen bounds)
+  const startX = max(0, -x);
+  const startY = max(0, -y);
+  const endX = min(width, WIDTH - x);
+  const endY = min(height, HEIGHT - y);
+
+  // Early exit if sprite is completely off-screen
+  if (startX >= endX || startY >= endY) return;
+
+  // Draw sprite pixels (only visible region)
   const spriteDataAddr = SPRITE_DATA + dataOffset;
 
-  for (let dy: i32 = 0; dy < height; dy++) {
-    for (let dx: i32 = 0; dx < width; dx++) {
+  for (let dy: i32 = startY; dy < endY; dy++) {
+    for (let dx: i32 = startX; dx < endX; dx++) {
       const pixelOffset = ((dy * width + dx) * 4) as usize;
       const pixelAddr = spriteDataAddr + pixelOffset;
 
-      const r = load<u8>(pixelAddr + 0);
-      const g = load<u8>(pixelAddr + 1);
-      const b = load<u8>(pixelAddr + 2);
-      const a = load<u8>(pixelAddr + 3);
+      const srcR = load<u8>(pixelAddr + 0);
+      const srcG = load<u8>(pixelAddr + 1);
+      const srcB = load<u8>(pixelAddr + 2);
+      const srcA = load<u8>(pixelAddr + 3);
 
-      // Skip transparent pixels (alpha < 128)
-      if (a < 128) continue;
+      // Skip fully transparent pixels
+      if (srcA == 0) continue;
 
-      // Convert RGBA to ABGR and draw
-      pset(x + dx, y + dy, toColor(r, g, b, a));
+      const screenX = x + dx;
+      const screenY = y + dy;
+
+      // If fully opaque, no blending needed
+      if (srcA == 255) {
+        pset(screenX, screenY, toColor(srcR, srcG, srcB, 255));
+      } else {
+        // Alpha blending required
+        const fbAddr = ((screenY * WIDTH + screenX) << 2) as usize;
+        const dstPixel = load<u32>(fbAddr);
+
+        // Extract destination RGB from ABGR format
+        const dstR = (dstPixel >> 16) & 0xff;
+        const dstG = (dstPixel >> 8) & 0xff;
+        const dstB = dstPixel & 0xff;
+
+        // Blend: result = src * alpha + dst * (1 - alpha)
+        const alpha = srcA as u32;
+        const invAlpha = 255 - alpha;
+
+        const blendR = ((srcR as u32 * alpha + dstR * invAlpha) / 255) as u8;
+        const blendG = ((srcG as u32 * alpha + dstG * invAlpha) / 255) as u8;
+        const blendB = ((srcB as u32 * alpha + dstB * invAlpha) / 255) as u8;
+
+        pset(screenX, screenY, toColor(blendR, blendG, blendB, 255));
+      }
     }
   }
 }
