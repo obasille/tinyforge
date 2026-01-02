@@ -104,12 +104,12 @@ async function loadGame(gameName) {
   }
 }
 
-// Initial load - default to minesweeper
-let currentGame = 'minesweeper';
-loadGame(currentGame);
-
 // Game selector UI
 const gameSelect = document.getElementById('game-select');
+
+// Initial load - use dropdown value (persisted by browser on reload)
+let currentGame = gameSelect.value;
+loadGame(currentGame);
 
 gameSelect.addEventListener('change', () => {
   const selectedGame = gameSelect.value;
