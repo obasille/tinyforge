@@ -227,3 +227,50 @@ export function drawString(x: i32, y: i32, text: string, color: u32): void {
     drawChar(x + i * 8, y, charCode, color);
   }
 }
+
+// === Utility Functions ===
+
+// PRNG using LCG algorithm
+// Seed is stored at the given RAM offset
+export function random(seedVar: usize): i32 {
+  let seed = load<i32>(seedVar);
+  seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+  store<i32>(seedVar, seed);
+  return seed;
+}
+
+@unmanaged
+export class Vec2i {
+  x: i32;
+  y: i32;
+
+  constructor(x: i32 = 0, y: i32 = 0) {
+    this.x = x;
+    this.y = y;
+  }
+
+  set(x: i32, y: i32): void {
+    this.x = x;
+    this.y = y;
+  }
+
+  copy(): Vec2i {
+    return new Vec2i(this.x, this.y);
+  }
+}
+
+// Draw a message box with title and optional subtitle
+// titleOffset and subtitleOffset are relative to box corner
+export function drawMessageBox(
+  pos: Vec2i, size: Vec2i,
+  title: string, titleOffset: Vec2i,
+  subtitle: string, subtitleOffset: Vec2i,
+  bgColor: u32, fgColor: u32
+): void {
+  fillRect(pos.x, pos.y, size.x, size.y, bgColor);
+  drawRect(pos.x, pos.y, size.x, size.y, fgColor);
+  drawString(pos.x + titleOffset.x, pos.y + titleOffset.y, title, fgColor);
+  if (subtitle.length > 0) {
+    drawString(pos.x + subtitleOffset.x, pos.y + subtitleOffset.y, subtitle, c(0xaaaaaa));
+  }
+}

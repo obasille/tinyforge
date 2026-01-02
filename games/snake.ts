@@ -1,7 +1,7 @@
 // SNAKE - Fantasy Console Game
 // Classic snake game with grid-based movement
 
-import { WIDTH, HEIGHT, Button, log, getI32, setI32, getU8, setU8, clearFramebuffer, pset, fillRect, drawRect, drawNumber, drawChar, drawString, c } from './console';
+import { WIDTH, HEIGHT, Button, log, getI32, setI32, getU8, setU8, clearFramebuffer, pset, fillRect, drawRect, drawNumber, drawChar, drawString, c, random, drawMessageBox, RAM_START, Vec2i } from './console';
 
 // === Constants ===
 @inline
@@ -48,16 +48,10 @@ enum Var {
   SNAKE_DATA = 16,         // 400 bytes - snake body (2 bytes per segment: x, y)
 }
 
-// === PRNG ===
-function random(): i32 {
-  let seed = getI32(Var.RNG_SEED);
-  seed = ((seed * 1103515245 + 12345) & 0x7fffffff);
-  setI32(Var.RNG_SEED, seed);
-  return seed;
-}
+
 
 function randomRange(max: i32): i32 {
-  return (random() % max);
+  return (random(RAM_START + Var.RNG_SEED) % max);
 }
 
 // === Snake Helpers ===
@@ -308,7 +302,7 @@ export function draw(): void {
   
   // Game messages
   if (state == GameState.START_SCREEN) {
-    drawGameMessage("SNAKE", 130, c(0x1a1a1a), c(0x00ff00));
+    drawMessageBox(new Vec2i(60, HEIGHT / 2 - 30), new Vec2i(200, 60), "SNAKE", new Vec2i(70, 15), "PRESS START", new Vec2i(25, 35), c(0x1a1a1a), c(0x00ff00));
   } else if (state == GameState.GAME_OVER) {
     fillRect(60, HEIGHT / 2 - 30, 200, 60, c(0x000000));
     drawRect(60, HEIGHT / 2 - 30, 200, 60, c(0xff0000));
@@ -318,11 +312,5 @@ export function draw(): void {
     drawNumber(130, HEIGHT / 2 - 5, score as i32, c(0xffffff));
     drawString(80, HEIGHT / 2 + 10, "PRESS START", c(0xaaaaaa));
   }
-}
-function drawGameMessage(message: string, x: i32, bgColor: u32, fgColor: u32): void {
-  fillRect(60, HEIGHT / 2 - 30, 200, 60, bgColor);
-  drawRect(60, HEIGHT / 2 - 30, 200, 60, fgColor);
-  drawString(x, HEIGHT / 2 - 15, message, fgColor);
-  drawString(85, HEIGHT / 2 + 5, "PRESS START", c(0xaaaaaa));
 }
 

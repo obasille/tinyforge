@@ -1,7 +1,7 @@
 // PONG - Fantasy Console Game
 // Two-player pong with horizontal paddles (top vs bottom)
 
-import { WIDTH, HEIGHT, Button, log, getI32, setI32, getF32, setF32, getU8, setU8, clearFramebuffer, drawString, drawNumber, drawRect, fillRect, c } from './console';
+import { WIDTH, HEIGHT, Button, log, getI32, setI32, getF32, setF32, getU8, setU8, clearFramebuffer, drawString, drawNumber, drawRect, fillRect, c, drawMessageBox, Vec2i } from './console';
 
 // === Constants ===
 @inline
@@ -264,7 +264,7 @@ export function draw(): void {
   
   // Game messages
   if (state == GameState.START_SCREEN) {
-    drawGameMessage("PONG", 135, c(0x1a1a1a), c(0xffffff));
+    drawMessageBox(new Vec2i(60, HEIGHT / 2 - 30), new Vec2i(200, 60), "PONG", new Vec2i(75, 15), "PRESS START", new Vec2i(25, 35), c(0x1a1a1a), c(0xffffff));
   } else if (state == GameState.GAME_OVER) {
     const winner = getU8(Var.WINNER);
     fillRect(60, HEIGHT / 2 - 20, 200, 40, c(0x000000));
@@ -277,11 +277,4 @@ export function draw(): void {
     }
     drawString(80, HEIGHT / 2 + 5, "PRESS START", c(0xaaaaaa));
   }
-}
-
-function drawGameMessage(message: string, x: i32, bgColor: u32, fgColor: u32): void {
-  fillRect(60, HEIGHT / 2 - 30, 200, 60, bgColor);
-  drawRect(60, HEIGHT / 2 - 30, 200, 60, fgColor);
-  drawString(x, HEIGHT / 2 - 15, message, fgColor);
-  drawString(85, HEIGHT / 2 + 5, "PRESS START", c(0xaaaaaa));
 }

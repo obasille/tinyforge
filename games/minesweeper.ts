@@ -1,7 +1,7 @@
 // MINESWEEPER - Fantasy Console Game
 // 10×10 grid, 15 mines, retro terminal aesthetic
 
-import { clearFramebuffer, Button, log, getI32, setI32, getU8, setU8, drawNumber, drawString, drawRect, fillCircle, fillRect, c } from './console';
+import { clearFramebuffer, Button, log, getI32, setI32, getU8, setU8, drawNumber, drawString, drawRect, fillCircle, fillRect, c, random, drawMessageBox, RAM_START, Vec2i } from './console';
 
 // === Constants ===
 @inline
@@ -55,18 +55,11 @@ function setCellData(x: i32, y: i32, data: u8): void {
   setU8(Var.GRID_START + (y * GRID_SIZE + x), data);
 }
 
-// === PRNG ===
-@inline
-function random(): i32 {
-  let seed = getI32(Var.RNG_SEED);
-  seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-  setI32(Var.RNG_SEED, seed);
-  return seed;
-}
+
 
 @inline
 function randomRange(max: i32): i32 {
-  return (random() % max);
+  return (random(RAM_START + Var.RNG_SEED) % max);
 }
 
 // === Game Logic ===
@@ -301,8 +294,5 @@ export function draw(): void {
 }
 
 function drawGameFinishedMessage(message: string, bgColor: u32, fgColor: u32): void {
-  fillRect(75, 95, 170, 50, bgColor);
-  drawRect(75, 95, 170, 50, fgColor);
-  drawString(125, 107, message, fgColor);
-  drawString(115, 122, "PRESS START", c(0xaaaaaa));
+  drawMessageBox(new Vec2i(75, 95), new Vec2i(170, 50), message, new Vec2i(50, 12), "PRESS START", new Vec2i(40, 27), bgColor, fgColor);
 }
