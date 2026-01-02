@@ -260,12 +260,12 @@ function random(): i32 {
 ```json
 {
   "scripts": {
-    "build:debug": "asc cart/yourgame.ts -o cart/cartridge.wasm ..."
+    "build:debug": "asc games/yourgame.ts -o cartridges/yourgame.wasm ..."
   }
 }
 ```
 
-**Or use asconfig.json targets** in the cart/ directory.
+**Or use asconfig.json targets** in the games/ directory.
 
 #### 11. Compilation Error Patterns
 
@@ -299,7 +299,7 @@ error("Invalid state");  // Unexpected conditions
 
 ### Complete Workflow for Creating a New Game
 
-1. **Create game file**: `cart/yourgame.ts`
+1. **Create game file**: `games/yourgame.ts`
 
 2. **Import required APIs**:
    ```ts
@@ -368,22 +368,63 @@ error("Invalid state");  // Unexpected conditions
    }
    ```
 
-7. **Update build configuration**:
-   - Edit `package.json` to compile your game
-   - Or add target to `cart/asconfig.json`
+7. **Update build configuration in package.json**:
+   
+   Add build scripts for your new game:
+   ```json
+   {
+     "scripts": {
+       "build": "npm run build:minesweeper && npm run build:pong && npm run build:snake && npm run build:yourgame",
+       "build:debug": "npm run build:minesweeper:debug && npm run build:pong:debug && npm run build:snake:debug && npm run build:yourgame:debug",
+       "build:yourgame": "asc games/yourgame.ts -o cartridges/yourgame.wasm --config games/asconfig.json",
+       "build:yourgame:debug": "asc games/yourgame.ts -o cartridges/yourgame.wasm --config games/asconfig.json --target debug"
+     }
+   }
+   ```
+   
+   **Key points:**
+   - Add both production and debug build scripts
+   - Output to `cartridges/` folder
+   - Update the main `build` and `build:debug` scripts to include your new game
+   - Use the existing `asconfig.json` in the games folder
 
-8. **Build and test**:
+8. **Add game to selector in host/index.html**:
+   
+   Add an option to the game select dropdown:
+   ```html
+   <select id="game-select" class="game-selector">
+     <option value="minesweeper">Minesweeper</option>
+     <option value="pong">Pong</option>
+     <option value="snake">Snake</option>
+     <option value="yourgame">Your Game Name</option>
+   </select>
+   ```
+   
+   **Key points:**
+   - The `value` attribute must match the WASM filename (without `.wasm` extension)
+   - The display text can be anything user-friendly
+   - Add the option inside the existing `<select id="game-select">` element
+
+9. **Build and test**:
    ```bash
    npm run build:debug
    ```
+   
+   The game will be compiled to `cartridges/yourgame.wasm` and can be selected from the dropdown.
 
-9. **Fix compilation errors**:
+10. **Fix compilation errors**:
    - Add missing casts for enums: `as u8`, `as i32`
    - Add parentheses for operator precedence
    - Remove duplicate variable declarations
    - Check bounds and types match
 
-10. **Verify game over flow**:
+11. **Test the game selector**:
+   - Start the server: `npm run serve`
+   - Open `http://localhost:8080/host/index.html`
+   - Your game should appear in the dropdown
+   - Selecting it loads the game without page refresh
+
+12. **Verify game over flow**:
     - Game transitions to GAME_OVER state
     - "PRESS START" message displays
     - START button calls `init()` to restart

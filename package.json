@@ -4,8 +4,14 @@
   "description": "A small, deterministic fantasy console for building simple 2D games on the web",
   "type": "module",
   "scripts": {
-    "build": "asc cart/snake.ts -o cart/cartridge.wasm --config cart/asconfig.json",
-    "build:debug": "asc cart/snake.ts -o cart/cartridge.wasm --config cart/asconfig.json --target debug",
+    "build": "npm run build:minesweeper && npm run build:pong && npm run build:snake",
+    "build:debug": "npm run build:minesweeper:debug && npm run build:pong:debug && npm run build:snake:debug",
+    "build:minesweeper": "asc games/minesweeper.ts -o cartridges/minesweeper.wasm --config games/asconfig.json",
+    "build:minesweeper:debug": "asc games/minesweeper.ts -o cartridges/minesweeper.wasm --config games/asconfig.json --target debug",
+    "build:pong": "asc games/pong.ts -o cartridges/pong.wasm --config games/asconfig.json",
+    "build:pong:debug": "asc games/pong.ts -o cartridges/pong.wasm --config games/asconfig.json --target debug",
+    "build:snake": "asc games/snake.ts -o cartridges/snake.wasm --config games/asconfig.json",
+    "build:snake:debug": "asc games/snake.ts -o cartridges/snake.wasm --config games/asconfig.json --target debug",
     "serve": "python -m http.server 8080",
     "dev": "npm run build && npm run serve"
   },

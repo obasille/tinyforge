@@ -90,7 +90,7 @@ fantasy-console/
 │  ├─ index.html        # Canvas and page shell
 │  └─ main.js           # Input, timing, rendering, WASM loader
 │
-├─ cart/                # The cartridge (AssemblyScript)
+├─ games/               # The cartridge (AssemblyScript)
 │  ├─ console.ts        # Console SDK (memory map, constants, input)
 │  ├─ cartridge.ts      # Game code
 │  ├─ asconfig.json     # AssemblyScript configuration
@@ -108,7 +108,7 @@ Owns everything that would be considered *hardware* on a real console:
 - Rendering
 - Cartridge loading
 
-### `cart/`
+### `games/`
 Contains only game code:
 
 - Update logic
@@ -353,23 +353,33 @@ npm install
 
 ### Build
 
-From the project root:
+The project includes three games: **minesweeper**, **pong**, and **snake**. Each compiles to its own WASM file.
 
+**Build all games:**
+```
+npm run build:debug
+```
+
+**Build individual games:**
+```
+npm run build:minesweeper:debug
+npm run build:pong:debug
+npm run build:snake:debug
+```
+
+**Production builds (optimized):**
 ```
 npm run build
 ```
 
-Or manually from the `cart/` directory:
+This creates:
+- `cartridges/minesweeper.wasm`
+- `cartridges/pong.wasm`
+- `cartridges/snake.wasm`
 
-```
-asc cartridge.ts \
-  -o cartridge.wasm \
-  -O3 \
-  --runtime stub \
-  --importMemory
-```
+### Switching Games
 
-The output `cartridge.wasm` is loaded by the host.
+The console includes a game selector in the devtools panel. Use the dropdown to select a game and click "Load Game" to switch between cartridges at runtime without refreshing the page.
 
 ---
 

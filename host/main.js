@@ -2,30 +2,51 @@ import * as loader from '@assemblyscript/loader';
 import { addConsoleEntry } from './console-panel.js';
 
 const canvas = document.getElementById("screen");
-const ctx = canvas.getContext("2d");
+const ctx = canvas.getContext("2d", { alpha: false });
+
+const WIDTH = 320;
+const HEIGHT = 240;
 
 let hasAborted = false;
+let animationFrameId = null;
 
 const memory = new WebAssembly.Memory({
   initial: 16,   // 16 × 64 KB = 1 MB
   maximum: 16    // fixed, no growth
 });
 
-// WASM module and exports
-let wasmExports;
+// Create framebuffer views (persistent across game loads)
+const fb = new Uint8ClampedArray(memory.buffer, 0, WIDTH * HEIGHT * 4);
+const fb32 = new Uint32Array(memory.buffer, 0, WIDTH * HEIGHT);
+const image = new ImageData(fb, WIDTH, HEIGHT);
 
-const wasm = await (async () => {
+// WASM module state
+let wasmExports;
+let init, update, draw;
+
+// Load a game cartridge
+async function loadGame(gameName) {
+  // Stop current game loop
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
+  }
+  
+  hasAborted = false;
+  addConsoleEntry('LOG', `Loading ${gameName}...`);
+  
   try {
     const wasm = await loader.instantiateStreaming(
-      fetch("../cart/cartridge.wasm"),
+      fetch(`../cartridges/${gameName}.wasm`),
       {
         env: {
           memory,
           abort: (msg, file, line, column) => {
-            hasAborted = true;  // Stop frame loop
+            // See AS __getString implementation in wasm-string.js
+            hasAborted = true;
             msg = wasmExports.__getString(msg);
             file = wasmExports.__getString(file);
-            const errorMsg =`Abort at ${file} ${line}:${column} => ${msg}`;
+            const errorMsg = `Abort at ${file} ${line}:${column} => ${msg}`;
             addConsoleEntry('ABORT', errorMsg);
             console.error("WASM abort:", { msg, file, line, column });
           },
@@ -58,39 +79,47 @@ const wasm = await (async () => {
     const missing = required.filter(name => !wasm.instance.exports[name]);
     
     if (missing.length > 0) {
-      throw new Error(
-        `Cartridge missing required exports: ${missing.join(', ')}`
-      );
+      throw new Error(`Cartridge missing required exports: ${missing.join(', ')}`);
     }
     
-    return wasm;
+    // Assign lifecycle functions
+    init = wasm.instance.exports.init;
+    update = wasm.instance.exports.update;
+    draw = wasm.instance.exports.draw;
+    
+    // Initialize the game
+    init();
+    addConsoleEntry('LOG', `${gameName} loaded successfully`);
+    
+    // Start game loop
+    last = performance.now();
+    acc = 0;
+    inputMask = 0;
+    prevInputMask = 0;
+    requestAnimationFrame(frame);
+    
   } catch (e) {
-    addConsoleEntry('ERROR', `Failed to load cartridge: ${e.message}`);
-    throw e;
+    addConsoleEntry('ERROR', `Failed to load ${gameName}: ${e.message}`);
+    hasAborted = true;
   }
-})();
+}
 
-const { init, update, draw } = wasm.instance.exports;
-const WIDTH = 320;
-const HEIGHT = 240;
-  
-// Create a Uint8ClampedArray that points to the framebuffer in WASM memory
-// Note: UInt8ClampedArray type is required by ImageData
-const fb = new Uint8ClampedArray(
-  memory.buffer,
-  0,
-  WIDTH * HEIGHT * 4
-);
+// Initial load - default to minesweeper
+let currentGame = 'minesweeper';
+loadGame(currentGame);
 
-// Create Uint32Array view for efficient clearing
-const fb32 = new Uint32Array(
-  memory.buffer,
-  0,
-  WIDTH * HEIGHT
-);
+// Game selector UI
+const gameSelect = document.getElementById('game-select');
 
-const image = new ImageData(fb, WIDTH, HEIGHT);
+gameSelect.addEventListener('change', () => {
+  const selectedGame = gameSelect.value;
+  if (selectedGame !== currentGame) {
+    currentGame = selectedGame;
+    loadGame(currentGame);
+  }
+});
 
+// Input handling
 const KEYMAP = {
   ArrowUp:    1 << 0,
   ArrowDown:  1 << 1,
@@ -118,13 +147,6 @@ window.addEventListener("keyup", e => {
   }
 });
 
-try {
-  init();
-} catch (e) {
-  addConsoleEntry('ERROR', `Error in init(): ${e.message}`);
-  hasAborted = true;
-}
-
 // === Fixed Timestep Loop ===
 
 // This ensures deterministic game logic regardless of actual frame rate
@@ -150,15 +172,23 @@ const inputEl = document.getElementById('input');
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     // Tab hidden - animation loop will stop naturally
+    if (animationFrameId) {
+      cancelAnimationFrame(animationFrameId);
+      animationFrameId = null;
+    }
   } else {
     // Tab visible - restart animation loop
-    last = performance.now();          // Reset reference time on resume
-    acc = 0;                           // Clear accumulated time
-    requestAnimationFrame(frame);      // Restart the loop
+    if (!animationFrameId && !hasAborted) {
+      last = performance.now();          // Reset reference time on resume
+      acc = 0;                           // Clear accumulated time
+      animationFrameId = requestAnimationFrame(frame);
+    }
   }
 });
 
 function frame(now) {
+  animationFrameId = null;  // Clear ID since this frame is running
+  
   // Stop if WASM has aborted
   if (hasAborted) {
     return;
@@ -180,6 +210,7 @@ function frame(now) {
       updates++;
     } catch (e) {
       addConsoleEntry('ERROR', `Error in update(): ${e.message}`);
+      hasAborted = true;
       break;
     }
   }
@@ -198,6 +229,7 @@ function frame(now) {
       ctx.putImageData(image, 0, 0);
     } catch (e) {
       addConsoleEntry('ERROR', `Error in draw(): ${e.message}`);
+      hasAborted = true;
     }
   }
 
@@ -217,8 +249,6 @@ function frame(now) {
 
   // Continue the loop only if document is still visible and no abort occurred
   if (!document.hidden && !hasAborted) {
-    requestAnimationFrame(frame);
+    animationFrameId = requestAnimationFrame(frame);
   }
 }
-
-requestAnimationFrame(frame);
