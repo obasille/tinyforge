@@ -1,7 +1,7 @@
 // SNAKE - Fantasy Console Game
 // Classic snake game with grid-based movement
 
-import { WIDTH, HEIGHT, Button, log, getI32, setI32, getU8, setU8, clearFramebuffer, pset, fillRect, drawRect, drawNumber, drawChar, drawString } from './console';
+import { WIDTH, HEIGHT, Button, log, getI32, setI32, getU8, setU8, clearFramebuffer, pset, fillRect, drawRect, drawNumber, drawChar, drawString, c } from './console';
 
 // === Constants ===
 @inline
@@ -264,63 +264,65 @@ export function update(input: i32, prevInput: i32): void {
 }
 
 export function draw(): void {
-  clearFramebuffer(0x0a0a0a);
+  clearFramebuffer(c(0x0a0a0a));
   
   const state = getU8(Var.GAME_STATE);
   const length = getI32(Var.SNAKE_LENGTH);
   
   // Draw grid lines (subtle)
+  const colorGrid = c(0x1a1a1a);
   for (let x: i32 = 0; x < WIDTH; x += GRID_SIZE) {
     for (let y: i32 = 0; y < HEIGHT; y++) {
-      pset(x, y, 0x1a1a1a);
+      pset(x, y, colorGrid);
     }
   }
   for (let y: i32 = 0; y < HEIGHT; y += GRID_SIZE) {
     for (let x: i32 = 0; x < WIDTH; x++) {
-      pset(x, y, 0x1a1a1a);
+      pset(x, y, colorGrid);
     }
   }
   
   // Draw snake
+  const colorBody = c(0x00ff00);
+  const colorHead = c(0x00ffaa);
   for (let i: i32 = 0; i < length; i++) {
     const sx = (getSegmentX(i) as i32) * GRID_SIZE;
     const sy = (getSegmentY(i) as i32) * GRID_SIZE;
     
-    let color: u32 = 0x00ff00; // Green for body
     if (i == 0) {
-      color = 0x00ffaa; // Brighter green for head
+      fillRect(sx + 1, sy + 1, GRID_SIZE - 2, GRID_SIZE - 2, colorHead);
+    } else {
+      fillRect(sx + 1, sy + 1, GRID_SIZE - 2, GRID_SIZE - 2, colorBody);
     }
-    
-    fillRect(sx + 1, sy + 1, GRID_SIZE - 2, GRID_SIZE - 2, color);
   }
   
   // Draw food
   const foodX = (getU8(Var.FOOD_X) as i32) * GRID_SIZE;
   const foodY = (getU8(Var.FOOD_Y) as i32) * GRID_SIZE;
-  fillRect(foodX + 2, foodY + 2, GRID_SIZE - 4, GRID_SIZE - 4, 0xff0000);
+  fillRect(foodX + 2, foodY + 2, GRID_SIZE - 4, GRID_SIZE - 4, c(0xff0000));
   
   // Draw score
   const score = getU8(Var.SCORE);
-  drawString(4, 4, "SCORE:", 0xaaaaaa);
-  drawNumber(50, 4, score as i32, 0xffffff);
+  drawString(4, 4, "SCORE:", c(0xaaaaaa));
+  drawNumber(50, 4, score as i32, c(0xffffff));
   
   // Game messages
   if (state == GameState.START_SCREEN) {
-    drawGameMessage("SNAKE", 130, 0x1a1a1a, 0x00ff00);
+    drawGameMessage("SNAKE", 130, c(0x1a1a1a), c(0x00ff00));
   } else if (state == GameState.GAME_OVER) {
-    fillRect(60, HEIGHT / 2 - 30, 200, 60, 0x000000);
-    drawRect(60, HEIGHT / 2 - 30, 200, 60, 0xff0000);
+    fillRect(60, HEIGHT / 2 - 30, 200, 60, c(0x000000));
+    drawRect(60, HEIGHT / 2 - 30, 200, 60, c(0xff0000));
     
-    drawString(80, HEIGHT / 2 - 20, "GAME OVER!", 0xff0000);
-    drawString(80, HEIGHT / 2 - 5, "SCORE:", 0xaaaaaa);
-    drawNumber(130, HEIGHT / 2 - 5, score as i32, 0xffffff);
-    drawString(80, HEIGHT / 2 + 10, "PRESS START", 0xaaaaaa);
+    drawString(80, HEIGHT / 2 - 20, "GAME OVER!", c(0xff0000));
+    drawString(80, HEIGHT / 2 - 5, "SCORE:", c(0xaaaaaa));
+    drawNumber(130, HEIGHT / 2 - 5, score as i32, c(0xffffff));
+    drawString(80, HEIGHT / 2 + 10, "PRESS START", c(0xaaaaaa));
   }
 }
 function drawGameMessage(message: string, x: i32, bgColor: u32, fgColor: u32): void {
   fillRect(60, HEIGHT / 2 - 30, 200, 60, bgColor);
   drawRect(60, HEIGHT / 2 - 30, 200, 60, fgColor);
   drawString(x, HEIGHT / 2 - 15, message, fgColor);
-  drawString(85, HEIGHT / 2 + 5, "PRESS START", 0xaaaaaa);
+  drawString(85, HEIGHT / 2 + 5, "PRESS START", c(0xaaaaaa));
 }
 

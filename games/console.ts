@@ -87,6 +87,15 @@ export function setU8(offset: u32, value: u8): void {
   store<u8>(RAM_START + offset, value);
 }
 
+// === Color Helper ===
+// Convert RGB (0xRRGGBB) to ABGR (0xAABBGGRR) with full alpha
+@inline
+export function c(rgb: u32): u32 {
+  const r = (rgb >> 16) & 0xFF;
+  const g = rgb & 0x00FF00;
+  const b = (rgb & 0xFF) << 16;
+  return 0xFF000000 | b | g | r;
+}
 
 // === Drawing Helpers ===
 

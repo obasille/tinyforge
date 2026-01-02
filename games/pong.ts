@@ -1,7 +1,7 @@
 // PONG - Fantasy Console Game
 // Two-player pong with horizontal paddles (top vs bottom)
 
-import { WIDTH, HEIGHT, Button, log, getI32, setI32, getF32, setF32, getU8, setU8, clearFramebuffer, drawString, drawNumber, drawRect, fillRect } from './console';
+import { WIDTH, HEIGHT, Button, log, getI32, setI32, getF32, setF32, getU8, setU8, clearFramebuffer, drawString, drawNumber, drawRect, fillRect, c } from './console';
 
 // === Constants ===
 @inline
@@ -234,7 +234,7 @@ export function update(input: i32, prevInput: i32): void {
 }
 
 export function draw(): void {
-  clearFramebuffer(0x0a0a0a);
+  clearFramebuffer(c(0x0a0a0a));
   
   const state = getU8(Var.GAME_STATE);
   const p1X = getF32(Var.P1_X) as i32;
@@ -243,38 +243,39 @@ export function draw(): void {
   const ballY = getF32(Var.BALL_Y) as i32;
   
   // Draw center line
+  const colorCenterLine = c(0x333333);
   for (let x: i32 = 0; x < WIDTH; x += 8) {
-    fillRect(x, HEIGHT / 2 - 1, 4, 2, 0x333333);
+    fillRect(x, HEIGHT / 2 - 1, 4, 2, colorCenterLine);
   }
   
   // Draw paddles
-  fillRect(p1X, 0, PADDLE_WIDTH, PADDLE_HEIGHT, 0x00aaff);           // Player 1 (top) - blue
-  fillRect(p2X, HEIGHT - PADDLE_HEIGHT, PADDLE_WIDTH, PADDLE_HEIGHT, 0xff5500); // Player 2 (bottom) - orange
+  fillRect(p1X, 0, PADDLE_WIDTH, PADDLE_HEIGHT, c(0x00aaff));           // Player 1 (top) - blue
+  fillRect(p2X, HEIGHT - PADDLE_HEIGHT, PADDLE_WIDTH, PADDLE_HEIGHT, c(0xff5500)); // Player 2 (bottom) - orange
   
   // Draw ball
-  fillRect(ballX, ballY, BALL_SIZE, BALL_SIZE, 0xffffff);
+  fillRect(ballX, ballY, BALL_SIZE, BALL_SIZE, c(0xffffff));
   
   // Draw scores
   const p1Score = getI32(Var.P1_SCORE);
   const p2Score = getI32(Var.P2_SCORE);
   
-  drawNumber(10, 10, p1Score, 0x00aaff);
-  drawNumber(10, HEIGHT - 20, p2Score, 0xff5500);
+  drawNumber(10, 10, p1Score, c(0x00aaff));
+  drawNumber(10, HEIGHT - 20, p2Score, c(0xff5500));
   
   // Game messages
   if (state == GameState.START_SCREEN) {
-    drawGameMessage("PONG", 135, 0x1a1a1a, 0xffffff);
+    drawGameMessage("PONG", 135, c(0x1a1a1a), c(0xffffff));
   } else if (state == GameState.GAME_OVER) {
     const winner = getU8(Var.WINNER);
-    fillRect(60, HEIGHT / 2 - 20, 200, 40, 0x000000);
-    drawRect(60, HEIGHT / 2 - 20, 200, 40, 0xffffff);
+    fillRect(60, HEIGHT / 2 - 20, 200, 40, c(0x000000));
+    drawRect(60, HEIGHT / 2 - 20, 200, 40, c(0xffffff));
     
     if (winner == 1) {
-      drawString(80, HEIGHT / 2 - 10, "PLAYER 1 WINS!", 0x00aaff);
+      drawString(80, HEIGHT / 2 - 10, "PLAYER 1 WINS!", c(0x00aaff));
     } else {
-      drawString(80, HEIGHT / 2 - 10, "PLAYER 2 WINS!", 0xff5500);
+      drawString(80, HEIGHT / 2 - 10, "PLAYER 2 WINS!", c(0xff5500));
     }
-    drawString(80, HEIGHT / 2 + 5, "PRESS START", 0xaaaaaa);
+    drawString(80, HEIGHT / 2 + 5, "PRESS START", c(0xaaaaaa));
   }
 }
 
@@ -282,5 +283,5 @@ function drawGameMessage(message: string, x: i32, bgColor: u32, fgColor: u32): v
   fillRect(60, HEIGHT / 2 - 30, 200, 60, bgColor);
   drawRect(60, HEIGHT / 2 - 30, 200, 60, fgColor);
   drawString(x, HEIGHT / 2 - 15, message, fgColor);
-  drawString(85, HEIGHT / 2 + 5, "PRESS START", 0xaaaaaa);
+  drawString(85, HEIGHT / 2 + 5, "PRESS START", c(0xaaaaaa));
 }

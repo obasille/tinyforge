@@ -1,7 +1,7 @@
 // MINESWEEPER - Fantasy Console Game
 // 10×10 grid, 15 mines, retro terminal aesthetic
 
-import { clearFramebuffer, Button, log, getI32, setI32, getU8, setU8, drawNumber, drawString, drawRect, fillCircle, fillRect } from './console';
+import { clearFramebuffer, Button, log, getI32, setI32, getU8, setU8, drawNumber, drawString, drawRect, fillCircle, fillRect, c } from './console';
 
 // === Constants ===
 @inline
@@ -224,11 +224,20 @@ export function update(input: i32, prevInput: i32): void {
 }
 
 export function draw(): void {
-  clearFramebuffer(0x0a0a0a);
+  clearFramebuffer(c(0x0a0a0a));
   
   const state = getU8(Var.GAME_STATE);
   const cx = getI32(Var.CURSOR_X);
   const cy = getI32(Var.CURSOR_Y);
+  
+  // Pre-convert colors
+  const colorBg = c(0x1a1a1a);
+  const colorBgRevealed = c(0x000000);
+  const colorBorder = c(0x333333);
+  const colorCursor = c(0x00ff00);
+  const colorMine = c(0xff0000);
+  const colorNumber = c(0x00ff00);
+  const colorFlag = c(0xffaa00);
   
   // Draw grid
   for (let y: i32 = 0; y < GRID_SIZE; y++) {
@@ -238,36 +247,36 @@ export function draw(): void {
       const sy = GRID_OFFSET_Y + y * CELL_SIZE;
       
       // Cell background
-      let bgColor: u32 = 0x1a1a1a;
       if (cell & CellFlag.REVEALED) {
-        bgColor = 0x000000;
+        fillRect(sx + 1, sy + 1, CELL_SIZE - 2, CELL_SIZE - 2, colorBgRevealed);
+      } else {
+        fillRect(sx + 1, sy + 1, CELL_SIZE - 2, CELL_SIZE - 2, colorBg);
       }
-      fillRect(sx + 1, sy + 1, CELL_SIZE - 2, CELL_SIZE - 2, bgColor);
       
       // Cell border
-      let borderColor: u32 = 0x333333;
       if (x == cx && y == cy) {
-        borderColor = 0x00ff00; // Green cursor
+        drawRect(sx, sy, CELL_SIZE, CELL_SIZE, colorCursor); // Green cursor
+      } else {
+        drawRect(sx, sy, CELL_SIZE, CELL_SIZE, colorBorder);
       }
-      drawRect(sx, sy, CELL_SIZE, CELL_SIZE, borderColor);
       
       // Cell content
       if (cell & CellFlag.REVEALED) {
         if (cell & CellFlag.MINE) {
           // Draw mine (red circle)
-          fillCircle(sx + 12, sy + 12, 6, 0xff0000);
+          fillCircle(sx + 12, sy + 12, 6, colorMine);
         } else {
           const count = cell & CellFlag.COUNT_MASK;
           if (count > 0) {
-            drawNumber(sx + 8, sy + 8, count, 0x00ff00);
+            drawNumber(sx + 8, sy + 8, count, colorNumber);
           }
         }
       } else if (cell & CellFlag.FLAGGED) {
         // Draw flag (yellow)
-        fillRect(sx + 10, sy + 6, 4, 12, 0xffaa00);
+        fillRect(sx + 10, sy + 6, 4, 12, colorFlag);
       } else if (state == GameState.LOST && (cell & CellFlag.MINE)) {
         // Reveal all mines when lost
-        fillCircle(sx + 12, sy + 12, 6, 0xff0000);
+        fillCircle(sx + 12, sy + 12, 6, colorMine);
       }
     }
   }
@@ -278,16 +287,16 @@ export function draw(): void {
   
   // Draw mine count indicator
   for (let i: i32 = 0; i < remaining && i < 15; i++) {
-    fillCircle(10, 10 + i * 8, 3, 0xff0000);
+    fillCircle(10, 10 + i * 8, 3, c(0xff0000));
   }
   
   // Game messages
   if (state == GameState.START_SCREEN) {
-    drawGameFinishedMessage("MINESWEEPER", 0x1a1a1a, 0x00ff00);
+    drawGameFinishedMessage("MINESWEEPER", c(0x1a1a1a), c(0x00ff00));
   } else if (state == GameState.WON) {
-    drawGameFinishedMessage("YOU WIN!", 0x0044aa, 0x00aaff);
+    drawGameFinishedMessage("YOU WIN!", c(0x0044aa), c(0x00aaff));
   } else if (state == GameState.LOST) {
-    drawGameFinishedMessage("GAME OVER", 0xaa5500, 0xffaa00);
+    drawGameFinishedMessage("GAME OVER", c(0xaa5500), c(0xffaa00));
   }
 }
 
@@ -295,5 +304,5 @@ function drawGameFinishedMessage(message: string, bgColor: u32, fgColor: u32): v
   fillRect(75, 95, 170, 50, bgColor);
   drawRect(75, 95, 170, 50, fgColor);
   drawString(125, 107, message, fgColor);
-  drawString(115, 122, "PRESS START", 0xaaaaaa);
+  drawString(115, 122, "PRESS START", c(0xaaaaaa));
 }
