@@ -2,9 +2,14 @@
   "emeraldwalk.runonsave": {
     "commands": [
       {
-        "match": "\\.ts$",
+        "match": "sdk.*\\.ts$",
         "isAsync": true,
         "cmd": "npm run build"
+      },
+      {
+        "match": "games.*\\.ts$",
+        "isAsync": true,
+        "cmd": "node scripts/build-game.js ${fileBasename}"
       }
     ]
   }
