@@ -9,6 +9,10 @@ const ctx = canvas.getContext("2d", { alpha: false });
 const WIDTH = 320;
 const HEIGHT = 240;
 
+// Memory map addresses
+const INPUT_ADDR = 0x0AB000;   // Keyboard input (2 bytes)
+const MOUSE_ADDR = 0x0AB010;   // Mouse input (6 bytes)
+
 let hasAborted = false;
 let animationFrameId = null;
 
@@ -30,7 +34,7 @@ let wasmExports;
 let init, update, draw;
 
 // Load a game cartridge
-async function loadGame(gameName) {
+async function loadGame(gameName, { skipInit = false } = {}) {
   // Stop current game loop
   if (animationFrameId) {
     cancelAnimationFrame(animationFrameId);
@@ -102,9 +106,13 @@ async function loadGame(gameName) {
     update = wasm.instance.exports.update;
     draw = wasm.instance.exports.draw;
     
-    // Initialize the game
-    init();
-    addConsoleEntry('LOG', `${gameName} loaded successfully`);
+    // Initialize the game (skip if hot reloading to preserve state)
+    if (!skipInit) {
+      init();
+      addConsoleEntry('LOG', `${gameName} loaded successfully`);
+    } else {
+      addConsoleEntry('LOG', `${gameName} hot reloaded (memory preserved)`);
+    }
     
     // Start game loop
     last = performance.now();
@@ -125,6 +133,48 @@ const gameSelect = document.getElementById('game-select');
 // Initial load - use dropdown value (persisted by browser on reload)
 let currentGame = gameSelect.value;
 
+// WASM file watcher for auto-reload
+let lastModified = null;
+let watchInterval = null;
+
+function hotReload() {
+  addConsoleEntry('LOG', 'Hot reloading cartridge...');
+  loadGame(currentGame, { skipInit: true });
+}
+
+async function checkWasmUpdate() {
+  try {
+    const response = await fetch(`../cartridges/${currentGame}.wasm`, {
+      method: 'HEAD',
+      cache: 'no-cache'
+    });
+    
+    const modified = response.headers.get('Last-Modified');
+    
+    if (lastModified && modified && modified !== lastModified) {
+      lastModified = modified;
+      hotReload();
+    } else if (!lastModified) {
+      lastModified = modified;
+    }
+  } catch (e) {
+    // Ignore errors (file might not exist yet, server down, etc.)
+  }
+}
+
+function startWasmWatch() {
+  if (watchInterval) clearInterval(watchInterval);
+  lastModified = null;
+  watchInterval = setInterval(checkWasmUpdate, 1000); // Check every second
+}
+
+function stopWasmWatch() {
+  if (watchInterval) {
+    clearInterval(watchInterval);
+    watchInterval = null;
+  }
+}
+
 // Load audio and sprites, then load the game
 Promise.all([
   audioManager.loadAudio().then(() => {
@@ -142,13 +192,30 @@ Promise.all([
   // Load game after all assets are ready
   addConsoleEntry('LOG', 'All assets loaded, starting game...');
   loadGame(currentGame);
+  
+  // Start watching for WASM changes
+  startWasmWatch();
 });
 
 gameSelect.addEventListener('change', () => {
   const selectedGame = gameSelect.value;
   if (selectedGame !== currentGame) {
     currentGame = selectedGame;
+    stopWasmWatch();
     loadGame(currentGame);
+    startWasmWatch();
+  }
+});
+
+// Reload button
+const reloadBtn = document.getElementById('reload-game');
+reloadBtn.addEventListener('click', hotReload);
+
+// Keyboard shortcut: R to reload
+window.addEventListener('keydown', (e) => {
+  if ((e.key === 'r' || e.key === 'R') && !e.repeat) {
+    hotReload();
+    e.preventDefault();
   }
 });
 
@@ -312,19 +379,17 @@ function frame(now) {
       // Write input state to WASM memory
       const inputView = new DataView(memory.buffer);
       
-      // Keyboard input at 0x0AB000 (INPUT_ADDR)
+      // Keyboard input
       // Layout: [u8 buttons][u8 prev_buttons]
-      // Games access via buttonDown(), buttonPressed()
-      inputView.setUint8(0x0AB000, inputMask);        // Current buttons
-      inputView.setUint8(0x0AB001, prevInputMask);    // Previous buttons
+      inputView.setUint8(INPUT_ADDR, inputMask);
+      inputView.setUint8(INPUT_ADDR + 1, prevInputMask);
       
-      // Mouse input at 0x0AB010 (MOUSE_ADDR)
+      // Mouse input
       // Layout: [i16 x][i16 y][u8 buttons][u8 prev_buttons]
-      // Games access via mouseX(), mouseY(), mouseDown(), mousePressed()
-      inputView.setInt16(0x0AB010, mouseX, true);     // Mouse X (little-endian)
-      inputView.setInt16(0x0AB012, mouseY, true);     // Mouse Y (little-endian)
-      inputView.setUint8(0x0AB014, mouseButtons);     // Current buttons
-      inputView.setUint8(0x0AB015, prevMouseButtons); // Previous buttons
+      inputView.setInt16(MOUSE_ADDR, mouseX, true);
+      inputView.setInt16(MOUSE_ADDR + 2, mouseY, true);
+      inputView.setUint8(MOUSE_ADDR + 4, mouseButtons);
+      inputView.setUint8(MOUSE_ADDR + 5, prevMouseButtons);
       
       update();                          // Game logic update
       prevInputMask = inputMask;         // Track previous input state
@@ -362,13 +427,14 @@ function frame(now) {
   }
 
   // Update performance metrics (rolling average)
-  updateTimeSamples.push(totalUpdateTime);
-  if (updateTimeSamples.length > PERF_SAMPLE_COUNT) updateTimeSamples.shift();
-  avgUpdateTime = updateTimeSamples.reduce((a, b) => a + b, 0) / updateTimeSamples.length;
+  function updatePerfMetric(samples, newValue) {
+    samples.push(newValue);
+    if (samples.length > PERF_SAMPLE_COUNT) samples.shift();
+    return samples.reduce((a, b) => a + b, 0) / samples.length;
+  }
   
-  drawTimeSamples.push(drawTime);
-  if (drawTimeSamples.length > PERF_SAMPLE_COUNT) drawTimeSamples.shift();
-  avgDrawTime = drawTimeSamples.reduce((a, b) => a + b, 0) / drawTimeSamples.length;
+  avgUpdateTime = updatePerfMetric(updateTimeSamples, totalUpdateTime);
+  avgDrawTime = updatePerfMetric(drawTimeSamples, drawTime);
 
   // Update FPS counter
   frameCount++;

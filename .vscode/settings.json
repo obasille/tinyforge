@@ -12,5 +12,12 @@
         "cmd": "node scripts/build-game.js ${fileBasename}"
       }
     ]
-  }
+  },
+  "liveServer.settings.ignoreFiles": [
+    // Don't watch games and sdk source files
+    "**/games/*.ts",
+    "**/sdk/*.ts",
+    // Don't watch compiled WebAssembly files
+    "**/*.wasm"
+  ]
 }

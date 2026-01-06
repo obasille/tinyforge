@@ -84,7 +84,7 @@ class SpriteManager {
         data: imageData.data // Uint8ClampedArray of RGBA values
       });
 
-      console.log(`Loaded sprite ${id}: ${img.width}x${img.height} from ${url}`);
+      // console.log(`Loaded sprite ${id}: ${img.width}x${img.height} from ${url}`);
     } catch (e) {
       console.warn(`Failed to load sprite ${id} from ${url}:`, e.message);
     }
