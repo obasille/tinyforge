@@ -6,6 +6,8 @@
   "scripts": {
     "build": "node scripts/build-game.js",
     "build:debug": "node scripts/build-game.js debug",
+    "build:host": "tsc -p host/tsconfig.json",
+    "build:host:watch": "tsc -p host/tsconfig.json --watch",
     "serve": "python -m http.server 8080",
     "dev": "npm run build && npm run serve"
   },
@@ -20,6 +22,7 @@
   "license": "MIT",
   "devDependencies": {
     "assemblyscript": "^0.28.9",
-    "prettier": "3.7.4"
+    "prettier": "3.7.4",
+    "typescript": "^5.9.3"
   }
 }

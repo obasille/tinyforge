@@ -154,17 +154,57 @@ All offsets are **absolute** and part of the hardware contract.
 ```
 Address        Size        Description
 ----------------------------------------------
-0x000000       307,200 B   Framebuffer (RGBA8888)
-0x04B000       256 KB      Game RAM (heap, state)
-0x08B000       64 KB       Save data (optional)
-0x09B000       64 KB       Debug / tooling
+0x000000       307,200 B   Framebuffer (RGBA8888, 320×240×4)
+0x04B000       2 B         Keyboard Input (current + previous buttons)
+0x04B008       6 B         Mouse Input (x, y, current + previous buttons)
+0x04B010       2,048 B     Sprite Metadata (256 sprites × 8 bytes)
+0x04B810       128 KB      Sprite Pixel Data (~128 KB, RGBA)
+0x06B810       ~421 KB     Game RAM (available for game state)
 ```
 
-Notes:
-- Memory is allocated by the **host (JS)**
+**Detailed Layout:**
+
+**Framebuffer (0x000000 - 0x04AFFF):**
+- 320 × 240 × 4 bytes = 307,200 bytes
+- Format: RGBA8888 (little-endian)
+- Write-only for cartridge
+
+**Keyboard Input (0x04B000 - 0x04B007):**
+- `+0`: u8 current button state (bitmask)
+- `+1`: u8 previous button state (for edge detection)
+
+**Mouse Input (0x04B008 - 0x04B00F):**
+- `+0`: i16 mouse X coordinate (-1 if outside canvas)
+- `+2`: i16 mouse Y coordinate (-1 if outside canvas)
+- `+4`: u8 current button state (bit 0=left, 1=right, 2=middle)
+- `+5`: u8 previous button state (for edge detection)
+
+**Sprite Metadata (0x04B010 - 0x04B80F):**
+- 256 sprite entries × 8 bytes per entry
+- Each entry:
+  - `+0`: u16 width (pixels)
+  - `+2`: u16 height (pixels)
+  - `+4`: u32 dataOffset (relative to SPRITE_DATA_ADDR)
+
+**Sprite Pixel Data (0x04B810 - 0x06B80F):**
+- ~128 KB available for sprite pixel data
+- Format: RGBA8888 (4 bytes per pixel)
+- Managed by host, loaded from `assets/sprites/`
+
+**Game RAM (0x06B810+):**
+- Available for game state, variables, and data structures
+- Use `RAM_START` constant from SDK
+- Store persistent game state here (not in module variables)
+- Use `@unmanaged` structs with `changetype<T>(RAM_START)` for type-safe access
+
+**Notes:**
+- Memory is allocated by the **host (JS)** at 1 MB total (16 pages)
 - Memory size is fixed at startup
 - Memory does **not** grow at runtime
 - The framebuffer region should be treated as write-only by the cartridge
+- Input/mouse regions are read-only for the cartridge (written by host)
+- Sprite data is managed by the host (cartridge uses sprite IDs)
+- All addresses are defined in `memory-map.ts` and shared between host and SDK
 
 ---
 

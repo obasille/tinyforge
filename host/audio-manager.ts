@@ -18,7 +18,7 @@ class AudioManager {
   #musicGain = null;
 
   constructor() {
-    this.#audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    this.#audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     this.#musicGain = this.#audioContext.createGain();
     this.#musicGain.connect(this.#audioContext.destination);
     this.#musicGain.gain.value = 0.5; // Music at 50% volume

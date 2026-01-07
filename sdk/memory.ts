@@ -1,104 +1,73 @@
 // TinyForge SDK - Memory Management
 // Defines memory layout, external memory interface, and RAM accessors
+// 
+// Memory layout constants are synced with ../memory-map.ts
 
 /** External WebAssembly memory shared between host and cartridge */
 @external("env", "memory")
 export declare const memory: WebAssembly.Memory;
 
+// Import shared memory constants from memory-map.ts
+// These are cast to AssemblyScript types for use in WASM
+import * as memoryMap from '../memory-map';
+
 /** Display width in pixels */
-export const WIDTH: i32 = 320;
+export const WIDTH = memoryMap.WIDTH as i32;
 
 /** Display height in pixels */
-export const HEIGHT: i32 = 240;
+export const HEIGHT = memoryMap.HEIGHT as i32;
 
 /** Framebuffer start address (0x000000) */
-export const FB_START: usize = 0x000000;
+export const FB_START = memoryMap.FB_START as usize;
 
 /** Framebuffer size in bytes */
-export const FB_SIZE: usize = WIDTH * HEIGHT * 4; // 307200
-
-/** Game RAM start address (0x04B000) */
-export const RAM_START: usize = 0x04b000;
-
-/** Game RAM size in bytes (256 KB) */
-export const RAM_SIZE: usize = 262144;
-
-/** Save data start address (0x08B000) */
-export const SAVE_START: usize = 0x08b000;
-
-/** Save data size in bytes (64 KB) */
-export const SAVE_SIZE: usize = 65536;
-
-/** Debug/tooling start address (0x09B000) */
-export const DEBUG_START: usize = 0x09b000;
-
-/** Debug/tooling size in bytes (64 KB) */
-export const DEBUG_SIZE: usize = 65536;
+export const FB_SIZE = memoryMap.FB_SIZE as usize;
 
 // === Input Memory Map ===
 
-// Keyboard state is stored at 0x0AB000 with the following layout:
-//   +0: u8  buttons    - Current button state (bitmask)
-//   +1: u8  prevButtons - Previous button state (for edge detection)
-// Access via buttonDown(), buttonPressed() in input.ts
+/** Keyboard input base address */
+export const INPUT_ADDR = memoryMap.INPUT_ADDR as usize;
 
-/** Keyboard input base address (0x0AB000) */
-export const INPUT_ADDR: usize = 0x0ab000;
+/** Keyboard current button state address */
+export const INPUT_BUTTONS_ADDR = memoryMap.INPUT_BUTTONS_ADDR as usize;
 
-/** Keyboard current button state address (0x0AB000) */
-export const INPUT_BUTTONS_ADDR: usize = INPUT_ADDR + 0;
+/** Keyboard previous button state address */
+export const INPUT_BUTTONS_PREV_ADDR = memoryMap.INPUT_BUTTONS_PREV_ADDR as usize;
 
-/** Keyboard previous button state address (0x0AB001) */
-export const INPUT_BUTTONS_PREV_ADDR: usize = INPUT_ADDR + 1;
+/** Mouse state base address */
+export const MOUSE_ADDR = memoryMap.MOUSE_ADDR as usize;
 
-// Mouse state is stored at 0x0AB010 with the following layout:
-//   +0: i16 x          - Mouse X coordinate (0-319, or -1 if outside canvas)
-//   +2: i16 y          - Mouse Y coordinate (0-239, or -1 if outside canvas)
-//   +4: u8  buttons    - Current button state (bit 0=left, 1=right, 2=middle)
-//   +5: u8  prevButtons - Previous button state (for edge detection)
-// Access via mouseX(), mouseY(), mouseDown(), mousePressed() in input.ts
+/** Mouse X coordinate address */
+export const MOUSE_X_ADDR = memoryMap.MOUSE_X_ADDR as usize;
 
-/** Mouse state base address (0x0AB010) */
-export const MOUSE_ADDR: usize = 0x0ab010;
+/** Mouse Y coordinate address */
+export const MOUSE_Y_ADDR = memoryMap.MOUSE_Y_ADDR as usize;
 
-/** Mouse X coordinate address (0x0AB010) */
-export const MOUSE_X_ADDR: usize = MOUSE_ADDR + 0;
+/** Mouse current button state address */
+export const MOUSE_BUTTONS_ADDR = memoryMap.MOUSE_BUTTONS_ADDR as usize;
 
-/** Mouse Y coordinate address (0x0AB012) */
-export const MOUSE_Y_ADDR: usize = MOUSE_ADDR + 2;
-
-/** Mouse current button state address (0x0AB014) */
-export const MOUSE_BUTTONS_ADDR: usize = MOUSE_ADDR + 4;
-
-/** Mouse previous button state address (0x0AB015) */
-export const MOUSE_BUTTONS_PREV_ADDR: usize = MOUSE_ADDR + 5;
+/** Mouse previous button state address */
+export const MOUSE_BUTTONS_PREV_ADDR = memoryMap.MOUSE_BUTTONS_PREV_ADDR as usize;
 
 // === Sprite Memory Map ===
 
-// Sprite data is stored starting at 0x0AB100 (after input memory)
-// Layout for each sprite entry (8 bytes of metadata per sprite):
-//   Sprite N metadata at: SPRITE_METADATA + (N * 8)
-//     +0: u16 width       - Sprite width in pixels
-//     +2: u16 height      - Sprite height in pixels
-//     +4: u32 dataOffset  - Offset to pixel data (relative to SPRITE_DATA)
-//
-// Pixel data starts at SPRITE_DATA and contains RGBA values (4 bytes per pixel)
-// All sprite pixel data is stored sequentially after metadata table
-//
-// Maximum: 256 sprites (IDs 0-255), metadata table = 2048 bytes
-// Sprite data region: ~128 KB available for pixel data
-
-/** Sprite metadata table base address (0x0AB100) */
-export const SPRITE_METADATA_ADDR: usize = 0x0ab100;
+/** Sprite metadata table base address */
+export const SPRITE_METADATA_ADDR = memoryMap.SPRITE_METADATA_ADDR as usize;
 
 /** Sprite metadata entry size (8 bytes) */
-export const SPRITE_METADATA_SIZE: u32 = 8;
+export const SPRITE_METADATA_SIZE = memoryMap.SPRITE_METADATA_SIZE as usize;
 
-/** Sprite pixel data base address (0x0AB900 - after 256 sprite metadata entries) */
-export const SPRITE_DATA_ADDR: usize = SPRITE_METADATA_ADDR + 256 * SPRITE_METADATA_SIZE;
+/** Sprite pixel data base address (after 256 sprite metadata entries) */
+export const SPRITE_DATA_ADDR = memoryMap.SPRITE_DATA_ADDR as usize;
 
 /** Maximum sprite data size (~128 KB) */
-export const SPRITE_DATA_SIZE: usize = 131072;
+export const SPRITE_DATA_SIZE = memoryMap.SPRITE_DATA_SIZE as usize;
+
+/** Game RAM start address */
+export const RAM_START = memoryMap.RAM_START as usize;
+
+/** Game RAM size in bytes (256 KB) */
+export const RAM_SIZE = memoryMap.RAM_SIZE as usize;
 
 /**
  * Read a 32-bit signed integer from game RAM

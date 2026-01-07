@@ -1,17 +1,15 @@
+// @ts-ignore - No type definitions available for @assemblyscript/loader
 import * as loader from '@assemblyscript/loader';
 import { addConsoleEntry } from './console-panel.js';
 import { audioManager } from './audio-manager.js';
 import { spriteManager } from './sprite-manager.js';
+import { INPUT_ADDR, MOUSE_ADDR } from '../memory-map.js';
 
-const canvas = document.getElementById("screen");
+const canvas = document.getElementById("screen") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d", { alpha: false });
 
 const WIDTH = 320;
 const HEIGHT = 240;
-
-// Memory map addresses
-const INPUT_ADDR = 0x0AB000;   // Keyboard input (2 bytes)
-const MOUSE_ADDR = 0x0AB010;   // Mouse input (6 bytes)
 
 let hasAborted = false;
 let animationFrameId = null;
@@ -30,7 +28,7 @@ const fb32 = new Uint32Array(memory.buffer, 0, WIDTH * HEIGHT);
 const image = new ImageData(fb, WIDTH, HEIGHT);
 
 // Allow external access to memory for tools
-window.getMemory = () => memory;
+(window as any).getMemory = () => memory;
 
 // Open memory viewer in new window
 function openMemoryViewer() {
@@ -140,7 +138,7 @@ async function loadGame(gameName, { skipInit = false } = {}) {
 }
 
 // Game selector UI
-const gameSelect = document.getElementById('game-select');
+const gameSelect = document.getElementById('game-select') as HTMLSelectElement;
 
 // Initial load - use dropdown value (persisted by browser on reload)
 let currentGame = gameSelect.value;
@@ -461,11 +459,11 @@ function frame(now) {
   }
 
   // Update dev tools panel
-  fpsEl.textContent = fps;
+  fpsEl.textContent = String(fps);
   updateTimeEl.textContent = avgUpdateTime.toFixed(2);
   drawTimeEl.textContent = avgDrawTime.toFixed(2);
-  updatesEl.textContent = updates;
-  accEl.textContent = Math.round(acc);
+  updatesEl.textContent = String(updates);
+  accEl.textContent = String(Math.round(acc));
   inputEl.textContent = '0x' + inputMask.toString(16).padStart(2, '0').toUpperCase();
   mouseEl.textContent = `${mouseX}, ${mouseY}`;
   mouseButtonsEl.textContent = '0x' + mouseButtons.toString(16).padStart(2, '0').toUpperCase();

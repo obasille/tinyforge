@@ -10,6 +10,11 @@
         "match": "games.*\\.ts$",
         "isAsync": true,
         "cmd": "node scripts/build-game.js ${fileBasename}"
+      },
+      {
+        "match": "(host.*\\.ts$|memory-map\\.ts$)",
+        "isAsync": true,
+        "cmd": "npm run build:host"
       }
     ]
   },

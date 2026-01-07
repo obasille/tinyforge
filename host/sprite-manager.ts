@@ -1,6 +1,7 @@
 // Sprite Manager - Handles sprite loading and memory management
 
 import { AssetLoader } from './asset-loader.js';
+import { SPRITE_METADATA_ADDR, SPRITE_DATA_ADDR, SPRITE_DATA_SIZE } from '../memory-map.js';
 
 class SpriteManager {
   #memory = null;
@@ -69,18 +70,19 @@ class SpriteManager {
       const img = await AssetLoader.loadImage(url);
       
       // Create canvas to extract pixel data
+      const image = img as HTMLImageElement;
       const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
+      canvas.width = image.width;
+      canvas.height = image.height;
       const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0);
+      ctx.drawImage(image, 0, 0);
       
       // Get RGBA pixel data
-      const imageData = ctx.getImageData(0, 0, img.width, img.height);
+      const imageData = ctx.getImageData(0, 0, image.width, image.height);
       
       this.#sprites.set(id, {
-        width: img.width,
-        height: img.height,
+        width: image.width,
+        height: image.height,
         data: imageData.data // Uint8ClampedArray of RGBA values
       });
 
@@ -94,15 +96,12 @@ class SpriteManager {
    * Write all sprite metadata and pixel data to WASM memory
    */
   #writeSpritesToMemory() {
-    const SPRITE_METADATA = 0x0AB100;
-    const SPRITE_DATA = 0x0AB900;
-    
     let dataOffset = 0;
     const view = new DataView(this.#memory.buffer);
     
     // Write metadata for each sprite
     for (const [id, sprite] of this.#sprites) {
-      const metadataAddr = SPRITE_METADATA + (id * 8);
+      const metadataAddr = SPRITE_METADATA_ADDR + (id * 8);
       
       view.setUint16(metadataAddr + 0, sprite.width, true);   // Width (little-endian)
       view.setUint16(metadataAddr + 2, sprite.height, true);  // Height (little-endian)
@@ -112,7 +111,7 @@ class SpriteManager {
     }
     
     // Write pixel data
-    const spriteDataView = new Uint8Array(this.#memory.buffer, SPRITE_DATA);
+    const spriteDataView = new Uint8Array(this.#memory.buffer, SPRITE_DATA_ADDR);
     let writeOffset = 0;
     
     for (const [id, sprite] of this.#sprites) {
@@ -124,8 +123,8 @@ class SpriteManager {
     this.#nextDataOffset = dataOffset;
     
     // Check if we exceeded available memory
-    if (this.#nextDataOffset > 131072) { // ~128 KB limit
-      console.warn(`Sprite data exceeds allocated memory: ${this.#nextDataOffset} bytes`);
+    if (this.#nextDataOffset > SPRITE_DATA_SIZE) {
+      console.warn(`Sprite data exceeds allocated memory: ${this.#nextDataOffset} bytes (max: ${SPRITE_DATA_SIZE})`);
     }
   }
 }

@@ -240,35 +240,8 @@
     </div>
   </div>
 
-  <div class="memory-regions">
-    <button class="region-btn" data-address="0x000000" data-size="256">
-      <strong>Framebuffer Start</strong>
-      0x000000 - 0x000100
-    </button>
-    <button class="region-btn" data-address="0x04B000" data-size="256">
-      <strong>Framebuffer End</strong>
-      0x04B000 - 0x04B100
-    </button>
-    <button class="region-btn" data-address="0x080000" data-size="256">
-      <strong>Game RAM Start</strong>
-      0x080000 - 0x080400
-    </button>
-    <button class="region-btn" data-address="0x0AB000" data-size="16">
-      <strong>Keyboard Input</strong>
-      0x0AB000 - 0x0AB010
-    </button>
-    <button class="region-btn" data-address="0x0AB010" data-size="16">
-      <strong>Mouse Input</strong>
-      0x0AB010 - 0x0AB020
-    </button>
-    <button class="region-btn" data-address="0x0AB100" data-size="512">
-      <strong>Sprite Metadata</strong>
-      0x0AB100 - 0x0AB300
-    </button>
-    <button class="region-btn" data-address="0x0AB900" data-size="1024">
-      <strong>Sprite Data</strong>
-      0x0AB900 - 0x0ABD00
-    </button>
+  <div class="memory-regions" id="memory-regions">
+    <!-- Regions will be populated from memory-map.json -->
   </div>
 
   <div class="memory-display" id="memory-display"></div>
@@ -290,6 +263,8 @@
   </div>
 
   <script type="module">
+    import * as memoryMap from './dist/memory-map.js';
+    
     let memory = null;
     let currentAddress = 0x080000;
     let bytesToShow = 256;
@@ -303,13 +278,63 @@
     // Try to connect to parent window memory
     function connectToMemory() {
       if (window.opener && window.opener.getMemory) {
-        memory = window.opener.getMemory();
-        document.getElementById('error').classList.add('hidden');
-        refreshMemory();
-      } else {
-        document.getElementById('error').textContent = 
-          'Not connected to TinyForge. Open this from the main console using "Open Memory Viewer" button.';
-        document.getElementById('error').classList.remove('hidden');
+        try {
+          memory = window.opener.getMemory();
+          if (memory) {
+            document.getElementById('error').classList.add('hidden');
+            loadMemoryRegions();
+            refreshMemory();
+            return true;
+          }
+        } catch (e) {
+          console.warn('Failed to get memory:', e);
+        }
+      }
+      
+      document.getElementById('error').textContent = 
+        'Not connected to TinyForge. Open this from the main console using "Open Memory Viewer" button.';
+      document.getElementById('error').classList.remove('hidden');
+      return false;
+    }
+
+    // Load memory region buttons from memory-map.json
+    async function loadMemoryRegions() {
+      try {
+        const container = document.getElementById('memory-regions');
+        const regions = [
+          { name: 'Framebuffer Start', addr: memoryMap.FB_START, size: 256 },
+          { name: 'Framebuffer End', addr: memoryMap.FB_START + memoryMap.FB_SIZE - 256, size: 256 },
+          { name: 'Game RAM Start', addr: memoryMap.RAM_START, size: 256 },
+          { name: 'Keyboard Input', addr: memoryMap.INPUT_ADDR, size: 16 },
+          { name: 'Mouse Input', addr: memoryMap.MOUSE_ADDR, size: 16 },
+          { name: 'Sprite Metadata', addr: memoryMap.SPRITE_METADATA_ADDR, size: 512 },
+          { name: 'Sprite Data', addr: memoryMap.SPRITE_DATA_ADDR, size: 1024 }
+        ];
+        
+        regions.forEach(region => {
+          const btn = document.createElement('button');
+          btn.className = 'region-btn';
+          btn.dataset.address = '0x' + region.addr.toString(16);
+          btn.dataset.size = String(region.size);
+          
+          const endAddr = region.addr + Math.min(region.size, 256);
+          btn.innerHTML = `
+            <strong>${region.name}</strong>
+            ${formatAddress(region.addr)} - ${formatAddress(endAddr)}
+          `;
+          
+          btn.addEventListener('click', () => {
+            currentAddress = region.addr;
+            bytesToShow = region.size;
+            document.getElementById('address-input').value = '0x' + region.addr.toString(16);
+            document.getElementById('bytes-count').value = String(region.size);
+            refreshMemory();
+          });
+          
+          container.appendChild(btn);
+        });
+      } catch (e) {
+        console.warn('Failed to load memory regions:', e);
       }
     }
 
@@ -571,16 +596,6 @@
       } else {
         clearInterval(autoRefreshInterval);
       }
-    });
-
-    document.querySelectorAll('.region-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        currentAddress = parseInt(btn.dataset.address, 16);
-        bytesToShow = parseInt(btn.dataset.size, 10);
-        document.getElementById('address-input').value = btn.dataset.address;
-        document.getElementById('bytes-count').value = btn.dataset.size;
-        refreshMemory();
-      });
     });
 
     document.getElementById('edit-save').addEventListener('click', saveEdit);
