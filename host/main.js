@@ -29,6 +29,18 @@ const fb = new Uint8ClampedArray(memory.buffer, 0, WIDTH * HEIGHT * 4);
 const fb32 = new Uint32Array(memory.buffer, 0, WIDTH * HEIGHT);
 const image = new ImageData(fb, WIDTH, HEIGHT);
 
+// Allow external access to memory for tools
+window.getMemory = () => memory;
+
+// Open memory viewer in new window
+function openMemoryViewer() {
+  const viewer = window.open('memory-viewer.html', 'TinyForge Memory Viewer', 
+    'width=1200,height=800,menubar=no,toolbar=no');
+  if (!viewer) {
+    addConsoleEntry('ERROR', 'Failed to open memory viewer. Please allow popups.');
+  }
+}
+
 // WASM module state
 let wasmExports;
 let init, update, draw;
@@ -210,6 +222,10 @@ gameSelect.addEventListener('change', () => {
 // Reload button
 const reloadBtn = document.getElementById('reload-game');
 reloadBtn.addEventListener('click', hotReload);
+
+// Memory viewer button
+const memoryViewerBtn = document.getElementById('open-memory-viewer');
+memoryViewerBtn.addEventListener('click', openMemoryViewer);
 
 // Keyboard shortcut: R to reload
 window.addEventListener('keydown', (e) => {

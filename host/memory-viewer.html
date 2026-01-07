@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TinyForge Memory Viewer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: 'Consolas', 'Monaco', monospace;
+      background: #1a1a1a;
+      color: #e0e0e0;
+      padding: 20px;
+    }
+
+    h1 {
+      font-size: 18px;
+      margin-bottom: 20px;
+      color: #4a9eff;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .control-group {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+    }
+
+    label {
+      font-size: 12px;
+      color: #999;
+    }
+
+    input, select, button {
+      padding: 6px 12px;
+      background: #2a2a2a;
+      border: 1px solid #444;
+      color: #e0e0e0;
+      border-radius: 3px;
+      font-family: inherit;
+      font-size: 12px;
+    }
+
+    input[type="text"] {
+      width: 120px;
+    }
+
+    button {
+      cursor: pointer;
+      background: #3a3a3a;
+    }
+
+    button:hover {
+      background: #4a4a4a;
+    }
+
+    .memory-regions {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .region-btn {
+      padding: 8px;
+      cursor: pointer;
+      border: 1px solid #444;
+      background: #2a2a2a;
+      color: #e0e0e0;
+      border-radius: 3px;
+      text-align: left;
+      font-size: 11px;
+    }
+
+    .region-btn:hover {
+      background: #3a3a3a;
+    }
+
+    .region-btn strong {
+      display: block;
+      color: #4a9eff;
+      margin-bottom: 4px;
+    }
+
+    .memory-display {
+      background: #0a0a0a;
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 10px;
+      max-height: 70vh;
+      overflow-y: auto;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .memory-row {
+      display: flex;
+      gap: 15px;
+      padding: 2px 0;
+      border-bottom: 1px solid #1a1a1a;
+    }
+
+    .memory-row:hover {
+      background: #1a1a1a;
+    }
+
+    .address {
+      color: #666;
+      width: 80px;
+      flex-shrink: 0;
+    }
+
+    .hex-bytes {
+      display: flex;
+      gap: 4px;
+      flex: 1;
+    }
+
+    .byte {
+      cursor: pointer;
+      padding: 0 2px;
+    }
+
+    .byte:hover {
+      background: #2a2a2a;
+    }
+
+    .byte.highlight {
+      background: #4a9eff33;
+      color: #4a9eff;
+    }
+
+    .ascii {
+      color: #888;
+      width: 200px;
+      flex-shrink: 0;
+    }
+
+    .stats {
+      margin-top: 20px;
+      padding: 10px;
+      background: #2a2a2a;
+      border-radius: 4px;
+      font-size: 11px;
+      color: #999;
+    }
+
+    .error {
+      color: #ff6b6b;
+      padding: 10px;
+      background: #3a1a1a;
+      border: 1px solid #5a2a2a;
+      border-radius: 4px;
+      margin-bottom: 20px;
+    }
+
+    .edit-dialog {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #2a2a2a;
+      border: 1px solid #444;
+      border-radius: 4px;
+      padding: 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      z-index: 1000;
+    }
+
+    .edit-dialog input {
+      width: 100px;
+      margin: 10px 0;
+    }
+
+    .dialog-buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 999;
+    }
+
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="error" class="error hidden"></div>
+
+  <div class="controls">
+    <div class="control-group">
+      <label>Address:</label>
+      <input type="text" id="address-input" value="0x080000" placeholder="0x000000">
+    </div>
+    <div class="control-group">
+      <label>Bytes:</label>
+      <select id="bytes-count">
+        <option value="256" selected>256</option>
+        <option value="512">512</option>
+        <option value="1024">1024</option>
+        <option value="2048">2048</option>
+        <option value="4096">4096</option>
+      </select>
+    </div>
+    <button id="refresh-btn">Refresh</button>
+    <button id="auto-refresh-toggle">Auto-Refresh: OFF</button>
+    <div class="control-group" style="gap: 2px;">
+      <button id="first-page" title="First Page">⏮</button>
+      <button id="prev-page" title="Previous Page">◀</button>
+      <button id="next-page" title="Next Page">▶</button>
+      <button id="last-page" title="Last Page">⏭</button>
+    </div>
+    <div class="control-group">
+      <label>Search:</label>
+      <input type="text" id="search-input" placeholder="0x1A2B3C or 1A2B3C" style="width: 150px;">
+      <button id="search-btn">Find</button>
+      <button id="search-next" style="display: none;">Next</button>
+      <label style="font-size: 11px; margin-left: 10px;">
+        <input type="checkbox" id="search-from-current">
+        From current address
+      </label>
+      <span id="search-results" style="font-size: 11px; color: #999; margin-left: 20px;"></span>
+    </div>
+  </div>
+
+  <div class="memory-regions">
+    <button class="region-btn" data-address="0x000000" data-size="256">
+      <strong>Framebuffer Start</strong>
+      0x000000 - 0x000100
+    </button>
+    <button class="region-btn" data-address="0x04B000" data-size="256">
+      <strong>Framebuffer End</strong>
+      0x04B000 - 0x04B100
+    </button>
+    <button class="region-btn" data-address="0x080000" data-size="256">
+      <strong>Game RAM Start</strong>
+      0x080000 - 0x080400
+    </button>
+    <button class="region-btn" data-address="0x0AB000" data-size="16">
+      <strong>Keyboard Input</strong>
+      0x0AB000 - 0x0AB010
+    </button>
+    <button class="region-btn" data-address="0x0AB010" data-size="16">
+      <strong>Mouse Input</strong>
+      0x0AB010 - 0x0AB020
+    </button>
+    <button class="region-btn" data-address="0x0AB100" data-size="512">
+      <strong>Sprite Metadata</strong>
+      0x0AB100 - 0x0AB300
+    </button>
+    <button class="region-btn" data-address="0x0AB900" data-size="1024">
+      <strong>Sprite Data</strong>
+      0x0AB900 - 0x0ABD00
+    </button>
+  </div>
+
+  <div class="memory-display" id="memory-display"></div>
+
+  <div class="stats" id="stats">
+    <span id="stats-text">No memory loaded</span>
+  </div>
+
+  <!-- Edit dialog -->
+  <div id="edit-overlay" class="overlay hidden"></div>
+  <div id="edit-dialog" class="edit-dialog hidden">
+    <h3>Edit Byte</h3>
+    <div>Address: <span id="edit-address"></span></div>
+    <input type="text" id="edit-value" placeholder="0xFF" maxlength="4">
+    <div class="dialog-buttons">
+      <button id="edit-save">Save</button>
+      <button id="edit-cancel">Cancel</button>
+    </div>
+  </div>
+
+  <script type="module">
+    let memory = null;
+    let currentAddress = 0x080000;
+    let bytesToShow = 256;
+    let autoRefresh = false;
+    let autoRefreshInterval = null;
+    let editingAddress = null;
+    let searchMatches = [];
+    let currentSearchIndex = -1;
+    let searchPatternLength = 0;
+
+    // Try to connect to parent window memory
+    function connectToMemory() {
+      if (window.opener && window.opener.getMemory) {
+        memory = window.opener.getMemory();
+        document.getElementById('error').classList.add('hidden');
+        refreshMemory();
+      } else {
+        document.getElementById('error').textContent = 
+          'Not connected to TinyForge. Open this from the main console using "Open Memory Viewer" button.';
+        document.getElementById('error').classList.remove('hidden');
+      }
+    }
+
+    function parseAddress(str) {
+      const cleaned = str.trim().toLowerCase();
+      if (cleaned.startsWith('0x')) {
+        return parseInt(cleaned, 16);
+      }
+      return parseInt(cleaned, 10);
+    }
+
+    function formatAddress(addr) {
+      return '0x' + addr.toString(16).toUpperCase().padStart(6, '0');
+    }
+
+    function formatByte(byte) {
+      return byte.toString(16).toUpperCase().padStart(2, '0');
+    }
+
+    function isMatchAddress(addr) {
+      // Check if this address is part of any search match
+      for (const matchAddr of searchMatches) {
+        if (addr >= matchAddr && addr < matchAddr + searchPatternLength) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    function refreshMemory() {
+      if (!memory) {
+        connectToMemory();
+        return;
+      }
+
+      const display = document.getElementById('memory-display');
+      const stats = document.getElementById('stats-text');
+      display.innerHTML = '';
+
+      try {
+        const view = new Uint8Array(memory.buffer);
+        const totalSize = view.byteLength;
+        
+        // Clamp address and size
+        const startAddr = Math.max(0, Math.min(currentAddress, totalSize - 1));
+        const endAddr = Math.min(startAddr + bytesToShow, totalSize);
+        const actualBytes = endAddr - startAddr;
+
+        // Display memory in rows of 16 bytes
+        for (let addr = startAddr; addr < endAddr; addr += 16) {
+          const row = document.createElement('div');
+          row.className = 'memory-row';
+
+          // Address column
+          const addrSpan = document.createElement('span');
+          addrSpan.className = 'address';
+          addrSpan.textContent = formatAddress(addr);
+          row.appendChild(addrSpan);
+
+          // Hex bytes column
+          const hexContainer = document.createElement('span');
+          hexContainer.className = 'hex-bytes';
+          
+          let ascii = '';
+          for (let i = 0; i < 16 && (addr + i) < endAddr; i++) {
+            const byte = view[addr + i];
+            const byteSpan = document.createElement('span');
+            byteSpan.className = 'byte';
+            
+            // Highlight if part of a search match
+            if (isMatchAddress(addr + i)) {
+              byteSpan.classList.add('highlight');
+            }
+            
+            byteSpan.textContent = formatByte(byte);
+            byteSpan.dataset.address = addr + i;
+            byteSpan.addEventListener('click', () => openEditDialog(addr + i, byte));
+            hexContainer.appendChild(byteSpan);
+
+            // ASCII representation
+            ascii += (byte >= 32 && byte <= 126) ? String.fromCharCode(byte) : '.';
+          }
+          row.appendChild(hexContainer);
+
+          // ASCII column
+          const asciiSpan = document.createElement('span');
+          asciiSpan.className = 'ascii';
+          asciiSpan.textContent = ascii;
+          row.appendChild(asciiSpan);
+
+          display.appendChild(row);
+        }
+
+        stats.textContent = `Memory: ${(totalSize / 1024).toFixed(1)} KB | Showing: ${actualBytes} bytes from ${formatAddress(startAddr)}`;
+      } catch (e) {
+        document.getElementById('error').textContent = `Error reading memory: ${e.message}`;
+        document.getElementById('error').classList.remove('hidden');
+      }
+    }
+
+    function openEditDialog(address, currentValue) {
+      editingAddress = address;
+      document.getElementById('edit-address').textContent = formatAddress(address);
+      document.getElementById('edit-value').value = '0x' + formatByte(currentValue);
+      document.getElementById('edit-dialog').classList.remove('hidden');
+      document.getElementById('edit-overlay').classList.remove('hidden');
+      document.getElementById('edit-value').focus();
+      document.getElementById('edit-value').select();
+    }
+
+    function closeEditDialog() {
+      document.getElementById('edit-dialog').classList.add('hidden');
+      document.getElementById('edit-overlay').classList.add('hidden');
+      editingAddress = null;
+    }
+
+    function saveEdit() {
+      if (editingAddress === null || !memory) return;
+
+      try {
+        const value = parseAddress(document.getElementById('edit-value').value);
+        if (value < 0 || value > 255) {
+          alert('Value must be between 0x00 and 0xFF');
+          return;
+        }
+
+        const view = new Uint8Array(memory.buffer);
+        view[editingAddress] = value;
+        closeEditDialog();
+        refreshMemory();
+      } catch (e) {
+        alert('Invalid value: ' + e.message);
+      }
+    }
+
+    function parseSearchPattern(str) {
+      // Remove spaces and 0x prefix
+      let cleaned = str.trim().replace(/\s+/g, '').toLowerCase();
+      if (cleaned.startsWith('0x')) {
+        cleaned = cleaned.substring(2);
+      }
+      
+      // Must be even number of hex digits
+      if (cleaned.length % 2 !== 0) {
+        throw new Error('Search pattern must have even number of hex digits');
+      }
+      
+      // Convert to byte array
+      const bytes = [];
+      for (let i = 0; i < cleaned.length; i += 2) {
+        const byte = parseInt(cleaned.substring(i, i + 2), 16);
+        if (isNaN(byte)) {
+          throw new Error('Invalid hex pattern');
+        }
+        bytes.push(byte);
+      }
+      
+      return bytes;
+    }
+
+    function searchMemory() {
+      if (!memory) return;
+      
+      const searchInput = document.getElementById('search-input').value;
+      if (!searchInput.trim()) {
+        alert('Please enter a search pattern');
+        return;
+      }
+      
+      try {
+        const pattern = parseSearchPattern(searchInput);
+        const view = new Uint8Array(memory.buffer);
+        searchMatches = [];
+        searchPatternLength = pattern.length;
+        
+        // Determine start address based on checkbox
+        const searchFromCurrent = document.getElementById('search-from-current').checked;
+        const startAddr = searchFromCurrent ? currentAddress : 0;
+        
+        // Search for pattern in memory
+        for (let addr = startAddr; addr <= view.byteLength - pattern.length; addr++) {
+          let match = true;
+          for (let i = 0; i < pattern.length; i++) {
+            if (view[addr + i] !== pattern[i]) {
+              match = false;
+              break;
+            }
+          }
+          if (match) {
+            searchMatches.push(addr);
+          }
+        }
+        
+        // Update UI
+        const resultsEl = document.getElementById('search-results');
+        const nextBtn = document.getElementById('search-next');
+        
+        if (searchMatches.length > 0) {
+          currentSearchIndex = 0;
+          resultsEl.textContent = `Found ${searchMatches.length} match${searchMatches.length > 1 ? 'es' : ''}`;
+          nextBtn.style.display = searchMatches.length > 1 ? 'inline-block' : 'none';
+          goToSearchMatch(0);
+        } else {
+          resultsEl.textContent = 'No matches found';
+          nextBtn.style.display = 'none';
+          currentSearchIndex = -1;
+        }
+      } catch (e) {
+        alert('Search error: ' + e.message);
+      }
+    }
+
+    function goToSearchMatch(index) {
+      if (index < 0 || index >= searchMatches.length) return;
+      
+      currentSearchIndex = index;
+      const matchAddr = searchMatches[index];
+      
+      // Navigate to match (center it in view if possible)
+      currentAddress = Math.max(0, matchAddr - Math.floor(bytesToShow / 2));
+      document.getElementById('address-input').value = formatAddress(currentAddress);
+      
+      // Update results text
+      const resultsEl = document.getElementById('search-results');
+      resultsEl.textContent = `Match ${index + 1} of ${searchMatches.length} at ${formatAddress(matchAddr)}`;
+      
+      refreshMemory();
+    }
+
+    function nextSearchMatch() {
+      if (searchMatches.length === 0) return;
+      const nextIndex = (currentSearchIndex + 1) % searchMatches.length;
+      goToSearchMatch(nextIndex);
+    }
+
+    // Event listeners
+    document.getElementById('address-input').addEventListener('change', (e) => {
+      try {
+        currentAddress = parseAddress(e.target.value);
+        refreshMemory();
+      } catch (e) {
+        alert('Invalid address');
+      }
+    });
+
+    document.getElementById('bytes-count').addEventListener('change', (e) => {
+      bytesToShow = parseInt(e.target.value, 10);
+      refreshMemory();
+    });
+
+    document.getElementById('refresh-btn').addEventListener('click', refreshMemory);
+
+    document.getElementById('auto-refresh-toggle').addEventListener('click', (e) => {
+      autoRefresh = !autoRefresh;
+      e.target.textContent = `Auto-Refresh: ${autoRefresh ? 'ON' : 'OFF'}`;
+      
+      if (autoRefresh) {
+        autoRefreshInterval = setInterval(refreshMemory, 100);
+      } else {
+        clearInterval(autoRefreshInterval);
+      }
+    });
+
+    document.querySelectorAll('.region-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        currentAddress = parseInt(btn.dataset.address, 16);
+        bytesToShow = parseInt(btn.dataset.size, 10);
+        document.getElementById('address-input').value = btn.dataset.address;
+        document.getElementById('bytes-count').value = btn.dataset.size;
+        refreshMemory();
+      });
+    });
+
+    document.getElementById('edit-save').addEventListener('click', saveEdit);
+    document.getElementById('edit-cancel').addEventListener('click', closeEditDialog);
+    document.getElementById('edit-overlay').addEventListener('click', closeEditDialog);
+
+    document.getElementById('edit-value').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') saveEdit();
+      if (e.key === 'Escape') closeEditDialog();
+    });
+
+    // Page navigation
+    document.getElementById('first-page').addEventListener('click', () => {
+      currentAddress = 0;
+      document.getElementById('address-input').value = formatAddress(currentAddress);
+      refreshMemory();
+    });
+
+    document.getElementById('prev-page').addEventListener('click', () => {
+      currentAddress = Math.max(0, currentAddress - bytesToShow);
+      document.getElementById('address-input').value = formatAddress(currentAddress);
+      refreshMemory();
+    });
+
+    document.getElementById('next-page').addEventListener('click', () => {
+      if (!memory) return;
+      const maxAddr = memory.buffer.byteLength - bytesToShow;
+      currentAddress = Math.min(maxAddr, currentAddress + bytesToShow);
+      document.getElementById('address-input').value = formatAddress(currentAddress);
+      refreshMemory();
+    });
+
+    document.getElementById('last-page').addEventListener('click', () => {
+      if (!memory) return;
+      currentAddress = Math.max(0, memory.buffer.byteLength - bytesToShow);
+      document.getElementById('address-input').value = formatAddress(currentAddress);
+      refreshMemory();
+    });
+
+    // Search functionality
+    document.getElementById('search-btn').addEventListener('click', searchMemory);
+    document.getElementById('search-next').addEventListener('click', nextSearchMatch);
+    
+    document.getElementById('search-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') searchMemory();
+    });
+
+    // Initial connection
+    connectToMemory();
+    
+    // Auto-connect if opened from parent
+    if (window.opener) {
+      setInterval(() => {
+        if (!memory && window.opener && window.opener.getMemory) {
+          connectToMemory();
+        }
+      }, 1000);
+    }
+  </script>
+</body>
+</html>
