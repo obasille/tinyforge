@@ -17,8 +17,8 @@
 //   - Use buttonPressed() / mousePressed() for one-time actions (button just pressed)
 
 import {
-  INPUT_BUTTONS,
-  INPUT_BUTTONS_PREV,
+  INPUT_BUTTONS_ADDR,
+  INPUT_BUTTONS_PREV_ADDR,
   MOUSE_X_ADDR,
   MOUSE_Y_ADDR,
   MOUSE_BUTTONS_ADDR,
@@ -67,7 +67,7 @@ export enum MouseButton {
  * ```
  */
 export function buttonDown(button: Button): bool {
-  return (load<u8>(INPUT_BUTTONS) & button) != 0;
+  return (load<u8>(INPUT_BUTTONS_ADDR) & button) != 0;
 }
 
 /**
@@ -82,8 +82,8 @@ export function buttonDown(button: Button): bool {
  * ```
  */
 export function buttonPressed(button: Button): bool {
-  const current = load<u8>(INPUT_BUTTONS);
-  const prev = load<u8>(INPUT_BUTTONS_PREV);
+  const current = load<u8>(INPUT_BUTTONS_ADDR);
+  const prev = load<u8>(INPUT_BUTTONS_PREV_ADDR);
   return (current & button) != 0 && (prev & button) == 0;
 }
 

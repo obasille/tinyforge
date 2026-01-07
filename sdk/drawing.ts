@@ -2,7 +2,7 @@
 // Low-level and high-level drawing functions for rendering graphics
 
 import { toColor } from "./color";
-import { WIDTH, HEIGHT, SPRITE_METADATA, SPRITE_DATA } from "./memory";
+import { WIDTH, HEIGHT, SPRITE_METADATA_ADDR, SPRITE_DATA_ADDR } from "./memory";
 
 /**
  * Efficiently clears entire framebuffer using native JS
@@ -257,7 +257,7 @@ export function drawString(x: i32, y: i32, text: string, color: u32): void {
  */
 export function drawSprite(id: u32, x: i32, y: i32): void {
   // Read sprite metadata
-  const metadataAddr = SPRITE_METADATA + (id as usize) * 8;
+  const metadataAddr = SPRITE_METADATA_ADDR + (id as usize) * 8;
   const width = load<u16>(metadataAddr + 0) as i32;
   const height = load<u16>(metadataAddr + 2) as i32;
   const dataOffset = load<u32>(metadataAddr + 4);
@@ -275,7 +275,7 @@ export function drawSprite(id: u32, x: i32, y: i32): void {
   if (startX >= endX || startY >= endY) return;
 
   // Draw sprite pixels (only visible region)
-  const spriteDataAddr = SPRITE_DATA + dataOffset;
+  const spriteDataAddr = SPRITE_DATA_ADDR + dataOffset;
 
   for (let dy: i32 = startY; dy < endY; dy++) {
     for (let dx: i32 = startX; dx < endX; dx++) {
@@ -341,7 +341,7 @@ export function drawSpriteFlip(
   flipV: bool,
 ): void {
   // Read sprite metadata
-  const metadataAddr = SPRITE_METADATA + (id as usize) * 8;
+  const metadataAddr = SPRITE_METADATA_ADDR + (id as usize) * 8;
   const width = load<u16>(metadataAddr + 0);
   const height = load<u16>(metadataAddr + 2);
   const dataOffset = load<u32>(metadataAddr + 4);
@@ -350,7 +350,7 @@ export function drawSpriteFlip(
   if (width == 0 || height == 0) return;
 
   // Draw sprite pixels with flipping
-  const spriteDataAddr = SPRITE_DATA + dataOffset;
+  const spriteDataAddr = SPRITE_DATA_ADDR + dataOffset;
 
   for (let dy: i32 = 0; dy < height; dy++) {
     for (let dx: i32 = 0; dx < width; dx++) {
@@ -387,7 +387,7 @@ export function drawSpriteFlip(
  */
 export function drawSprite2x(id: u8, x: i32, y: i32): void {
   // Read sprite metadata
-  const metadataAddr = SPRITE_METADATA + (id as usize) * 8;
+  const metadataAddr = SPRITE_METADATA_ADDR + (id as usize) * 8;
   const width = load<u16>(metadataAddr + 0);
   const height = load<u16>(metadataAddr + 2);
   const dataOffset = load<u32>(metadataAddr + 4);
@@ -396,7 +396,7 @@ export function drawSprite2x(id: u8, x: i32, y: i32): void {
   if (width == 0 || height == 0) return;
 
   // Draw sprite pixels scaled 2x
-  const spriteDataAddr = SPRITE_DATA + dataOffset;
+  const spriteDataAddr = SPRITE_DATA_ADDR + dataOffset;
 
   for (let dy: i32 = 0; dy < height; dy++) {
     for (let dx: i32 = 0; dx < width; dx++) {

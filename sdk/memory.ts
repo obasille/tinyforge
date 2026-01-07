@@ -14,8 +14,8 @@ export const HEIGHT: i32 = 240;
 /** Framebuffer start address (0x000000) */
 export const FB_START: usize = 0x000000;
 
-/** Framebuffer size in bytes (320×240×4) */
-export const FB_SIZE: usize = 307200;
+/** Framebuffer size in bytes */
+export const FB_SIZE: usize = WIDTH * HEIGHT * 4; // 307200
 
 /** Game RAM start address (0x04B000) */
 export const RAM_START: usize = 0x04b000;
@@ -46,10 +46,10 @@ export const DEBUG_SIZE: usize = 65536;
 export const INPUT_ADDR: usize = 0x0ab000;
 
 /** Keyboard current button state address (0x0AB000) */
-export const INPUT_BUTTONS: usize = INPUT_ADDR + 0;
+export const INPUT_BUTTONS_ADDR: usize = INPUT_ADDR + 0;
 
 /** Keyboard previous button state address (0x0AB001) */
-export const INPUT_BUTTONS_PREV: usize = INPUT_ADDR + 1;
+export const INPUT_BUTTONS_PREV_ADDR: usize = INPUT_ADDR + 1;
 
 // Mouse state is stored at 0x0AB010 with the following layout:
 //   +0: i16 x          - Mouse X coordinate (0-319, or -1 if outside canvas)
@@ -89,13 +89,13 @@ export const MOUSE_BUTTONS_PREV_ADDR: usize = MOUSE_ADDR + 5;
 // Sprite data region: ~128 KB available for pixel data
 
 /** Sprite metadata table base address (0x0AB100) */
-export const SPRITE_METADATA: usize = 0x0ab100;
+export const SPRITE_METADATA_ADDR: usize = 0x0ab100;
 
 /** Sprite metadata entry size (8 bytes) */
 export const SPRITE_METADATA_SIZE: u32 = 8;
 
 /** Sprite pixel data base address (0x0AB900 - after 256 sprite metadata entries) */
-export const SPRITE_DATA: usize = SPRITE_METADATA + 256 * SPRITE_METADATA_SIZE;
+export const SPRITE_DATA_ADDR: usize = SPRITE_METADATA_ADDR + 256 * SPRITE_METADATA_SIZE;
 
 /** Maximum sprite data size (~128 KB) */
 export const SPRITE_DATA_SIZE: usize = 131072;
