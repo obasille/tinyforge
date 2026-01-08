@@ -2,75 +2,46 @@
 
 // Import console SDK
 import {
-  WIDTH,
-  HEIGHT,
-  clearFramebuffer,
-  pset,
   Button,
+  HEIGHT,
+  RAM_START,
+  WIDTH,
   buttonDown,
+  c,
+  clearFramebuffer,
   log,
-  warn,
-  getI32,
-  setI32,
+  pset,
 } from "../sdk";
 
 // === RAM Variable System ===
-// Generic RAM allocation and access for game state
-// Each enum value represents an offset from RAM_START
+// RAM allocation for persistent game state
 
-enum Var {
-  PX = 0, // Player X (i32, 4 bytes)
-  PY = 4, // Player Y (i32, 4 bytes)
-  // Add more variables here:
-  // SCORE = 8,
-  // HEALTH = 12,
-  // etc.
+@unmanaged
+class GameVars {
+  playerX: i32 = 0;      // 0
+  playerY: i32 = 0;      // 4
 }
 
-@inline
-function getPX(): i32 {
-  return getI32(Var.PX);
-}
-@inline
-function setPX(value: i32): void {
-  setI32(Var.PX, value);
-}
-@inline
-function getPY(): i32 {
-  return getI32(Var.PY);
-}
-@inline
-function setPY(value: i32): void {
-  setI32(Var.PY, value);
-}
+const gameVars = changetype<GameVars>(RAM_START);
 
 // === lifecycle ===
+  
 export function init(): void {
-  warn("Game starting...");
-
-  clearFramebuffer(0xff000000); // black
+  clearFramebuffer(c(0xff000000)); // black
 
   // Initialize player position in RAM
-  setPX(160);
-  setPY(120);
+  gameVars.playerX = 160;
+  gameVars.playerY = 120;
 
-  log("Game started!");
+  log("Starting!");
 }
 
 export function update(): void {
-  // Load player position from RAM
-  let px = getPX();
-  let py = getPY();
-
   // Movement logic - use buttonDown() for continuous movement
-  if (buttonDown(Button.LEFT)) px--;
-  if (buttonDown(Button.RIGHT)) px++;
-  if (buttonDown(Button.UP)) py--;
-  if (buttonDown(Button.DOWN)) py++;
-
-  // Store updated position back to RAM
-  setPX(px);
-  setPY(py);
+  if (buttonDown(Button.LEFT)) gameVars.playerX--;
+  if (buttonDown(Button.RIGHT)) gameVars.playerX++;
+  if (buttonDown(Button.UP)) gameVars.playerY--;
+  if (buttonDown(Button.DOWN)) gameVars.playerY++;
 
   // Example: detect button press (not hold) - use buttonPressed() for one-time actions
   // if (buttonPressed(Button.A)) { /* do something once */ }
@@ -78,8 +49,8 @@ export function update(): void {
 
 export function draw(): void {
   // Load player position from RAM
-  const px = getPX();
-  const py = getPY();
+  const px = gameVars.playerX;
+  const py = gameVars.playerY;
 
   // test pattern
   for (let y = 0; y < HEIGHT; y++) {
@@ -91,5 +62,5 @@ export function draw(): void {
     }
   }
   // draw player
-  pset(px, py, 0xffffff);
+  pset(px, py, c(0xffffff));
 }

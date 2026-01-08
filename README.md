@@ -540,40 +540,59 @@ The SDK provides:
 ### Minimal cartridge
 
 ```ts
-import { memory, clearFramebuffer, pset, Button, getI32, setI32 } from './console';
+import { clearFramebuffer, pset, Button, RAM_START } from './console';
 
-// Game state in RAM
-enum Var {
-  X = 0,        // i32 - player x
-  Y = 4,        // i32 - player y
+// Game state persisted in RAM using @unmanaged struct
+@unmanaged
+class GameVars {
+  x: i32;  // 0 - player x
+  y: i32;  // 4 - player y
 }
+
+const gameVars = changetype<GameVars>(RAM_START);
+
+// === lifecycle ===
 
 export function init(): void {
   clearFramebuffer(0xff000000);
-  setI32(Var.X, 160);
-  setI32(Var.Y, 120);
+
+  // Initialize player position in RAM
+  gameVars.x = 160;
+  gameVars.y = 120;
+
+  log("Starting!");
 }
 
 export function update(input: i32, prevInput: i32): void {
-  let x = getI32(Var.X);
-  let y = getI32(Var.Y);
-  
-  if (input & Button.LEFT)  x--;
-  if (input & Button.RIGHT) x++;
-  if (input & Button.UP)    y--;
-  if (input & Button.DOWN)  y++;
-  
-  setI32(Var.X, x);
-  setI32(Var.Y, y);
+  // Movement logic - use buttonDown() for continuous movement
+  if (input & Button.LEFT)  gameVars.x--;
+  if (input & Button.RIGHT) gameVars.x++;
+  if (input & Button.UP)    gameVars.y--;
+  if (input & Button.DOWN)  gameVars.y++;
 }
 
 export function draw(): void {
+  // Clear buffer
   clearFramebuffer(0x000000);
-  const x = getI32(Var.X);
-  const y = getI32(Var.Y);
-  pset(x, y, 0xffffff);
+  // And draw point at player's position
+  pset(gameVars.x, gameVars.y, c(0xffffff));
 }
 ```
+
+**Why @unmanaged structs?**
+
+The `@unmanaged` decorator tells AssemblyScript to not use automatic memory management for this class. This allows us to:
+
+- Cast a memory address directly to a struct type using `changetype<T>(address)`
+- Access game state as struct fields instead of manual offset calculations
+- Get better type safety and IDE autocomplete
+- Avoid manual `getI32`/`setI32` calls for every variable access
+
+**Important notes:**
+
+- Struct fields are laid out sequentially in memory (x at offset 0, y at offset 4)
+- The struct size must fit within your allocated RAM region
+- All cartridges share the same RAM starting at `RAM_START`
 
 The cartridge:
 - Has no access to time

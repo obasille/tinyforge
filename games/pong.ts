@@ -2,42 +2,30 @@
 // Two-player pong with horizontal paddles (top vs bottom)
 
 import {
-  WIDTH,
-  HEIGHT,
   Button,
   buttonDown,
   buttonPressed,
-  log,
-  getI32,
-  setI32,
-  getF32,
-  setF32,
-  getU8,
-  setU8,
+  c,
   clearFramebuffer,
-  drawString,
+  drawMessageBox,
   drawNumber,
   drawRect,
+  drawString,
   fillRect,
-  c,
-  drawMessageBox,
+  HEIGHT,
+  log,
+  RAM_START,
   Vec2i,
+  WIDTH,
 } from "../sdk";
 
 // === Constants ===
-@inline
 const PADDLE_WIDTH: i32 = 40;
-@inline
 const PADDLE_HEIGHT: i32 = 6;
-@inline
 const BALL_SIZE: i32 = 4;
-@inline
 const PADDLE_SPEED: f32 = 3.0;
-@inline
 const BALL_SPEED_INITIAL: f32 = 2.0;
-@inline
 const BALL_SPEED_INCREMENT: f32 = 0.1;
-@inline
 const MAX_SCORE: i32 = 5;
 
 // Game states
@@ -48,66 +36,69 @@ enum GameState {
 }
 
 // === RAM Layout ===
-enum Var {
+@unmanaged
+class GameVars {
   // Player 1 (top paddle)
-  P1_X = 0, // f32 - paddle X position
-  P1_SCORE = 4, // i32 - player 1 score
+  p1X: f32 = 0;      // 0
+  p1Score: i32 = 0;  // 4
 
   // Player 2 (bottom paddle)
-  P2_X = 8, // f32 - paddle X position
-  P2_SCORE = 12, // i32 - player 2 score
+  p2X: f32 = 0;      // 8
+  p2Score: i32 = 0;  // 12
 
   // Ball
-  BALL_X = 16, // f32 - ball X position
-  BALL_Y = 20, // f32 - ball Y position
-  BALL_VX = 24, // f32 - ball X velocity
-  BALL_VY = 28, // f32 - ball Y velocity
+  ballX: f32 = 0;    // 16
+  ballY: f32 = 0;    // 20
+  ballVX: f32 = 0;   // 24
+  ballVY: f32 = 0;   // 28
 
   // Game state
-  GAME_STATE = 32, // u8 - current game state
-  WINNER = 33, // u8 - winning player (1 or 2)
+  state: u8 = 0;     // 32
+  winner: u8 = 0;    // 33
 }
+
+const gameVars = changetype<GameVars>(RAM_START);
 
 // === Helper Functions ===
 function resetBall(servingPlayer: i32): void {
   // Center the ball
-  setF32(Var.BALL_X, (WIDTH / 2 - BALL_SIZE / 2) as f32);
-  setF32(Var.BALL_Y, (HEIGHT / 2 - BALL_SIZE / 2) as f32);
+  gameVars.ballX = (WIDTH / 2 - BALL_SIZE / 2) as f32;
+  gameVars.ballY = (HEIGHT / 2 - BALL_SIZE / 2) as f32;
 
   // Set velocity (serve toward the player who lost the point)
-  setF32(Var.BALL_VX, 0.0);
+  gameVars.ballVX = 0.0;
   if (servingPlayer == 1) {
-    setF32(Var.BALL_VY, BALL_SPEED_INITIAL); // Serve down toward player 2
+    gameVars.ballVY = BALL_SPEED_INITIAL; // Serve down toward player 2
   } else {
-    setF32(Var.BALL_VY, -BALL_SPEED_INITIAL); // Serve up toward player 1
+    gameVars.ballVY = -BALL_SPEED_INITIAL; // Serve up toward player 1
   }
 }
 
 function checkCollision(): void {
-  const ballX = getF32(Var.BALL_X);
-  const ballY = getF32(Var.BALL_Y);
-  let ballVX = getF32(Var.BALL_VX);
-  let ballVY = getF32(Var.BALL_VY);
+  const ballX = gameVars.ballX;
+  const ballY = gameVars.ballY;
+  let ballVX = gameVars.ballVX;
+  let ballVY = gameVars.ballVY;
 
   // Left/right wall collisions
   if (ballX <= 0.0) {
-    setF32(Var.BALL_X, 0.0);
+    gameVars.ballX = 0.0;
     ballVX = -ballVX;
-    setF32(Var.BALL_VX, ballVX);
+    gameVars.ballVX = ballVX;
   } else if (ballX >= ((WIDTH - BALL_SIZE) as f32)) {
-    setF32(Var.BALL_X, (WIDTH - BALL_SIZE) as f32);
+    gameVars.ballX = (WIDTH - BALL_SIZE) as f32;
     ballVX = -ballVX;
-    setF32(Var.BALL_VX, ballVX);
+    gameVars.ballVX = ballVX;
   }
 
   // Top paddle collision (player 1)
-  const p1X = getF32(Var.P1_X);
+  const p1X = gameVars.p1X;
   if (
     ballY <= (PADDLE_HEIGHT as f32) &&
     ballX + (BALL_SIZE as f32) >= p1X &&
     ballX <= p1X + (PADDLE_WIDTH as f32)
   ) {
-    setF32(Var.BALL_Y, PADDLE_HEIGHT as f32);
+    gameVars.ballY = PADDLE_HEIGHT as f32;
     ballVY = -ballVY;
 
     // Add horizontal velocity based on where ball hits paddle
@@ -120,19 +111,19 @@ function checkCollision(): void {
     ballVX = (ballVX * newSpeed) / speed;
     ballVY = (ballVY * newSpeed) / speed;
 
-    setF32(Var.BALL_VX, ballVX);
-    setF32(Var.BALL_VY, ballVY);
+    gameVars.ballVX = ballVX;
+    gameVars.ballVY = ballVY;
   }
 
   // Bottom paddle collision (player 2)
-  const p2X = getF32(Var.P2_X);
+  const p2X = gameVars.p2X;
   const bottomPaddleY = HEIGHT - PADDLE_HEIGHT;
   if (
     ballY + (BALL_SIZE as f32) >= (bottomPaddleY as f32) &&
     ballX + (BALL_SIZE as f32) >= p2X &&
     ballX <= p2X + (PADDLE_WIDTH as f32)
   ) {
-    setF32(Var.BALL_Y, (bottomPaddleY - BALL_SIZE) as f32);
+    gameVars.ballY = (bottomPaddleY - BALL_SIZE) as f32;
     ballVY = -ballVY;
 
     // Add horizontal velocity based on where ball hits paddle
@@ -145,19 +136,18 @@ function checkCollision(): void {
     ballVX = (ballVX * newSpeed) / speed;
     ballVY = (ballVY * newSpeed) / speed;
 
-    setF32(Var.BALL_VX, ballVX);
-    setF32(Var.BALL_VY, ballVY);
+    gameVars.ballVX = ballVX;
+    gameVars.ballVY = ballVY;
   }
 
   // Top edge (player 2 scores)
   if (ballY < 0.0) {
-    const p2Score = getI32(Var.P2_SCORE) + 1;
-    setI32(Var.P2_SCORE, p2Score);
+    gameVars.p2Score++;
     log("Player 2 scores!");
 
-    if (p2Score >= MAX_SCORE) {
-      setU8(Var.GAME_STATE, GameState.GAME_OVER as u8);
-      setU8(Var.WINNER, 2);
+    if (gameVars.p2Score >= MAX_SCORE) {
+      gameVars.state = GameState.GAME_OVER as u8;
+      gameVars.winner = 2;
       log("Player 2 wins!");
     } else {
       resetBall(2);
@@ -166,13 +156,12 @@ function checkCollision(): void {
 
   // Bottom edge (player 1 scores)
   if (ballY > (HEIGHT as f32)) {
-    const p1Score = getI32(Var.P1_SCORE) + 1;
-    setI32(Var.P1_SCORE, p1Score);
+    gameVars.p1Score++;
     log("Player 1 scores!");
 
-    if (p1Score >= MAX_SCORE) {
-      setU8(Var.GAME_STATE, GameState.GAME_OVER as u8);
-      setU8(Var.WINNER, 1);
+    if (gameVars.p1Score >= MAX_SCORE) {
+      gameVars.state = GameState.GAME_OVER as u8;
+      gameVars.winner = 1;
       log("Player 1 wins!");
     } else {
       resetBall(1);
@@ -182,32 +171,28 @@ function checkCollision(): void {
 
 // === Lifecycle ===
 export function init(): void {
-  log("Pong starting...");
-
   // Initialize paddles (centered)
-  setF32(Var.P1_X, (WIDTH / 2 - PADDLE_WIDTH / 2) as f32);
-  setF32(Var.P2_X, (WIDTH / 2 - PADDLE_WIDTH / 2) as f32);
+  gameVars.p1X = (WIDTH / 2 - PADDLE_WIDTH / 2) as f32;
+  gameVars.p2X = (WIDTH / 2 - PADDLE_WIDTH / 2) as f32;
 
   // Initialize scores
-  setI32(Var.P1_SCORE, 0);
-  setI32(Var.P2_SCORE, 0);
-  setU8(Var.WINNER, 0);
+  gameVars.p1Score = 0;
+  gameVars.p2Score = 0;
+  gameVars.winner = 0;
 
   // Initialize ball
   resetBall(1);
 
   // Set game state
-  setU8(Var.GAME_STATE, GameState.START_SCREEN as u8);
-
-  log("Pong ready! First to 5 wins!");
+  gameVars.state = GameState.START_SCREEN as u8;
 }
 
 export function update(): void {
-  const state = getU8(Var.GAME_STATE);
+  const state = gameVars.state;
 
   // Start game from start screen
   if (state == GameState.START_SCREEN && buttonPressed(Button.START)) {
-    setU8(Var.GAME_STATE, GameState.PLAYING as u8);
+    gameVars.state = GameState.PLAYING as u8;
     return;
   }
 
@@ -220,7 +205,7 @@ export function update(): void {
   if (state != GameState.PLAYING) return;
 
   // Player 1 (top paddle) - A & B buttons
-  let p1X = getF32(Var.P1_X);
+  let p1X = gameVars.p1X;
   if (buttonDown(Button.A)) {
     p1X -= PADDLE_SPEED;
     if (p1X < 0.0) p1X = 0.0;
@@ -230,10 +215,10 @@ export function update(): void {
     if (p1X > ((WIDTH - PADDLE_WIDTH) as f32))
       p1X = (WIDTH - PADDLE_WIDTH) as f32;
   }
-  setF32(Var.P1_X, p1X);
+  gameVars.p1X = p1X;
 
   // Player 2 (bottom paddle) - Left & Right arrows
-  let p2X = getF32(Var.P2_X);
+  let p2X = gameVars.p2X;
   if (buttonDown(Button.LEFT)) {
     p2X -= PADDLE_SPEED;
     if (p2X < 0.0) p2X = 0.0;
@@ -243,16 +228,11 @@ export function update(): void {
     if (p2X > ((WIDTH - PADDLE_WIDTH) as f32))
       p2X = (WIDTH - PADDLE_WIDTH) as f32;
   }
-  setF32(Var.P2_X, p2X);
+  gameVars.p2X = p2X;
 
   // Update ball position
-  const ballX = getF32(Var.BALL_X);
-  const ballY = getF32(Var.BALL_Y);
-  const ballVX = getF32(Var.BALL_VX);
-  const ballVY = getF32(Var.BALL_VY);
-
-  setF32(Var.BALL_X, ballX + ballVX);
-  setF32(Var.BALL_Y, ballY + ballVY);
+  gameVars.ballX += gameVars.ballVX;
+  gameVars.ballY += gameVars.ballVY;
 
   // Check collisions
   checkCollision();
@@ -261,11 +241,11 @@ export function update(): void {
 export function draw(): void {
   clearFramebuffer(c(0x0a0a0a));
 
-  const state = getU8(Var.GAME_STATE);
-  const p1X = getF32(Var.P1_X) as i32;
-  const p2X = getF32(Var.P2_X) as i32;
-  const ballX = getF32(Var.BALL_X) as i32;
-  const ballY = getF32(Var.BALL_Y) as i32;
+  const state = gameVars.state;
+  const p1X = gameVars.p1X as i32;
+  const p2X = gameVars.p2X as i32;
+  const ballX = gameVars.ballX as i32;
+  const ballY = gameVars.ballY as i32;
 
   // Draw center line
   const colorCenterLine = c(0x333333);
@@ -287,11 +267,8 @@ export function draw(): void {
   fillRect(ballX, ballY, BALL_SIZE, BALL_SIZE, c(0xffffff));
 
   // Draw scores
-  const p1Score = getI32(Var.P1_SCORE);
-  const p2Score = getI32(Var.P2_SCORE);
-
-  drawNumber(10, 10, p1Score, c(0x00aaff));
-  drawNumber(10, HEIGHT - 20, p2Score, c(0xff5500));
+  drawNumber(10, 10, gameVars.p1Score, c(0x00aaff));
+  drawNumber(10, HEIGHT - 20, gameVars.p2Score, c(0xff5500));
 
   // Game messages
   if (state == GameState.START_SCREEN) {
@@ -306,11 +283,10 @@ export function draw(): void {
       c(0xffffff),
     );
   } else if (state == GameState.GAME_OVER) {
-    const winner = getU8(Var.WINNER);
     fillRect(60, HEIGHT / 2 - 20, 200, 40, c(0x000000));
     drawRect(60, HEIGHT / 2 - 20, 200, 40, c(0xffffff));
 
-    if (winner == 1) {
+    if (gameVars.winner == 1) {
       drawString(80, HEIGHT / 2 - 10, "PLAYER 1 WINS!", c(0x00aaff));
     } else {
       drawString(80, HEIGHT / 2 - 10, "PLAYER 2 WINS!", c(0xff5500));

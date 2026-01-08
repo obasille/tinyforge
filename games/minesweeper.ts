@@ -2,43 +2,36 @@
 // 10×10 grid, 15 mines, retro terminal aesthetic
 
 import {
-  clearFramebuffer,
   Button,
   buttonPressed,
-  log,
-  getI32,
-  setI32,
-  getU8,
-  setU8,
+  c,
+  clearFramebuffer,
+  drawMessageBox,
   drawNumber,
   drawRect,
+  drawSprite,
   fillCircle,
   fillRect,
-  c,
-  random,
-  drawMessageBox,
-  RAM_START,
-  Vec2i,
+  getU8,
+  log,
+  MouseButton,
+  mousePressed,
   mouseX,
   mouseY,
-  mousePressed,
-  MouseButton,
-  playSfx,
   playMusic,
+  playSfx,
+  RAM_START,
+  random,
+  setU8,
   stopMusic,
-  drawSprite,
+  Vec2i,
 } from "../sdk";
 
 // === Constants ===
-@inline
 const GRID_SIZE: i32 = 10;
-@inline
 const MINE_COUNT: i32 = 15;
-@inline
 const CELL_SIZE: i32 = 24;
-@inline
 const GRID_OFFSET_X: i32 = 40; // Center 240px grid in 320px width
-@inline
 const GRID_OFFSET_Y: i32 = 0;
 
 // Audio IDs
@@ -69,33 +62,36 @@ enum GameState {
   LOST = 3,
 }
 
-// === RAM Layout ===
-enum Var {
-  CURSOR_X = 0, // i32 - cursor X (0-9)
-  CURSOR_Y = 4, // i32 - cursor Y (0-9)
-  GAME_STATE = 8, // u8  - game state
-  REVEALED_COUNT = 9, // u8  - revealed cells
-  FLAG_COUNT = 10, // u8  - flags placed
-  RNG_SEED = 12, // i32 - PRNG seed
-  GRID_START = 16, // 100 bytes - grid data (10×10)
+@unmanaged
+class GameVars {
+  cursorX: i32 = 0;      // 0
+  cursorY: i32 = 0;      // 4
+  state: u8 = 0;         // 8
+  revealedCount: u8 = 0; // 9
+  flagCount: u8 = 0;     // 10
+  _padding: u8 = 0;      // 11
+  rngSeed: i32 = 0;      // 12
 }
+
+const gameVars = changetype<GameVars>(RAM_START);
+const GRID_START = RAM_START + sizeof<GameVars>(); // 100 bytes - grid data (10×10)
 
 // === Grid Helpers ===
 @inline
 function getCellData(x: i32, y: i32): u8 {
   if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return 0;
-  return getU8(Var.GRID_START + (y * GRID_SIZE + x));
+  return getU8(GRID_START + (y * GRID_SIZE + x));
 }
 
 @inline
 function setCellData(x: i32, y: i32, data: u8): void {
   if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return;
-  setU8(Var.GRID_START + (y * GRID_SIZE + x), data);
+  setU8(GRID_START + (y * GRID_SIZE + x), data);
 }
 
 @inline
 function randomRange(max: i32): i32 {
-  return random(RAM_START + Var.RNG_SEED) % max;
+  return random(RAM_START + 12) % max; // rngSeed offset
 }
 
 // === Game Logic ===
@@ -142,11 +138,11 @@ function revealCell(x: i32, y: i32): void {
   // Reveal this cell
   cell |= CellFlag.REVEALED as u8;
   setCellData(x, y, cell);
-  setU8(Var.REVEALED_COUNT, getU8(Var.REVEALED_COUNT) + 1);
+  gameVars.revealedCount++;
 
   // If mine, game over
   if (cell & CellFlag.MINE) {
-    setU8(Var.GAME_STATE, GameState.LOST as u8);
+    gameVars.state = GameState.LOST as u8;
     playSfx(SFX.EXPLODE, 0.8);
     stopMusic();
     log("Game Over!");
@@ -173,21 +169,21 @@ function toggleFlag(x: i32, y: i32): void {
 
   if (cell & CellFlag.FLAGGED) {
     cell &= ~(CellFlag.FLAGGED as u8);
-    setU8(Var.FLAG_COUNT, getU8(Var.FLAG_COUNT) - 1);
+    gameVars.flagCount--;
     playSfx(SFX.FLAG, 0.4);
-  } else if ((getU8(Var.FLAG_COUNT) as i32) < MINE_COUNT) {
+  } else if ((gameVars.flagCount as i32) < MINE_COUNT) {
     cell |= CellFlag.FLAGGED as u8;
-    setU8(Var.FLAG_COUNT, getU8(Var.FLAG_COUNT) + 1);
+    gameVars.flagCount++;
     playSfx(SFX.FLAG, 0.4);
   }
   setCellData(x, y, cell);
 }
 
 function checkWin(): void {
-  const revealed = getU8(Var.REVEALED_COUNT) as i32;
+  const revealed = gameVars.revealedCount as i32;
   const target = GRID_SIZE * GRID_SIZE - MINE_COUNT;
   if (revealed >= target) {
-    setU8(Var.GAME_STATE, GameState.WON as u8);
+    gameVars.state = GameState.WON as u8;
     playSfx(SFX.WIN, 0.8);
     stopMusic();
     log("You Win!");
@@ -196,30 +192,26 @@ function checkWin(): void {
 
 // === Lifecycle ===
 export function init(): void {
-  log("Minesweeper starting...");
-
   // Clear grid
   for (let i: i32 = 0; i < GRID_SIZE * GRID_SIZE; i++) {
-    setU8(Var.GRID_START + i, 0);
+    setU8(GRID_START + i, 0);
   }
 
   // Initialize state
-  setI32(Var.CURSOR_X, 5);
-  setI32(Var.CURSOR_Y, 5);
-  setU8(Var.GAME_STATE, GameState.START_SCREEN as u8);
-  setU8(Var.REVEALED_COUNT, 0);
-  setU8(Var.FLAG_COUNT, 0);
-  setI32(Var.RNG_SEED, 12345);
+  gameVars.cursorX = 5;
+  gameVars.cursorY = 5;
+  gameVars.state = GameState.START_SCREEN as u8;
+  gameVars.revealedCount = 0;
+  gameVars.flagCount = 0;
+  gameVars.rngSeed = 12345;
 
   // Setup game
   placeMines();
   calculateAdjacentMines();
-
-  log("Minesweeper ready!");
 }
 
 export function update(): void {
-  const state = getU8(Var.GAME_STATE);
+  const state = gameVars.state;
 
   // Start game from start screen
   if (
@@ -228,7 +220,7 @@ export function update(): void {
       mousePressed(MouseButton.LEFT) ||
       mousePressed(MouseButton.RIGHT))
   ) {
-    setU8(Var.GAME_STATE, GameState.PLAYING as u8);
+    gameVars.state = GameState.PLAYING as u8;
     // Start music after user interaction
     playMusic(Music.GAMEPLAY, 0.5);
     return;
@@ -251,8 +243,8 @@ export function update(): void {
   const mx = mouseX();
   const my = mouseY();
 
-  let cx = getI32(Var.CURSOR_X);
-  let cy = getI32(Var.CURSOR_Y);
+  let cx = gameVars.cursorX;
+  let cy = gameVars.cursorY;
 
   // Update cursor position based on mouse hover
   if (mx >= 0 && my >= 0) {
@@ -262,8 +254,8 @@ export function update(): void {
     if (gridX >= 0 && gridX < GRID_SIZE && gridY >= 0 && gridY < GRID_SIZE) {
       cx = gridX;
       cy = gridY;
-      setI32(Var.CURSOR_X, cx);
-      setI32(Var.CURSOR_Y, cy);
+      gameVars.cursorX = cx;
+      gameVars.cursorY = cy;
     }
   }
 
@@ -282,9 +274,9 @@ export function update(): void {
 export function draw(): void {
   clearFramebuffer(c(0x0a0a0a));
 
-  const state = getU8(Var.GAME_STATE);
-  const cx = getI32(Var.CURSOR_X);
-  const cy = getI32(Var.CURSOR_Y);
+  const state = gameVars.state;
+  const cx = gameVars.cursorX;
+  const cy = gameVars.cursorY;
 
   // Pre-convert colors
   const colorBg = c(0x1a1a1a);
@@ -293,7 +285,6 @@ export function draw(): void {
   const colorCursor = c(0x00ff00);
   const colorMine = c(0xff0000);
   const colorNumber = c(0x00ff00);
-  const colorFlag = c(0xffaa00);
 
   // Draw grid
   for (let y: i32 = 0; y < GRID_SIZE; y++) {
@@ -338,7 +329,7 @@ export function draw(): void {
   }
 
   // Status bar
-  const flagCount = getU8(Var.FLAG_COUNT);
+  const flagCount = gameVars.flagCount;
   const remaining = MINE_COUNT - flagCount;
 
   // Draw mine count indicator

@@ -2,41 +2,33 @@
 // Classic snake game with grid-based movement
 
 import {
-  WIDTH,
-  HEIGHT,
   Button,
   buttonPressed,
-  log,
-  getI32,
-  setI32,
-  getU8,
-  setU8,
-  clearFramebuffer,
-  pset,
-  fillRect,
-  drawRect,
-  drawNumber,
-  drawString,
   c,
-  random,
+  clearFramebuffer,
   drawMessageBox,
+  drawNumber,
+  drawRect,
+  drawString,
+  fillRect,
+  getU8,
+  HEIGHT,
+  log,
+  pset,
   RAM_START,
+  random,
+  setU8,
   Vec2i,
+  WIDTH,
 } from "../sdk";
 
 // === Constants ===
-@inline
 const GRID_SIZE: i32 = 16; // Size of each grid cell in pixels
-@inline
 const GRID_WIDTH: i32 = WIDTH / GRID_SIZE; // 20 cells wide
-@inline
 const GRID_HEIGHT: i32 = HEIGHT / GRID_SIZE; // 15 cells tall
-@inline
 const MAX_SNAKE_LENGTH: i32 = GRID_WIDTH * GRID_HEIGHT; // Maximum possible length
 
-@inline
 const INITIAL_SPEED: u8 = 10; // Frames between moves (lower = faster)
-@inline
 const SPEED_INCREMENT: u8 = 1; // Speed increase per food eaten
 
 // Directions
@@ -55,36 +47,39 @@ enum GameState {
 }
 
 // === RAM Layout ===
-enum Var {
-  SNAKE_LENGTH = 0, // i32 - current snake length
-  SNAKE_DIR = 4, // u8 - current direction
-  NEXT_DIR = 5, // u8 - queued direction (for turning)
-  FOOD_X = 6, // u8 - food X position
-  FOOD_Y = 7, // u8 - food Y position
-  GAME_STATE = 8, // u8 - game state
-  SCORE = 9, // u8 - current score
-  SPEED = 10, // u8 - current game speed
-  MOVE_TIMER = 11, // u8 - countdown timer for movement
-  RNG_SEED = 12, // i32 - PRNG seed
-  SNAKE_DATA = 16, // 400 bytes - snake body (2 bytes per segment: x, y)
+@unmanaged
+class GameVars {
+  length: i32 = 0;    // 0
+  dir: u8 = 0;        // 4
+  nextDir: u8 = 0;    // 5
+  foodX: u8 = 0;      // 6
+  foodY: u8 = 0;      // 7
+  state: u8 = 0;      // 8
+  score: u8 = 0;      // 9
+  speed: u8 = 0;      // 10
+  moveTimer: u8 = 0;  // 11
+  rngSeed: i32 = 0;   // 12
 }
 
+const gameVars = changetype<GameVars>(RAM_START);
+const SNAKE_DATA = RAM_START + 16; // 400 bytes - snake body (2 bytes per segment: x, y)
+
 function randomRange(max: i32): i32 {
-  return random(RAM_START + Var.RNG_SEED) % max;
+  return random(RAM_START + 12) % max; // rngSeed offset
 }
 
 // === Snake Helpers ===
 function getSegmentX(index: i32): u8 {
-  return getU8(Var.SNAKE_DATA + index * 2);
+  return getU8(SNAKE_DATA + index * 2);
 }
 
 function getSegmentY(index: i32): u8 {
-  return getU8(Var.SNAKE_DATA + index * 2 + 1);
+  return getU8(SNAKE_DATA + index * 2 + 1);
 }
 
 function setSegment(index: i32, x: u8, y: u8): void {
-  setU8(Var.SNAKE_DATA + index * 2, x);
-  setU8(Var.SNAKE_DATA + index * 2 + 1, y);
+  setU8(SNAKE_DATA + index * 2, x);
+  setU8(SNAKE_DATA + index * 2 + 1, y);
 }
 
 function spawnFood(): void {
@@ -98,7 +93,7 @@ function spawnFood(): void {
 
     // Check if position is occupied by snake
     let occupied = false;
-    const length = getI32(Var.SNAKE_LENGTH);
+    const length = gameVars.length;
     for (let i: i32 = 0; i < length; i++) {
       if (getSegmentX(i) == fx && getSegmentY(i) == fy) {
         occupied = true;
@@ -107,8 +102,8 @@ function spawnFood(): void {
     }
 
     if (!occupied) {
-      setU8(Var.FOOD_X, fx);
-      setU8(Var.FOOD_Y, fy);
+      gameVars.foodX = fx;
+      gameVars.foodY = fy;
       return;
     }
 
@@ -116,8 +111,8 @@ function spawnFood(): void {
   }
 
   // Fallback: place at 0,0 (shouldn't happen unless grid is full)
-  setU8(Var.FOOD_X, 0);
-  setU8(Var.FOOD_Y, 0);
+  gameVars.foodX = 0;
+  gameVars.foodY = 0;
 }
 
 function checkCollision(x: u8, y: u8): bool {
@@ -127,7 +122,7 @@ function checkCollision(x: u8, y: u8): bool {
   }
 
   // Self collision (check against all body segments except head)
-  const length = getI32(Var.SNAKE_LENGTH);
+  const length = gameVars.length;
   for (let i: i32 = 1; i < length; i++) {
     if (getSegmentX(i) == x && getSegmentY(i) == y) {
       return true;
@@ -138,8 +133,8 @@ function checkCollision(x: u8, y: u8): bool {
 }
 
 function moveSnake(): void {
-  const dir = getU8(Var.SNAKE_DIR);
-  const length = getI32(Var.SNAKE_LENGTH);
+  const dir = gameVars.dir;
+  const length = gameVars.length;
 
   // Get current head position
   let headX = getSegmentX(0);
@@ -153,24 +148,23 @@ function moveSnake(): void {
 
   // Check collision
   if (checkCollision(headX, headY)) {
-    setU8(Var.GAME_STATE, GameState.GAME_OVER as u8);
+    gameVars.state = GameState.GAME_OVER as u8;
     log("Game Over!");
     return;
   }
 
   // Check if food is eaten
-  const foodX = getU8(Var.FOOD_X);
-  const foodY = getU8(Var.FOOD_Y);
+  const foodX = gameVars.foodX;
+  const foodY = gameVars.foodY;
   let grow = false;
 
   if (headX == foodX && headY == foodY) {
     grow = true;
-    setU8(Var.SCORE, getU8(Var.SCORE) + 1);
+    gameVars.score++;
 
     // Increase speed
-    const currentSpeed = getU8(Var.SPEED);
-    if (currentSpeed > 2) {
-      setU8(Var.SPEED, currentSpeed - SPEED_INCREMENT);
+    if (gameVars.speed > 2) {
+      gameVars.speed -= SPEED_INCREMENT;
     }
 
     spawnFood();
@@ -184,7 +178,7 @@ function moveSnake(): void {
       for (let i: i32 = length; i > 0; i--) {
         setSegment(i, getSegmentX(i - 1), getSegmentY(i - 1));
       }
-      setI32(Var.SNAKE_LENGTH, newLength);
+      gameVars.length = newLength;
     }
   } else {
     // Not growing: shift all segments (tail disappears)
@@ -199,39 +193,35 @@ function moveSnake(): void {
 
 // === Lifecycle ===
 export function init(): void {
-  log("Snake starting...");
-
   // Initialize snake (start in center, length 3, moving right)
   const startX = (GRID_WIDTH / 2) as u8;
   const startY = (GRID_HEIGHT / 2) as u8;
 
-  setI32(Var.SNAKE_LENGTH, 3);
+  gameVars.length = 3;
   setSegment(0, startX, startY);
   setSegment(1, (startX - 1) as u8, startY);
   setSegment(2, (startX - 2) as u8, startY);
 
-  setU8(Var.SNAKE_DIR, Direction.RIGHT as u8);
-  setU8(Var.NEXT_DIR, Direction.RIGHT as u8);
-  setU8(Var.GAME_STATE, GameState.START_SCREEN as u8);
-  setU8(Var.SCORE, 0);
-  setU8(Var.SPEED, INITIAL_SPEED);
-  setU8(Var.MOVE_TIMER, INITIAL_SPEED);
+  gameVars.dir = Direction.RIGHT as u8;
+  gameVars.nextDir = Direction.RIGHT as u8;
+  gameVars.state = GameState.START_SCREEN as u8;
+  gameVars.score = 0;
+  gameVars.speed = INITIAL_SPEED;
+  gameVars.moveTimer = INITIAL_SPEED;
 
   // Initialize RNG
-  setI32(Var.RNG_SEED, 12345);
+  gameVars.rngSeed = 12345;
 
   // Spawn first food
   spawnFood();
-
-  log("Snake ready!");
 }
 
 export function update(): void {
-  const state = getU8(Var.GAME_STATE);
+  const state = gameVars.state;
 
   // Start game from start screen
   if (state == GameState.START_SCREEN && buttonPressed(Button.START)) {
-    setU8(Var.GAME_STATE, GameState.PLAYING as u8);
+    gameVars.state = GameState.PLAYING as u8;
     return;
   }
 
@@ -244,43 +234,38 @@ export function update(): void {
   if (state != GameState.PLAYING) return;
 
   // Handle input (queue direction change)
-  const currentDir = getU8(Var.SNAKE_DIR);
+  const currentDir = gameVars.dir;
 
   if (buttonPressed(Button.UP)) {
-    if (currentDir != Direction.DOWN) setU8(Var.NEXT_DIR, Direction.UP as u8);
+    if (currentDir != Direction.DOWN) gameVars.nextDir = Direction.UP as u8;
   } else if (buttonPressed(Button.DOWN)) {
-    if (currentDir != Direction.UP) setU8(Var.NEXT_DIR, Direction.DOWN as u8);
+    if (currentDir != Direction.UP) gameVars.nextDir = Direction.DOWN as u8;
   } else if (buttonPressed(Button.LEFT)) {
-    if (currentDir != Direction.RIGHT)
-      setU8(Var.NEXT_DIR, Direction.LEFT as u8);
+    if (currentDir != Direction.RIGHT) gameVars.nextDir = Direction.LEFT as u8;
   } else if (buttonPressed(Button.RIGHT)) {
-    if (currentDir != Direction.LEFT)
-      setU8(Var.NEXT_DIR, Direction.RIGHT as u8);
+    if (currentDir != Direction.LEFT) gameVars.nextDir = Direction.RIGHT as u8;
   }
 
   // Update movement timer
-  let timer = getU8(Var.MOVE_TIMER);
-  timer--;
+  gameVars.moveTimer--;
 
-  if (timer == 0) {
+  if (gameVars.moveTimer == 0) {
     // Apply queued direction
-    setU8(Var.SNAKE_DIR, getU8(Var.NEXT_DIR));
+    gameVars.dir = gameVars.nextDir;
 
     // Move snake
     moveSnake();
 
     // Reset timer
-    timer = getU8(Var.SPEED);
+    gameVars.moveTimer = gameVars.speed;
   }
-
-  setU8(Var.MOVE_TIMER, timer);
 }
 
 export function draw(): void {
   clearFramebuffer(c(0x0a0a0a));
 
-  const state = getU8(Var.GAME_STATE);
-  const length = getI32(Var.SNAKE_LENGTH);
+  const state = gameVars.state;
+  const length = gameVars.length;
 
   // Draw grid lines (subtle)
   const colorGrid = c(0x1a1a1a);
@@ -310,14 +295,13 @@ export function draw(): void {
   }
 
   // Draw food
-  const foodX = (getU8(Var.FOOD_X) as i32) * GRID_SIZE;
-  const foodY = (getU8(Var.FOOD_Y) as i32) * GRID_SIZE;
+  const foodX = (gameVars.foodX as i32) * GRID_SIZE;
+  const foodY = (gameVars.foodY as i32) * GRID_SIZE;
   fillRect(foodX + 2, foodY + 2, GRID_SIZE - 4, GRID_SIZE - 4, c(0xff0000));
 
   // Draw score
-  const score = getU8(Var.SCORE);
   drawString(4, 4, "SCORE:", c(0xaaaaaa));
-  drawNumber(50, 4, score as i32, c(0xffffff));
+  drawNumber(50, 4, gameVars.score as i32, c(0xffffff));
 
   // Game messages
   if (state == GameState.START_SCREEN) {
@@ -337,7 +321,7 @@ export function draw(): void {
 
     drawString(80, HEIGHT / 2 - 20, "GAME OVER!", c(0xff0000));
     drawString(80, HEIGHT / 2 - 5, "SCORE:", c(0xaaaaaa));
-    drawNumber(130, HEIGHT / 2 - 5, score as i32, c(0xffffff));
+    drawNumber(130, HEIGHT / 2 - 5, gameVars.score as i32, c(0xffffff));
     drawString(80, HEIGHT / 2 + 10, "PRESS START", c(0xaaaaaa));
   }
 }
