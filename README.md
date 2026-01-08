@@ -413,10 +413,29 @@ assets/
 └─ sprites/         # Sprite images
    ├─ 0-flag.png
    ├─ 1-player.png
+   ├─ 2~4x3-tiles.png  # Sprite sheet: 4x3 grid
    └─ ...
 ```
 
-Files are **ID-based**: the filename must start with a number (0-255) which becomes the sprite ID.
+**Single sprites:**
+- Format: `{ID}-name.png` (e.g., `0-flag.png`)
+- The numeric ID (0-255) becomes the sprite ID
+
+**Sprite sheets:**
+- Format: `{ID}~{COLS}x{ROWS}-name.png` (e.g., `10~4x3-tiles.png`)
+- Automatically split into individual sprites
+- Grid dimensions: COLS (across) × ROWS (down)
+- Sprites assigned sequential IDs starting from base ID
+- Order: left-to-right, top-to-bottom
+- Everything after dimensions is optional/ignored
+
+**Example sprite sheet:**
+```
+File: 10~4x3-tiles.png (128x96 pixels)
+Grid: 4 columns × 3 rows = 12 sprites
+Each sprite: 32×32 pixels
+Assigned IDs: 10-21
+```
 
 **Supported formats:**
 - PNG (with transparency)

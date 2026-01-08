@@ -4,11 +4,46 @@ This folder contains sprite image files for TinyForge.
 
 ## File Naming Convention
 
-Sprites use the same ID-based naming pattern as audio files:
+### Single Sprites
+
 - Format: `{ID}-description.png`
 - Examples: `0-player.png`, `1_enemy.png`, `2 coin.png`
 
 The numeric ID (0-255) at the start is extracted and used to reference the sprite in code.
+
+### Sprite Sheets
+
+Sprite sheets allow you to pack multiple sprites into a single image file, which are automatically split into individual sprites.
+
+- Format: `{ID}~{COLS}x{ROWS}-description.png`
+- Examples: 
+  - `10~4x3-tiles.png` - Sprite sheet starting at ID 10, with 4 columns and 3 rows (12 sprites total)
+  - `50~8x2-characters.png` - Sprite sheet starting at ID 50, with 8 columns and 2 rows (16 sprites total)
+  - `10~4x3.png` - Description is optional
+
+**How it works:**
+1. The image is divided into a grid of COLS × ROWS
+2. Each cell becomes a separate sprite
+3. Sprites are assigned sequential IDs starting from the base ID
+4. Order: left-to-right, top-to-bottom
+
+**Example:**
+```
+File: 10~4x3-tiles.png (128x96 image)
+Grid: 4 columns × 3 rows = 12 sprites
+Sprite size: 32x32 pixels each
+IDs assigned: 10, 11, 12, 13 (row 1)
+              14, 15, 16, 17 (row 2)
+              18, 19, 20, 21 (row 3)
+```
+
+**Notes:**
+- Format uses tilde (~) to separate ID from dimensions
+- Dimensions use 'x' separator: `COLS x ROWS`
+- Everything after dimensions is ignored (just like single sprite names)
+- Grid dimensions are calculated by dividing image size by columns/rows
+- All sprites in a sheet have the same dimensions
+- Maximum sprite ID is 255 (excess sprites are skipped)
 
 ## Supported Formats
 
