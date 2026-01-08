@@ -51,6 +51,9 @@ async function loadGame(gameName, { skipInit = false } = {}) {
     animationFrameId = null;
   }
   
+  // Stop any playing music
+  audioManager.stopMusic();
+  
   hasAborted = false;
   addConsoleEntry('LOG', `Loading ${gameName}...`);
   
