@@ -1,7 +1,6 @@
 // TinyForge SDK - Drawing Primitives
 // Low-level and high-level drawing functions for rendering graphics
 
-import { toColor } from "./color";
 import { WIDTH, HEIGHT, SPRITE_METADATA_ADDR, SPRITE_DATA_ADDR } from "./memory";
 
 /**
@@ -250,15 +249,18 @@ export function drawString(x: i32, y: i32, text: string, color: u32): void {
  * @param id Sprite ID
  * @param x X coordinate (top-left)
  * @param y Y coordinate (top-left)
+ * @param flipX Whether to flip the sprite horizontally (default: false)
+ * @param flipY Whether to flip the sprite vertically (default: false)
  * @example
  * ```typescript
  * drawSprite(0, 100, 100); // Draw sprite 0 at (100, 100)
+ * drawSprite(0, 100, 100, true); // Draw flipped horizontally
  * ```
  */
-export function drawSprite(id: u32, x: i32, y: i32): void {
+export function drawSprite(id: u32, x: i32, y: i32, flipX: bool = false, flipY: bool = false): void {
   // Read sprite metadata
   const metadataAddr = SPRITE_METADATA_ADDR + (id as usize) * 8;
-  const width = load<u16>(metadataAddr + 0) as i32;
+  const width = load<u16>(metadataAddr) as i32;
   const height = load<u16>(metadataAddr + 2) as i32;
   const dataOffset = load<u32>(metadataAddr + 4);
 
@@ -277,148 +279,58 @@ export function drawSprite(id: u32, x: i32, y: i32): void {
   // Draw sprite pixels (only visible region)
   const spriteDataAddr = SPRITE_DATA_ADDR + dataOffset;
 
-  for (let dy: i32 = startY; dy < endY; dy++) {
-    for (let dx: i32 = startX; dx < endX; dx++) {
-      const pixelOffset = ((dy * width + dx) * 4) as usize;
-      const pixelAddr = spriteDataAddr + pixelOffset;
+  let rowOffset = startY * width;
+  let fbRowBase = ((y + startY) * WIDTH) as usize;
 
-      const srcR = load<u8>(pixelAddr + 0);
-      const srcG = load<u8>(pixelAddr + 1);
-      const srcB = load<u8>(pixelAddr + 2);
-      const srcA = load<u8>(pixelAddr + 3);
+  for (let dy: i32 = startY; dy < endY; dy++) {
+    // Calculate source row offset (use incremental for non-flipped, multiply for flipped)
+    const srcRowOffset = flipY ? ((height - 1 - dy) * width) : rowOffset;
+    
+    for (let dx: i32 = startX; dx < endX; dx++) {
+      // Calculate source column (no cost for non-flipped)
+      const srcX = flipX ? (width - 1 - dx) : dx;
+      const pixelAddr = spriteDataAddr + ((srcRowOffset + srcX) << 2) as usize;
+      const srcPixel = load<u32>(pixelAddr);
+      
+      const srcA = (srcPixel >> 24) & 0xff;
 
       // Skip fully transparent pixels
       if (srcA == 0) continue;
 
       const screenX = x + dx;
-      const screenY = y + dy;
+      const fbAddr = (fbRowBase + screenX as usize) << 2;
 
-      // If fully opaque, no blending needed
+      // If fully opaque, write directly
       if (srcA == 255) {
-        pset(screenX, screenY, toColor(srcR, srcG, srcB, 255));
+        store<u32>(fbAddr, srcPixel | 0xff000000);
       } else {
         // Alpha blending required
-        const fbAddr = ((screenY * WIDTH + screenX) << 2) as usize;
         const dstPixel = load<u32>(fbAddr);
 
+        // Extract source RGB from loaded pixel
+        const srcR = srcPixel & 0xff;
+        const srcG = (srcPixel >> 8) & 0xff;
+        const srcB = (srcPixel >> 16) & 0xff;
+
         // Extract destination RGB from ABGR format
-        const dstR = (dstPixel >> 16) & 0xff;
+        const dstR = dstPixel & 0xff;
         const dstG = (dstPixel >> 8) & 0xff;
-        const dstB = dstPixel & 0xff;
+        const dstB = (dstPixel >> 16) & 0xff;
 
-        // Blend: result = src * alpha + dst * (1 - alpha)
-        const alpha = srcA as u32;
-        const invAlpha = 255 - alpha;
+        // Blend using bit shift approximation: (x * a + 128) >> 8 ≈ x * a / 255
+        const invAlpha = 255 - srcA;
 
-        const blendR = ((srcR as u32 * alpha + dstR * invAlpha) / 255) as u8;
-        const blendG = ((srcG as u32 * alpha + dstG * invAlpha) / 255) as u8;
-        const blendB = ((srcB as u32 * alpha + dstB * invAlpha) / 255) as u8;
+        const blendR = ((srcR * srcA + dstR * invAlpha + 128) >> 8) as u8;
+        const blendG = ((srcG * srcA + dstG * invAlpha + 128) >> 8) as u8;
+        const blendB = ((srcB * srcA + dstB * invAlpha + 128) >> 8) as u8;
 
-        pset(screenX, screenY, toColor(blendR, blendG, blendB, 255));
+        // Store blended pixel in ABGR format
+        const blended = (blendR as u32) | ((blendG as u32) << 8) | ((blendB as u32) << 16);
+        store<u32>(fbAddr, blended | 0xff000000);
       }
     }
-  }
-}
-
-/**
- * Draw a sprite with optional horizontal and vertical flipping
- * Supports transparency (alpha < 128 treated as transparent)
- * @param id Sprite ID (0-255)
- * @param x X coordinate (top-left)
- * @param y Y coordinate (top-left)
- * @param flipH Flip horizontally
- * @param flipV Flip vertically
- * @example
- * ```typescript
- * drawSpriteFlip(0, 100, 100, true, false); // Draw sprite 0 flipped horizontally
- * ```
- */
-export function drawSpriteFlip(
-  id: u8,
-  x: i32,
-  y: i32,
-  flipH: bool,
-  flipV: bool,
-): void {
-  // Read sprite metadata
-  const metadataAddr = SPRITE_METADATA_ADDR + (id as usize) * 8;
-  const width = load<u16>(metadataAddr + 0);
-  const height = load<u16>(metadataAddr + 2);
-  const dataOffset = load<u32>(metadataAddr + 4);
-
-  // Early exit if sprite has no size (not loaded)
-  if (width == 0 || height == 0) return;
-
-  // Draw sprite pixels with flipping
-  const spriteDataAddr = SPRITE_DATA_ADDR + dataOffset;
-
-  for (let dy: i32 = 0; dy < height; dy++) {
-    for (let dx: i32 = 0; dx < width; dx++) {
-      const srcX = flipH ? width - 1 - dx : dx;
-      const srcY = flipV ? height - 1 - dy : dy;
-
-      const pixelOffset = ((srcY * width + srcX) * 4) as usize;
-      const pixelAddr = spriteDataAddr + pixelOffset;
-
-      const r = load<u8>(pixelAddr + 0);
-      const g = load<u8>(pixelAddr + 1);
-      const b = load<u8>(pixelAddr + 2);
-      const a = load<u8>(pixelAddr + 3);
-
-      // Skip transparent pixels (alpha < 128)
-      if (a < 128) continue;
-
-      // Convert RGBA to ABGR and draw
-      pset(x + dx, y + dy, toColor(r, g, b, a));
-    }
-  }
-}
-
-/**
- * Draw a scaled sprite (2x upscaling)
- * Supports transparency (alpha < 128 treated as transparent)
- * @param id Sprite ID (0-255)
- * @param x X coordinate (top-left)
- * @param y Y coordinate (top-left)
- * @example
- * ```typescript
- * drawSprite2x(0, 100, 100); // Draw sprite 0 scaled 2x
- * ```
- */
-export function drawSprite2x(id: u8, x: i32, y: i32): void {
-  // Read sprite metadata
-  const metadataAddr = SPRITE_METADATA_ADDR + (id as usize) * 8;
-  const width = load<u16>(metadataAddr + 0);
-  const height = load<u16>(metadataAddr + 2);
-  const dataOffset = load<u32>(metadataAddr + 4);
-
-  // Early exit if sprite has no size (not loaded)
-  if (width == 0 || height == 0) return;
-
-  // Draw sprite pixels scaled 2x
-  const spriteDataAddr = SPRITE_DATA_ADDR + dataOffset;
-
-  for (let dy: i32 = 0; dy < height; dy++) {
-    for (let dx: i32 = 0; dx < width; dx++) {
-      const pixelOffset = ((dy * width + dx) * 4) as usize;
-      const pixelAddr = spriteDataAddr + pixelOffset;
-
-      const r = load<u8>(pixelAddr + 0);
-      const g = load<u8>(pixelAddr + 1);
-      const b = load<u8>(pixelAddr + 2);
-      const a = load<u8>(pixelAddr + 3);
-
-      // Skip transparent pixels (alpha < 128)
-      if (a < 128) continue;
-
-      // Convert RGBA to ABGR
-      const color = toColor(r, g, b, a);
-
-      // Draw 2x2 block
-      pset(x + dx * 2, y + dy * 2, color);
-      pset(x + dx * 2 + 1, y + dy * 2, color);
-      pset(x + dx * 2, y + dy * 2 + 1, color);
-      pset(x + dx * 2 + 1, y + dy * 2 + 1, color);
-    }
+    
+    rowOffset += width;
+    fbRowBase += WIDTH as usize;
   }
 }
