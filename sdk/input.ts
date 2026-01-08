@@ -66,6 +66,7 @@ export enum MouseButton {
  * }
  * ```
  */
+@inline
 export function buttonDown(button: Button): bool {
   return (load<u8>(INPUT_BUTTONS_ADDR) & button) != 0;
 }
@@ -81,6 +82,7 @@ export function buttonDown(button: Button): bool {
  * }
  * ```
  */
+@inline
 export function buttonPressed(button: Button): bool {
   const current = load<u8>(INPUT_BUTTONS_ADDR);
   const prev = load<u8>(INPUT_BUTTONS_PREV_ADDR);
@@ -98,6 +100,7 @@ export function buttonPressed(button: Button): bool {
  * }
  * ```
  */
+@inline
 export function mouseX(): i16 {
   return load<i16>(MOUSE_X_ADDR);
 }
@@ -113,6 +116,7 @@ export function mouseX(): i16 {
  * }
  * ```
  */
+@inline
 export function mouseY(): i16 {
   return load<i16>(MOUSE_Y_ADDR);
 }
@@ -128,6 +132,7 @@ export function mouseY(): i16 {
  * }
  * ```
  */
+@inline
 export function mouseDown(button: MouseButton): bool {
   return (load<u8>(MOUSE_BUTTONS_ADDR) & button) != 0;
 }
@@ -145,6 +150,7 @@ export function mouseDown(button: MouseButton): bool {
  * }
  * ```
  */
+@inline
 export function mousePressed(button: MouseButton): bool {
   const current = load<u8>(MOUSE_BUTTONS_ADDR);
   const prev = load<u8>(MOUSE_BUTTONS_PREV_ADDR);

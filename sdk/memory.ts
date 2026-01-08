@@ -75,7 +75,7 @@ export const RAM_SIZE = memoryMap.RAM_SIZE as usize;
  * @returns The i32 value at the specified offset
  */
 @inline
-export function getI32(offset: u32): i32 {
+export function getI32(offset: usize): i32 {
   return load<i32>(RAM_START + offset);
 }
 
@@ -85,7 +85,7 @@ export function getI32(offset: u32): i32 {
  * @param value The i32 value to store
  */
 @inline
-export function setI32(offset: u32, value: i32): void {
+export function setI32(offset: usize, value: i32): void {
   store<i32>(RAM_START + offset, value);
 }
 
@@ -95,7 +95,7 @@ export function setI32(offset: u32, value: i32): void {
  * @returns The f32 value at the specified offset
  */
 @inline
-export function getF32(offset: u32): f32 {
+export function getF32(offset: usize): f32 {
   return load<f32>(RAM_START + offset);
 }
 
@@ -105,7 +105,7 @@ export function getF32(offset: u32): f32 {
  * @param value The f32 value to store
  */
 @inline
-export function setF32(offset: u32, value: f32): void {
+export function setF32(offset: usize, value: f32): void {
   store<f32>(RAM_START + offset, value);
 }
 
@@ -115,7 +115,7 @@ export function setF32(offset: u32, value: f32): void {
  * @returns The u8 value at the specified offset
  */
 @inline
-export function getU8(offset: u32): u8 {
+export function getU8(offset: usize): u8 {
   return load<u8>(RAM_START + offset);
 }
 
@@ -125,6 +125,6 @@ export function getU8(offset: u32): u8 {
  * @param value The u8 value to store
  */
 @inline
-export function setU8(offset: u32, value: u8): void {
+export function setU8(offset: usize, value: u8): void {
   store<u8>(RAM_START + offset, value);
 }
