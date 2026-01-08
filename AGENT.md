@@ -267,6 +267,18 @@ function random(): i32 {
 
 **Or use asconfig.json targets** in the games/ directory.
 
+**Build optimization - selective rebuilds:**
+- When modifying a **game file** (e.g., `games/dinoworld.ts`), rebuild only that game:
+  ```bash
+  npm run build gamename
+  # Example: npm run build dinoworld
+  ```
+- When modifying an **SDK file** (e.g., `sdk/drawing.ts`, `sdk/input.ts`), rebuild all games:
+  ```bash
+  npm run build
+  ```
+- This saves time by avoiding unnecessary recompilation of unchanged games.
+
 #### 11. Compilation Error Patterns
 
 **Decorator errors (`@inline`):**
