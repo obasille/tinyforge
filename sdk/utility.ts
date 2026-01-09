@@ -124,3 +124,33 @@ export function drawMessageBox(
     );
   }
 }
+
+/**
+ * Draw a centered message box with "PRESS START" prompt
+ * Standard size and positioning for game start/end screens
+ * @param message Main message to display (e.g., "GAME OVER", "YOU WIN!")
+ * @param bgColor Background fill color (ABGR format)
+ * @param fgColor Border and text color (ABGR format)
+ *
+ * @example
+ * ```ts
+ * // Draw game over message:
+ * drawStartMessageBox("GAME OVER", c(0xaa5500), c(0xffaa00));
+ * ```
+ */
+export function drawStartMessageBox(
+  message: string,
+  bgColor: u32,
+  fgColor: u32,
+): void {
+  drawMessageBox(
+    new Vec2i(75, 95),
+    new Vec2i(170, 50),
+    message,
+    new Vec2i(50, 12),
+    "PRESS START",
+    new Vec2i(40, 27),
+    bgColor,
+    fgColor,
+  );
+}

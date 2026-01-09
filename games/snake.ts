@@ -6,9 +6,9 @@ import {
   buttonPressed,
   c,
   clearFramebuffer,
-  drawMessageBox,
   drawNumber,
   drawRect,
+  drawStartMessageBox,
   drawString,
   fillRect,
   getU8,
@@ -18,7 +18,6 @@ import {
   RAM_START,
   random,
   setU8,
-  Vec2i,
   WIDTH,
 } from "../sdk";
 
@@ -305,23 +304,8 @@ export function draw(): void {
 
   // Game messages
   if (state == GameState.START_SCREEN) {
-    drawMessageBox(
-      new Vec2i(60, HEIGHT / 2 - 30),
-      new Vec2i(200, 60),
-      "SNAKE",
-      new Vec2i(70, 15),
-      "PRESS START",
-      new Vec2i(25, 35),
-      c(0x1a1a1a),
-      c(0x00ff00),
-    );
+    drawStartMessageBox("SNAKE", c(0x1a1a1a), c(0x00ff00));
   } else if (state == GameState.GAME_OVER) {
-    fillRect(60, HEIGHT / 2 - 30, 200, 60, c(0x000000));
-    drawRect(60, HEIGHT / 2 - 30, 200, 60, c(0xff0000));
-
-    drawString(80, HEIGHT / 2 - 20, "GAME OVER!", c(0xff0000));
-    drawString(80, HEIGHT / 2 - 5, "SCORE:", c(0xaaaaaa));
-    drawNumber(130, HEIGHT / 2 - 5, gameVars.score as i32, c(0xffffff));
-    drawString(80, HEIGHT / 2 + 10, "PRESS START", c(0xaaaaaa));
+    drawStartMessageBox("GAME OVER", c(0x1a1a1a), c(0xff0000));
   }
 }

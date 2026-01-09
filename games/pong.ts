@@ -7,15 +7,14 @@ import {
   buttonPressed,
   c,
   clearFramebuffer,
-  drawMessageBox,
   drawNumber,
   drawRect,
+  drawStartMessageBox,
   drawString,
   fillRect,
   HEIGHT,
   log,
   RAM_START,
-  Vec2i,
   WIDTH,
 } from "../sdk";
 
@@ -272,25 +271,12 @@ export function draw(): void {
 
   // Game messages
   if (state == GameState.START_SCREEN) {
-    drawMessageBox(
-      new Vec2i(60, HEIGHT / 2 - 30),
-      new Vec2i(200, 60),
-      "PONG",
-      new Vec2i(75, 15),
-      "PRESS START",
-      new Vec2i(25, 35),
-      c(0x1a1a1a),
-      c(0xffffff),
-    );
+    drawStartMessageBox("PONG", c(0x1a1a1a), c(0xffffff));
   } else if (state == GameState.GAME_OVER) {
-    fillRect(60, HEIGHT / 2 - 20, 200, 40, c(0x000000));
-    drawRect(60, HEIGHT / 2 - 20, 200, 40, c(0xffffff));
-
     if (gameVars.winner == 1) {
-      drawString(80, HEIGHT / 2 - 10, "PLAYER 1 WINS!", c(0x00aaff));
+      drawStartMessageBox("PLAYER 1 WINS!", c(0x1a1a1a), c(0x00aaff));
     } else {
-      drawString(80, HEIGHT / 2 - 10, "PLAYER 2 WINS!", c(0xff5500));
+      drawStartMessageBox("PLAYER 2 WINS!", c(0x1a1a1a), c(0xff5500));
     }
-    drawString(80, HEIGHT / 2 + 5, "PRESS START", c(0xaaaaaa));
   }
 }

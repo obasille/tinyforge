@@ -13,7 +13,7 @@ import {
   drawNumber,
   drawSprite,
   drawString,
-  drawMessageBox,
+  drawStartMessageBox,
   fillRect,
   fillCircle,
   log,
@@ -405,25 +405,8 @@ export function draw(): void {
 
   // Draw messages
   if (state == GameState.START_SCREEN) {
-    drawGameMessage("DINO WORLD", c(0x1a1a1a), c(0x00ff00));
+    drawStartMessageBox("DINO WORLD", c(0x1a1a1a), c(0x00ff00));
   } else if (state == GameState.GAME_OVER) {
-    drawGameMessage("GAME OVER", c(0xaa5500), c(0xffaa00));
+    drawStartMessageBox("GAME OVER", c(0xaa5500), c(0xffaa00));
   }
-}
-
-function drawGameMessage(
-  message: string,
-  bgColor: u32,
-  fgColor: u32,
-): void {
-  drawMessageBox(
-    new Vec2i(75, 95),
-    new Vec2i(170, 50),
-    message,
-    new Vec2i(50, 12),
-    "PRESS START",
-    new Vec2i(40, 27),
-    bgColor,
-    fgColor,
-  );
 }

@@ -6,10 +6,10 @@ import {
   buttonPressed,
   c,
   clearFramebuffer,
-  drawMessageBox,
   drawNumber,
   drawRect,
   drawSprite,
+  drawStartMessageBox,
   fillCircle,
   fillRect,
   getU8,
@@ -339,27 +339,10 @@ export function draw(): void {
 
   // Game messages
   if (state == GameState.START_SCREEN) {
-    drawGameFinishedMessage("MINESWEEPER", c(0x1a1a1a), c(0x00ff00));
+    drawStartMessageBox("MINESWEEPER", c(0x1a1a1a), c(0x00ff00));
   } else if (state == GameState.WON) {
-    drawGameFinishedMessage("YOU WIN!", c(0x0044aa), c(0x00aaff));
+    drawStartMessageBox("YOU WIN!", c(0x0044aa), c(0x00aaff));
   } else if (state == GameState.LOST) {
-    drawGameFinishedMessage("GAME OVER", c(0xaa5500), c(0xffaa00));
+    drawStartMessageBox("GAME OVER", c(0xaa5500), c(0xffaa00));
   }
-}
-
-function drawGameFinishedMessage(
-  message: string,
-  bgColor: u32,
-  fgColor: u32,
-): void {
-  drawMessageBox(
-    new Vec2i(75, 95),
-    new Vec2i(170, 50),
-    message,
-    new Vec2i(50, 12),
-    "PRESS START",
-    new Vec2i(40, 27),
-    bgColor,
-    fgColor,
-  );
 }

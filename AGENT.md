@@ -177,26 +177,25 @@ export function update(input: i32, prevInput: i32): void {
 
 #### 7. Game Over Screen Pattern
 
-**Factorize message rendering with helper function:**
+**Use drawStartMessageBox for consistent message screens:**
 ```ts
-function drawGameOverMessage(message: string, x: i32, bgColor: u32, fgColor: u32): void {
-  fillRect(75, 105, 170, 45, bgColor);
-  drawRect(75, 105, 170, 45, fgColor);
-  drawString(x, 112, message, fgColor);
-  drawString(90, 127, "PRESS START", 0xaaaaaa);
-}
-
 export function draw(): void {
   // ... draw game
   
   const state = getU8(Var.GAME_STATE);
-  if (state == GameState.GAME_OVER) {
-    drawGameOverMessage("GAME OVER", 110, 0xaa5500, 0xffaa00);
+  if (state == GameState.START_SCREEN) {
+    drawStartMessageBox("GAME NAME", c(0x1a1a1a), c(0x00ff00));
+  } else if (state == GameState.GAME_OVER) {
+    drawStartMessageBox("GAME OVER", c(0xaa5500), c(0xffaa00));
   }
 }
 ```
 
-**Always include "PRESS START" instruction** on game over screens.
+**drawStartMessageBox provides:**
+- Centered message box (170x50 at position 75,95)
+- Automatic "PRESS START" instruction
+- Consistent styling across all games
+- Custom background and foreground colors
 
 #### 8. Operator Precedence - CRITICAL
 
