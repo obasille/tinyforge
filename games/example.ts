@@ -9,6 +9,8 @@ import {
   buttonDown,
   c,
   clearFramebuffer,
+  drawNumber,
+  drawSprite,
   log,
   pset,
 } from "../sdk";
@@ -18,8 +20,9 @@ import {
 
 @unmanaged
 class GameVars {
-  playerX: i32 = 0;      // 0
-  playerY: i32 = 0;      // 4
+  playerX: i32 = 0;     // 0
+  playerY: i32 = 0;     // 4
+  animFrame: i32 = 0;   // 8
 }
 
 const gameVars = changetype<GameVars>(RAM_START);
@@ -45,6 +48,8 @@ export function update(): void {
 
   // Example: detect button press (not hold) - use buttonPressed() for one-time actions
   // if (buttonPressed(Button.A)) { /* do something once */ }
+
+  gameVars.animFrame++;
 }
 
 export function draw(): void {
@@ -63,4 +68,10 @@ export function draw(): void {
   }
   // draw player
   pset(px, py, c(0xffffff));
+
+  const speed = 0.3;
+  const i = <u32>Math.floor(gameVars.animFrame * speed / 2) % 9;
+  const o = <u32>Math.floor(gameVars.animFrame * speed) % 350;
+  drawSprite(1 + i, -30 + o, 10, true, true); // draw sprite at (10,10)
+  // drawNumber(1, 30, i, c(0x0000ff)); // draw animation frame count
 }
