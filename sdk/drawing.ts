@@ -83,37 +83,76 @@ export function fillCircle(cx: i32, cy: i32, r: i32, color: u32): void {
  * Each pixel is rendered as a 2×2 block for better visibility
  * @param x Top-left X coordinate
  * @param y Top-left Y coordinate
- * @param num Digit to draw (0-9)
+ * @param digit Digit to draw (0-9)
  * @param color ABGR color value
  */
-export function drawNumber(x: i32, y: i32, num: i32, color: u32): void {
+export function drawDigit(x: i32, y: i32, digit: i32, color: u32): void {
   // Simple 3×5 digit patterns (5 rows, 3 columns each = 15 bits)
   // Each pattern is: row0_row1_row2_row3_row4 (3 bits per row)
   let pattern: u16 = 0;
 
-  if (num == 0)
+  if (digit == 0)
     pattern = 0b111_101_101_101_111 as u16; // 0
-  else if (num == 1)
+  else if (digit == 1)
     pattern = 0b010_110_010_010_111 as u16; // 1
-  else if (num == 2)
+  else if (digit == 2)
     pattern = 0b111_001_111_100_111 as u16; // 2
-  else if (num == 3)
+  else if (digit == 3)
     pattern = 0b111_001_111_001_111 as u16; // 3
-  else if (num == 4)
+  else if (digit == 4)
     pattern = 0b101_101_111_001_001 as u16; // 4
-  else if (num == 5)
+  else if (digit == 5)
     pattern = 0b111_100_111_001_111 as u16; // 5
-  else if (num == 6)
+  else if (digit == 6)
     pattern = 0b111_100_111_101_111 as u16; // 6
-  else if (num == 7)
+  else if (digit == 7)
     pattern = 0b111_001_001_001_001 as u16; // 7
-  else if (num == 8)
+  else if (digit == 8)
     pattern = 0b111_101_111_101_111 as u16; // 8
-  else if (num == 9) pattern = 0b111_101_111_001_111 as u16; // 9
+  else if (digit == 9) pattern = 0b111_101_111_001_111 as u16; // 9
 
-  if (pattern == 0 && num != 0) return;
+  if (pattern == 0 && digit != 0) return;
 
   draw3x5Pattern(x, y, pattern, color);
+}
+
+/**
+ * Draw a number (positive or negative, multi-digit) using 3×5 bitmap patterns
+ * @param x Top-left X coordinate
+ * @param y Top-left Y coordinate
+ * @param num Number to draw
+ * @param color ABGR color value
+ */
+export function drawNumber(x: i32, y: i32, num: i32, color: u32): void {
+  let currentX = x;
+  
+  // Handle negative numbers
+  if (num < 0) {
+    drawChar(currentX, y, 45, color); // Draw '-' character
+    currentX += 8; // Each character is 6 pixels wide + 2 pixel spacing
+    num = -num;
+  }
+  
+  // Handle zero specially
+  if (num == 0) {
+    drawDigit(currentX, y, 0, color);
+    return;
+  }
+  
+  // Count digits to determine starting position
+  let temp = num;
+  let digitCount: i32 = 0;
+  while (temp > 0) {
+    digitCount++;
+    temp /= 10;
+  }
+  
+  // Draw digits from right to left
+  for (let i: i32 = digitCount - 1; i >= 0; i--) {
+    const digit = num % 10;
+    drawDigit(currentX + i * 8, y, digit, color);
+    num /= 10;
+  }
 }
 
 /**
@@ -200,7 +239,7 @@ export function drawChar(x: i32, y: i32, char: i32, color: u32): void {
   } else {
     // Try with digits '0'-'9'
     const digit = char - 48;
-    drawNumber(x, y, digit, color);
+    drawDigit(x, y, digit, color);
   }
 }
 
