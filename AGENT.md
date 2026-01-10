@@ -216,7 +216,74 @@ ballX = (WIDTH - BALL_SIZE) as f32;
 
 **When in doubt, add parentheses** around expressions before casting.
 
-#### 9. Common Patterns
+#### 9. Type Strictness in Arithmetic Operations
+
+**AssemblyScript is strict about mixing numeric types in operations:**
+
+Unlike TypeScript, AssemblyScript does not allow arithmetic operations between different numeric types (e.g., `f32` and `i32`) without explicit casting. This prevents accidental precision loss and ensures type safety.
+
+**Common scenarios requiring casts:**
+
+**1. Adding/subtracting integers to floats:**
+```ts
+const BALL_SIZE: i32 = 0;
+const paddleX: f32 = 0;
+const paddleY: f32 = 0;
+
+// ❌ WRONG - cannot add i32 to f32
+ballX = paddleX + (WIDTH / 2);
+
+// ✅ CORRECT - cast integer to f32 first
+ballX = paddleX + ((WIDTH / 2) as f32);
+
+// ❌ WRONG - cannot subtract i32 from f32
+ballY = (paddleY - BALL_SIZE) as f32;
+
+// ✅ CORRECT - perform subtraction first, then cast
+ballY = ((paddleX - BALL_SIZE) as f32);
+```
+
+**2. Comparisons between different types:**
+```ts
+// ❌ WRONG - comparing f32 with i32 result
+if (ballY + (BALL_SIZE as f32) <= PADDLE_Y + PADDLE_HEIGHT) { }
+
+// ✅ CORRECT - cast the entire right side
+if (ballY + (BALL_SIZE as f32) <= ((PADDLE_Y + PADDLE_HEIGHT) as f32)) { }
+```
+
+**3. Complex expressions with mixed types:**
+```ts
+// ❌ WRONG - multiple type mismatches
+const hitPos = (ballX + (SIZE / 2) as f32 - paddleX) / (WIDTH as f32);
+
+// ✅ CORRECT - wrap each operation properly
+const hitPos = (ballX + ((SIZE / 2) as f32) - paddleX) / (WIDTH as f32);
+```
+
+**4. Division and multiplication:**
+```ts
+// Integer division stays integer
+const half: i32 = WIDTH / 2;  // i32
+
+// Float division needs explicit types
+const half: f32 = (WIDTH as f32) / 2.0;  // f32
+```
+
+**Best practices:**
+- Cast constants at the point of use, not at declaration
+- Use parentheses liberally to group operations before casting
+- When in doubt, cast each subexpression individually
+- Prefer `((expr) as f32)` over `expr as f32` for clarity
+
+**Error messages to watch for:**
+- `Operator '+' cannot be applied to types 'f32' and 'i32'`
+- `Operator '-' cannot be applied to types 'f32' and 'i32'`
+- `Operator '<=' cannot be applied to types 'f32' and 'i32'`
+
+These errors mean you need to cast one side to match the other type.
+
+#### 10. Common Patterns
 
 **Cursor/player movement with bounds:**
 ```ts
@@ -253,7 +320,7 @@ function random(): i32 {
 }
 ```
 
-#### 10. Build Configuration
+#### 11. Build Configuration
 
 **Update package.json when creating new games:**
 ```json
@@ -278,7 +345,7 @@ function random(): i32 {
   ```
 - This saves time by avoiding unnecessary recompilation of unchanged games.
 
-#### 11. Compilation Error Patterns
+#### 12. Compilation Error Patterns
 
 **Decorator errors (`@inline`):**
 - These are pre-existing and don't affect compilation
@@ -297,7 +364,7 @@ function random(): i32 {
 - AssemblyScript version may not support `@inline` on constants
 - Can be safely ignored if build succeeds
 
-#### 12. Logging and Debugging
+#### 13. Logging and Debugging
 
 **Use logging strategically:**
 ```ts
