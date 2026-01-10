@@ -128,3 +128,13 @@ export function getU8(offset: usize): u8 {
 export function setU8(offset: usize, value: u8): void {
   store<u8>(RAM_START + offset, value);
 }
+
+@inline
+export function getU16(offset: usize): u16 {
+  return load<u16>(RAM_START + offset);
+}
+
+@inline
+export function setU16(offset: usize, value: u16): void {
+  store<u16>(RAM_START + offset, value);
+}
