@@ -264,7 +264,19 @@ pauseBtn.addEventListener('click', togglePause);
 const memoryViewerBtn = document.getElementById('open-memory-viewer');
 memoryViewerBtn.addEventListener('click', openMemoryViewer);
 
-// Keyboard shortcuts: R to restart, P to pause
+// Fullscreen button
+const fullscreenBtn = document.getElementById('fullscreen-btn');
+fullscreenBtn.addEventListener('click', () => {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(err => {
+      addConsoleEntry('ERROR', `Failed to enter fullscreen: ${err.message}`);
+    });
+  } else {
+    document.exitFullscreen();
+  }
+});
+
+// Keyboard shortcuts: R to restart, P to pause, F for fullscreen
 window.addEventListener('keydown', (e) => {
   if ((e.key === 'r' || e.key === 'R') && !e.repeat) {
     if (init) {
@@ -274,6 +286,15 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
   } else if ((e.key === 'p' || e.key === 'P') && !e.repeat) {
     togglePause();
+    e.preventDefault();
+  } else if ((e.key === 'f' || e.key === 'F') && !e.repeat) {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(err => {
+        addConsoleEntry('ERROR', `Failed to enter fullscreen: ${err.message}`);
+      });
+    } else {
+      document.exitFullscreen();
+    }
     e.preventDefault();
   }
 });
