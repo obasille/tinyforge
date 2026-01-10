@@ -229,7 +229,7 @@ export function drawChar(x: i32, y: i32, char: i32, color: u32): void {
   else if (char == 44)
     pattern = 0b000_000_000_010_100 as u16; // ,
   else if (char == 58)
-    pattern = 0b000_010_000_010_000 as u16; // :
+    pattern = 0b000_100_000_100_000 as u16; // :
   else if (char == 45)
     pattern = 0b000_000_111_000_000 as u16; // -
   else if (char == 32) pattern = 0b000_000_000_000_000 as u16; // space

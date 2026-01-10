@@ -68,8 +68,109 @@ function handlePwaUi() {
     if (consolePanel) consolePanel.style.display = 'none';
     document.body.style.gap = '0';
     document.body.style.padding = '0';
+
+    // Show on-screen controls if on mobile
+    if (/Mobi|Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) {
+      const onscreen = document.getElementById('onscreen-controls');
+      if (onscreen) onscreen.style.display = 'flex';
+    }
   }
 }
+// --- On-screen controls logic ---
+const BUTTON_MAP = {
+  up: 1 << 0,
+  down: 1 << 1,
+  left: 1 << 2,
+  right: 1 << 3,
+  a: 1 << 4,
+  b: 1 << 5,
+  start: 1 << 6,
+  next: -1 // special, not mapped to inputMask
+};
+
+function setButtonState(btn: string, pressed: boolean) {
+  if (BUTTON_MAP[btn] !== undefined) {
+    if (pressed) {
+      inputMask |= BUTTON_MAP[btn];
+    } else {
+      inputMask &= ~BUTTON_MAP[btn];
+    }
+  }
+}
+
+function setupOnscreenControls() {
+  const onscreen = document.getElementById('onscreen-controls');
+  if (!onscreen) return;
+  // D-pad and AB buttons
+  onscreen.querySelectorAll('button[data-btn]').forEach(btn => {
+    const key = btn.getAttribute('data-btn');
+    if (!key) return;
+    if (key === 'next') {
+      // Next button: switch to next game
+      const nextHandler = (e: Event) => {
+        e.preventDefault();
+        const select = document.getElementById('game-select') as HTMLSelectElement;
+        if (select) {
+          const options = Array.from(select.options);
+          const idx = options.findIndex(opt => opt.value === select.value);
+          const nextIdx = (idx + 1) % options.length;
+          select.selectedIndex = nextIdx;
+          select.dispatchEvent(new Event('change'));
+        }
+      };
+      btn.addEventListener('touchstart', nextHandler);
+      btn.addEventListener('mousedown', nextHandler);
+    } else {
+      // Touch events
+      btn.addEventListener('touchstart', e => {
+        setButtonState(key, true);
+        e.preventDefault();
+      });
+      btn.addEventListener('touchend', e => {
+        setButtonState(key, false);
+        e.preventDefault();
+      });
+      btn.addEventListener('touchcancel', e => {
+        setButtonState(key, false);
+        e.preventDefault();
+      });
+      // Mouse fallback
+      btn.addEventListener('mousedown', e => {
+        setButtonState(key, true);
+        e.preventDefault();
+      });
+      btn.addEventListener('mouseup', e => {
+        setButtonState(key, false);
+        e.preventDefault();
+      });
+      btn.addEventListener('mouseleave', e => {
+        setButtonState(key, false);
+        e.preventDefault();
+      });
+    }
+  });
+
+  // Tap anywhere else on canvas = Start
+  const canvas = document.getElementById('screen');
+  if (canvas) {
+    canvas.addEventListener('touchstart', e => {
+      // Only trigger if not touching a button
+      if (e.target === canvas) setButtonState('start', true);
+    });
+    canvas.addEventListener('touchend', e => {
+      setButtonState('start', false);
+    });
+    // Mouse fallback
+    canvas.addEventListener('mousedown', e => {
+      if (e.target === canvas) setButtonState('start', true);
+    });
+    canvas.addEventListener('mouseup', e => {
+      setButtonState('start', false);
+    });
+  }
+}
+
+window.addEventListener('DOMContentLoaded', setupOnscreenControls);
 
 window.addEventListener('DOMContentLoaded', handlePwaUi);
 window.matchMedia('(display-mode: standalone)').addEventListener('change', handlePwaUi);

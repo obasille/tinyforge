@@ -24,6 +24,22 @@
   <body>
     <div id="game-container">
       <canvas id="screen" width="320" height="240"></canvas>
+      <div id="onscreen-controls" style="display:none">
+        <div class="dpad-cross">
+          <button class="dpad-btn" data-btn="up">▲</button>
+          <div class="dpad-middle-row">
+            <button class="dpad-btn" data-btn="left">◀</button>
+            <span class="dpad-center"></span>
+            <button class="dpad-btn" data-btn="right">▶</button>
+          </div>
+          <button class="dpad-btn" data-btn="down">▼</button>
+        </div>
+        <div class="ab-buttons">
+          <button class="ab-btn" data-btn="a">A</button>
+          <button class="ab-btn" data-btn="b">B</button>
+          <button class="ab-btn ab-next" data-btn="next">Next</button>
+        </div>
+      </div>
       
       <div id="console">
         <div class="console-header">
