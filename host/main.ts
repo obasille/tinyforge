@@ -30,6 +30,50 @@ const image = new ImageData(fb, WIDTH, HEIGHT);
 // Allow external access to memory for tools
 (window as any).getMemory = () => memory;
 
+// Register service worker for PWA
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(err => {
+      console.warn('Service worker registration failed:', err);
+    });
+  });
+}
+
+// Detect if running as PWA (standalone)
+function isStandalone() {
+  // @ts-ignore for iOS Safari standalone
+  return window.matchMedia('(display-mode: standalone)').matches || (typeof window.navigator !== 'undefined' && 'standalone' in window.navigator && (window.navigator as any).standalone === true);
+}
+
+function handlePwaUi() {
+  if (isStandalone()) {
+    // Hide devtools
+    const devtools = document.getElementById('devtools');
+    if (devtools) devtools.style.display = 'none';
+    // Scale game to fit screen
+    const gameContainer = document.getElementById('game-container');
+    const canvas = document.getElementById('screen');
+    if (gameContainer && canvas) {
+      gameContainer.style.width = '100vw';
+      gameContainer.style.height = '100vh';
+      canvas.style.width = '100vw';
+      canvas.style.height = '100vh';
+      canvas.style.maxWidth = '100vw';
+      canvas.style.maxHeight = '100vh';
+      canvas.style.border = 'none';
+      canvas.style.objectFit = 'contain';
+    }
+    // Optionally hide console
+    const consolePanel = document.getElementById('console');
+    if (consolePanel) consolePanel.style.display = 'none';
+    document.body.style.gap = '0';
+    document.body.style.padding = '0';
+  }
+}
+
+window.addEventListener('DOMContentLoaded', handlePwaUi);
+window.matchMedia('(display-mode: standalone)').addEventListener('change', handlePwaUi);
+
 // Open memory viewer in new window
 function openMemoryViewer() {
   const viewer = window.open('memory-viewer.html', 'TinyForge Memory Viewer', 
