@@ -14,6 +14,7 @@ import {
   fillRect,
   HEIGHT,
   log,
+  playSfx,
   RAM_START,
   WIDTH,
 } from "../sdk";
@@ -54,6 +55,8 @@ class GameVars {
   // Game state
   state: u8 = 0;     // 32
   winner: u8 = 0;    // 33
+  countdown: i32 = 0; // 36
+  servingPlayer: i32 = 0; // 40
 }
 
 const gameVars = changetype<GameVars>(RAM_START);
@@ -64,13 +67,11 @@ function resetBall(servingPlayer: i32): void {
   gameVars.ballX = (WIDTH / 2 - BALL_SIZE / 2) as f32;
   gameVars.ballY = (HEIGHT / 2 - BALL_SIZE / 2) as f32;
 
-  // Set velocity (serve toward the player who lost the point)
+  // Stop ball and start countdown
   gameVars.ballVX = 0.0;
-  if (servingPlayer == 1) {
-    gameVars.ballVY = BALL_SPEED_INITIAL; // Serve down toward player 2
-  } else {
-    gameVars.ballVY = -BALL_SPEED_INITIAL; // Serve up toward player 1
-  }
+  gameVars.ballVY = 0.0;
+  gameVars.countdown = 240; // 4 seconds at 60fps
+  gameVars.servingPlayer = servingPlayer;
 }
 
 function checkCollision(): void {
@@ -84,10 +85,12 @@ function checkCollision(): void {
     gameVars.ballX = 0.0;
     ballVX = -ballVX;
     gameVars.ballVX = ballVX;
+    playSfx(0, 0.3);
   } else if (ballX >= ((WIDTH - BALL_SIZE) as f32)) {
     gameVars.ballX = (WIDTH - BALL_SIZE) as f32;
     ballVX = -ballVX;
     gameVars.ballVX = ballVX;
+    playSfx(0, 0.2);
   }
 
   // Top paddle collision (player 1)
@@ -112,6 +115,7 @@ function checkCollision(): void {
 
     gameVars.ballVX = ballVX;
     gameVars.ballVY = ballVY;
+    playSfx(0, 0.4);
   }
 
   // Bottom paddle collision (player 2)
@@ -137,12 +141,14 @@ function checkCollision(): void {
 
     gameVars.ballVX = ballVX;
     gameVars.ballVY = ballVY;
+    playSfx(0, 0.4);
   }
 
   // Top edge (player 2 scores)
   if (ballY < 0.0) {
     gameVars.p2Score++;
     log("Player 2 scores!");
+    playSfx(1, 0.5);
 
     if (gameVars.p2Score >= MAX_SCORE) {
       gameVars.state = GameState.GAME_OVER as u8;
@@ -157,6 +163,7 @@ function checkCollision(): void {
   if (ballY > (HEIGHT as f32)) {
     gameVars.p1Score++;
     log("Player 1 scores!");
+    playSfx(1, 0.5);
 
     if (gameVars.p1Score >= MAX_SCORE) {
       gameVars.state = GameState.GAME_OVER as u8;
@@ -203,6 +210,21 @@ export function update(): void {
 
   if (state != GameState.PLAYING) return;
 
+  // Handle countdown
+  if (gameVars.countdown > 0) {
+    gameVars.countdown--;
+    
+    // Launch ball when countdown reaches 0
+    if (gameVars.countdown == 0) {
+      const servingPlayer = gameVars.servingPlayer;
+      if (servingPlayer == 1) {
+        gameVars.ballVY = BALL_SPEED_INITIAL; // Serve down toward player 2
+      } else {
+        gameVars.ballVY = -BALL_SPEED_INITIAL; // Serve up toward player 1
+      }
+    }
+  }
+
   // Player 1 (top paddle) - A & B buttons
   let p1X = gameVars.p1X;
   if (buttonDown(Button.A)) {
@@ -229,12 +251,14 @@ export function update(): void {
   }
   gameVars.p2X = p2X;
 
-  // Update ball position
-  gameVars.ballX += gameVars.ballVX;
-  gameVars.ballY += gameVars.ballVY;
+  // Update ball position (only if countdown is over)
+  if (gameVars.countdown == 0) {
+    gameVars.ballX += gameVars.ballVX;
+    gameVars.ballY += gameVars.ballVY;
 
-  // Check collisions
-  checkCollision();
+    // Check collisions
+    checkCollision();
+  }
 }
 
 export function draw(): void {
@@ -268,6 +292,27 @@ export function draw(): void {
   // Draw scores
   drawNumber(10, 10, gameVars.p1Score, c(0x00aaff));
   drawNumber(10, HEIGHT - 20, gameVars.p2Score, c(0xff5500));
+
+  // Draw countdown
+  if (state == GameState.PLAYING && gameVars.countdown > 0) {
+    const secondsLeft = gameVars.countdown / 60;
+    let countdownText = "";
+    
+    if (secondsLeft >= 3) {
+      countdownText = "3";
+    } else if (secondsLeft == 2) {
+      countdownText = "2";
+    } else if (secondsLeft == 1) {
+      countdownText = "1";
+    } else {
+      countdownText = "GO!";
+    }
+    
+    // Draw centered countdown text
+    fillRect(WIDTH / 2 - 12, HEIGHT / 2 - 10, 24, 20, c(0x303030)); // Clear area
+    const textX = secondsLeft > 0 ? WIDTH / 2 - 2 : WIDTH / 2 - 10;
+    drawString(textX, HEIGHT / 2 - 4, countdownText, c(0xffff00));
+  }
 
   // Game messages
   if (state == GameState.START_SCREEN) {

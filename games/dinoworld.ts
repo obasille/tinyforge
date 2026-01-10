@@ -3,22 +3,21 @@
 // Import console SDK
 import {
   Button,
+  HEIGHT,
   RAM_START,
   WIDTH,
-  HEIGHT,
   buttonDown,
   buttonPressed,
   c,
   clearFramebuffer,
   drawNumber,
   drawSprite,
-  drawString,
   drawStartMessageBox,
-  fillRect,
+  drawString,
   fillCircle,
+  fillRect,
   log,
   playSfx,
-  Vec2i,
 } from "../sdk";
 
 // === Constants ===
@@ -35,26 +34,29 @@ enum GameState {
 }
 
 // Platform definition
+@unmanaged
 class Platform {
-  x: i32;
-  y: i32;
-  w: i32;
-  h: i32;
+  x: i32 = 0;
+  y: i32 = 0;
+  w: i32 = 0;
+  h: i32 = 0;
 }
 
 // Spike trap definition
+@unmanaged
 class Spike {
-  x: f32;
-  y: f32;
-  speed: f32;
-  active: bool;
+  x: f32 = 0;
+  y: f32 = 0;
+  speed: f32 = 0;
+  active: bool = 0;
 }
 
 // Coin collectible definition
+@unmanaged
 class Coin {
-  x: i32;
-  y: i32;
-  active: bool;
+  x: i32 = 0;
+  y: i32 = 0;
+  active: bool = 0;
 }
 
 // Define platforms (x, y, width, height)
@@ -113,7 +115,7 @@ class GameVars {
   velocityX: f32 = 0;     // 8
   velocityY: f32 = 0;     // 12
   grounded: u8 = 0;       // 16
-  facingRight: u8 = 1;    // 17
+  facingRight: u8 = 0;    // 17
   animFrame: i32 = 0;     // 20
   animTimer: i32 = 0;     // 24
   lives: i32 = 0;         // 28
@@ -128,10 +130,11 @@ const gameVars = changetype<GameVars>(RAM_START);
 const PLAYER_WIDTH: i32 = 32;
 const PLAYER_HEIGHT: i32 = 32;
 const TAIL_LENGTH: i32 = 10;
-const COLLISION_WIDTH: i32 = PLAYER_WIDTH - TAIL_LENGTH; // 22 pixels
+const HEAD_TRANSPARENT: i32 = 6; // Don't collide with last 6 pixels on head side
+const COLLISION_WIDTH: i32 = PLAYER_WIDTH - TAIL_LENGTH - HEAD_TRANSPARENT; // 16 pixels
 const STARTING_LIVES: i32 = 5;
 const INVULN_TIME: i32 = 120; // 2 seconds at 60fps
-const DIFFICULTY_SCALE: f32 = 1800.0; // Lower = faster difficulty increase (1800 = +1 every 30 seconds)
+const DIFFICULTY_SCALE: f32 = 10; // Lower = faster difficulty increase (10 => one 10th per second)
 
 // === lifecycle ===
   
@@ -162,8 +165,6 @@ export function init(): void {
     spikes[i].y = -20;
     spikes[i].active = false;
   }
-
-  log("Dino World Started!");
 }
 
 export function update(): void {
@@ -220,39 +221,46 @@ export function update(): void {
 
   // Keep player in horizontal bounds (accounting for tail position)
   const tailOffset = gameVars.facingRight ? TAIL_LENGTH : 0;
-  if (gameVars.playerX < <f32>(-tailOffset)) gameVars.playerX = <f32>(-tailOffset);
+  if (gameVars.playerX < <f32>(-tailOffset)) {
+    gameVars.playerX = <f32>(-tailOffset);
+  }
   const maxX = <f32>(WIDTH - PLAYER_WIDTH + tailOffset);
-  if (gameVars.playerX > maxX) gameVars.playerX = maxX;
+  if (gameVars.playerX > maxX) {
+    gameVars.playerX = maxX;
+  }
 
   // Platform collision (use collision box, not full sprite)
   gameVars.grounded = 0;
   
-  const px = <i32>gameVars.playerX;
-  const py = <i32>gameVars.playerY;
-  
-  // Calculate collision box position (exclude tail)
-  const collisionX = gameVars.facingRight ? px + TAIL_LENGTH : px;
-  const collisionW = COLLISION_WIDTH;
-  const collisionH = PLAYER_HEIGHT;
+  // Check for collision only if falling
+  if (gameVars.velocityY >= 0) {
+    const px = <i32>gameVars.playerX;
+    const py = <i32>gameVars.playerY;
 
-  for (let i = 0; i < platforms.length; i++) {
-    const plat = platforms[i];
+    // Calculate collision box position (exclude tail and head transparent pixels)
+    const collisionX = gameVars.facingRight ? px + TAIL_LENGTH : px + HEAD_TRANSPARENT;
+    const collisionW = COLLISION_WIDTH;
+    const collisionH = PLAYER_HEIGHT;
+
+    for (let i = 0; i < platforms.length; i++) {
+      const plat = platforms[i];
     
-    // Check if collision box is overlapping platform horizontally
-    const overlapX = collisionX + collisionW > plat.x && collisionX < plat.x + plat.w;
+      // Check if collision box is overlapping platform horizontally
+      const overlapX = collisionX + collisionW > plat.x && collisionX < plat.x + plat.w;
     
-    // Check if player is falling and their feet are at or below platform top
-    if (overlapX && gameVars.velocityY >= 0) {
-      const prevY = py - <i32>gameVars.velocityY;
-      const prevBottom = prevY + collisionH;
-      const currBottom = py + collisionH;
+      // Check if player's feet are at or below platform top
+      if (overlapX) {
+        const prevY = py - <i32>gameVars.velocityY;
+        const prevBottom = prevY + collisionH;
+        const currBottom = py + collisionH;
       
-      // Check if player crossed platform surface this frame
-      if (prevBottom <= plat.y && currBottom >= plat.y) {
-        gameVars.playerY = <f32>(plat.y - collisionH);
-        gameVars.velocityY = 0;
-        gameVars.grounded = 1;
-        break;
+        // Check if player crossed platform surface this frame
+        if (prevBottom <= plat.y && currBottom >= plat.y) {
+          gameVars.playerY = <f32>(plat.y - collisionH);
+          gameVars.velocityY = 0;
+          gameVars.grounded = 1;
+          break;
+        }
       }
     }
   }
@@ -274,9 +282,9 @@ export function update(): void {
     const spike = spikes[i];
     
     // Increase difficulty over time: spikes spawn faster and move faster
-    const difficultyMultiplier = 1.0 + (<f32>gameVars.gameTimer) / DIFFICULTY_SCALE;
+    const difficultyMultiplier: f32 = 1 + (<f32>gameVars.gameTimer) / (DIFFICULTY_SCALE * 60);
     const minInterval = 60; // Don't spawn faster than every second
-    const baseInterval = 180 + i * 60;
+    const baseInterval = 180 + i * 120;
     const adjustedInterval = max(minInterval, <i32>((<f32>baseInterval) / difficultyMultiplier));
 
     // Activate spikes periodically (faster as time goes on)
@@ -285,8 +293,8 @@ export function update(): void {
       spike.y = -20;
       spike.x = 30 + <f32>(i * 100);
       // Increase speed over time
-      const baseSpeeds: f32[] = [1.5, 1.8, 1.3];
-      spike.speed = <f32>(baseSpeeds[i] * difficultyMultiplier);
+      const baseSpeed: f32 = (1000 + <f32>randomCoinInt(500)) / 1000;
+      spike.speed = baseSpeed * difficultyMultiplier;
     }
 
     if (spike.active) {
@@ -304,8 +312,11 @@ export function update(): void {
         const sx = <i32>spike.x;
         const sy = <i32>spike.y;
 
-        // Simple box collision
-        if (px + PLAYER_WIDTH > sx && px < sx + 16 &&
+        // Box collision (exclude last 3 pixels on head side - transparent in sprites)
+        const HEAD_SPIKE_MARGIN: i32 = 3;
+        const collideLeft = gameVars.facingRight ? px : px + HEAD_SPIKE_MARGIN;
+        const collideRight = gameVars.facingRight ? px + PLAYER_WIDTH - HEAD_SPIKE_MARGIN : px + PLAYER_WIDTH;
+        if (collideRight > sx && collideLeft < sx + 16 &&
             py + PLAYER_HEIGHT > sy && py < sy + 16) {
           // Hit! Lose a life
           gameVars.lives--;
@@ -329,12 +340,14 @@ export function update(): void {
   if (coin.active) {
     const px = <i32>gameVars.playerX;
     const py = <i32>gameVars.playerY;
-    const collisionX = gameVars.facingRight ? px + TAIL_LENGTH : px;
+    const HEAD_TRANSPARENT: i32 = 7;
+    const collisionX = gameVars.facingRight ? px + TAIL_LENGTH : px + HEAD_TRANSPARENT;
+    const adjustedWidth = COLLISION_WIDTH;
 
     // Coin is 24x24 pixels
     if (
       collisionX < coin.x + 24 &&
-      collisionX + COLLISION_WIDTH > coin.x &&
+      collisionX + adjustedWidth > coin.x &&
       py < coin.y + 24 &&
       py + PLAYER_HEIGHT > coin.y
     ) {

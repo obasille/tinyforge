@@ -7,7 +7,6 @@ import {
   c,
   clearFramebuffer,
   drawNumber,
-  drawRect,
   drawStartMessageBox,
   drawString,
   fillRect,
@@ -27,7 +26,7 @@ const GRID_WIDTH: i32 = WIDTH / GRID_SIZE; // 20 cells wide
 const GRID_HEIGHT: i32 = HEIGHT / GRID_SIZE; // 15 cells tall
 const MAX_SNAKE_LENGTH: i32 = GRID_WIDTH * GRID_HEIGHT; // Maximum possible length
 
-const INITIAL_SPEED: u8 = 10; // Frames between moves (lower = faster)
+const INITIAL_SPEED: u8 = 15; // Frames between moves (lower = faster)
 const SPEED_INCREMENT: u8 = 1; // Speed increase per food eaten
 
 // Directions
