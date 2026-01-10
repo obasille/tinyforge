@@ -220,18 +220,60 @@ gameSelect.addEventListener('change', () => {
   }
 });
 
-// Reload button
-const reloadBtn = document.getElementById('reload-game');
-reloadBtn.addEventListener('click', hotReload);
+// Restart button - resets game state
+const restartBtn = document.getElementById('restart-game');
+restartBtn.addEventListener('click', () => {
+  if (init) {
+    init();
+    addConsoleEntry('LOG', 'Game restarted');
+  }
+});
+
+// Toggle pause state
+function togglePause() {
+  const pauseBtn = document.getElementById('pause-game') as HTMLButtonElement;
+  isPaused = !isPaused;
+  pauseBtn.textContent = isPaused ? 'Resume (P)' : 'Pause (P)';
+  
+  if (isPaused) {
+    addConsoleEntry('LOG', 'Game paused');
+    // Stop animation loop
+    if (animationFrameId) {
+      cancelAnimationFrame(animationFrameId);
+      animationFrameId = null;
+    }
+  } else {
+    addConsoleEntry('LOG', 'Game resumed');
+    // Restart animation loop
+    if (!animationFrameId && !hasAborted) {
+      const now = performance.now();
+      last = now;
+      acc = 0;
+      lastFpsUpdate = now;
+      frameCount = 0;
+      animationFrameId = requestAnimationFrame(frame);
+    }
+  }
+}
+
+// Pause button
+const pauseBtn = document.getElementById('pause-game') as HTMLButtonElement;
+pauseBtn.addEventListener('click', togglePause);
 
 // Memory viewer button
 const memoryViewerBtn = document.getElementById('open-memory-viewer');
 memoryViewerBtn.addEventListener('click', openMemoryViewer);
 
-// Keyboard shortcut: R to reload
+// Keyboard shortcuts: R to restart, P to pause
 window.addEventListener('keydown', (e) => {
   if ((e.key === 'r' || e.key === 'R') && !e.repeat) {
-    hotReload();
+    if (init) {
+      init();
+      addConsoleEntry('LOG', 'Game restarted');
+    }
+    e.preventDefault();
+  } else if ((e.key === 'p' || e.key === 'P') && !e.repeat) {
+    togglePause();
     e.preventDefault();
   }
 });
@@ -249,6 +291,7 @@ const KEYMAP = {
 
 let inputMask = 0;
 let prevInputMask = 0;
+let isPaused = false;
 
 // Mouse state
 // Coordinates are in virtual screen space (0-319, 0-239)
