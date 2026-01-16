@@ -86,29 +86,28 @@ It only sees memory and exported functions.
 
 ```
 tinyforge/
-├─ host/                # The runtime (JavaScript + HTML)
-│  ├─ index.html        # Canvas and page shell
-│  └─ main.js           # Input, timing, rendering, WASM loader
+├─ index.html           # Canvas and page shell
+├─ memory-viewer.html   # Memory inspector UI
+├─ host/
+│  └─ styles.css        # Host styling
+├─ icons/
+│  └─ favicon.svg
 │
-├─ sdk/                # The game SDK (AssemblyScript)
-│  ├─ index.ts          # SDK entry point
-│  ├─ memory.ts         # Memory map and constants
-│  ├─ input.ts          # Input functions
-│  ├─ drawing.ts        # Drawing primitives
-│  └─ ...               # Other SDK modules
+├─ src/
+│  ├─ web/              # Host runtime (TypeScript)
+│  ├─ sdk/              # Game SDK (AssemblyScript)
+│  ├─ games/            # Game cartridges (AssemblyScript)
+│  └─ memory-map.ts     # Shared memory constants
 │
-├─ games/              # Game cartridges (AssemblyScript)
-│  ├─ asconfig.json     # AssemblyScript configuration
-│  ├─ minesweeper.ts    # Game code
-│  └─ ...               # More games
+├─ dist/
+│  ├─ web/              # Compiled host JS
+│  ├─ cartridges/       # Compiled WASM files
+│  └─ memory-map.js
 │
-├─ cartridges/         # Compiled WASM files
-│  └─ minesweeper.wasm
-│
-└─ package.json        # Build scripts and dependencies
+└─ package.json         # Build scripts and dependencies
 ```
 
-### `host/`
+### `src/web/`
 Owns everything that would be considered *hardware* on a real console:
 
 - RAM allocation
@@ -117,7 +116,7 @@ Owns everything that would be considered *hardware* on a real console:
 - Rendering
 - Cartridge loading
 
-### `games/`
+### `src/games/`
 Contains only game code:
 
 - Update logic
@@ -204,7 +203,7 @@ Address        Size        Description
 - The framebuffer region should be treated as write-only by the cartridge
 - Input/mouse regions are read-only for the cartridge (written by host)
 - Sprite data is managed by the host (cartridge uses sprite IDs)
-- All addresses are defined in `memory-map.ts` and shared between host and SDK
+- All addresses are defined in `src/memory-map.ts` and shared between host and SDK
 
 ---
 
@@ -659,9 +658,9 @@ npm run build
 ```
 
 This creates:
-- `cartridges/minesweeper.wasm`
-- `cartridges/pong.wasm`
-- `cartridges/snake.wasm`
+- `dist/cartridges/minesweeper.wasm`
+- `dist/cartridges/pong.wasm`
+- `dist/cartridges/snake.wasm`
 
 ### Switching Games
 
@@ -684,7 +683,7 @@ python -m http.server 8080
 Then open:
 
 ```
-http://localhost:8080/host/index.html
+http://localhost:8080/index.html
 ```
 
 A VS Code Live Server or any static server also works.

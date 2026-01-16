@@ -59,7 +59,7 @@ async function loadGame(gameName, { skipInit = false } = {}) {
   
   try {
     const wasm = await loader.instantiateStreaming(
-      fetch(`../cartridges/${gameName}.wasm`),
+      fetch(`./dist/cartridges/${gameName}.wasm`),
       {
         env: {
           memory,
@@ -157,7 +157,7 @@ function hotReload() {
 
 async function checkWasmUpdate() {
   try {
-    const response = await fetch(`../cartridges/${currentGame}.wasm`, {
+    const response = await fetch(`./dist/cartridges/${currentGame}.wasm`, {
       method: 'HEAD',
       cache: 'no-cache'
     });

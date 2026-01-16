@@ -326,20 +326,20 @@ function random(): i32 {
 ```json
 {
   "scripts": {
-    "build:debug": "asc games/yourgame.ts -o cartridges/yourgame.wasm ..."
+    "build:debug": "asc src/games/yourgame.ts -o dist/cartridges/yourgame.wasm ..."
   }
 }
 ```
 
-**Or use asconfig.json targets** in the games/ directory.
+**Or use asconfig.json targets** in the src/games/ directory.
 
 **Build optimization - selective rebuilds:**
-- When modifying a **game file** (e.g., `games/dinoworld.ts`), rebuild only that game:
+- When modifying a **game file** (e.g., `src/games/dinoworld.ts`), rebuild only that game:
   ```bash
   npm run build gamename
   # Example: npm run build dinoworld
   ```
-- When modifying an **SDK file** (e.g., `sdk/drawing.ts`, `sdk/input.ts`), rebuild all games:
+- When modifying an **SDK file** (e.g., `src/sdk/drawing.ts`, `src/sdk/input.ts`), rebuild all games:
   ```bash
   npm run build
   ```
@@ -377,7 +377,7 @@ error("Invalid state");  // Unexpected conditions
 
 ### Complete Workflow for Creating a New Game
 
-1. **Create game file**: `games/yourgame.ts`
+1. **Create game file**: `src/games/yourgame.ts`
 
 2. **Import required APIs**:
    ```ts
@@ -454,19 +454,19 @@ error("Invalid state");  // Unexpected conditions
      "scripts": {
        "build": "npm run build:minesweeper && npm run build:pong && npm run build:snake && npm run build:yourgame",
        "build:debug": "npm run build:minesweeper:debug && npm run build:pong:debug && npm run build:snake:debug && npm run build:yourgame:debug",
-       "build:yourgame": "asc games/yourgame.ts -o cartridges/yourgame.wasm --config games/asconfig.json",
-       "build:yourgame:debug": "asc games/yourgame.ts -o cartridges/yourgame.wasm --config games/asconfig.json --target debug"
+       "build:yourgame": "asc src/games/yourgame.ts -o dist/cartridges/yourgame.wasm --config src/games/asconfig.json",
+       "build:yourgame:debug": "asc src/games/yourgame.ts -o dist/cartridges/yourgame.wasm --config src/games/asconfig.json --target debug"
      }
    }
    ```
    
    **Key points:**
    - Add both production and debug build scripts
-   - Output to `cartridges/` folder
+   - Output to `dist/cartridges/` folder
    - Update the main `build` and `build:debug` scripts to include your new game
-   - Use the existing `asconfig.json` in the games folder
+   - Use the existing `asconfig.json` in the src/games folder
 
-8. **Add game to selector in host/index.html**:
+8. **Add game to selector in index.html**:
    
    Add an option to the game select dropdown:
    ```html
@@ -488,7 +488,7 @@ error("Invalid state");  // Unexpected conditions
    npm run build:debug
    ```
    
-   The game will be compiled to `cartridges/yourgame.wasm` and can be selected from the dropdown.
+   The game will be compiled to `dist/cartridges/yourgame.wasm` and can be selected from the dropdown.
 
 10. **Fix compilation errors**:
    - Add missing casts for enums: `as u8`, `as i32`
@@ -498,7 +498,7 @@ error("Invalid state");  // Unexpected conditions
 
 11. **Test the game selector**:
    - Start the server: `npm run serve`
-   - Open `http://localhost:8080/host/index.html`
+   - Open `http://localhost:8080/index.html`
    - Your game should appear in the dropdown
    - Selecting it loads the game without page refresh
 

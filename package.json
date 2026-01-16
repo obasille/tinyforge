@@ -6,8 +6,8 @@
   "scripts": {
     "build": "node scripts/build-game.js",
     "build:debug": "node scripts/build-game.js debug",
-    "build:host": "tsc -p host/tsconfig.json",
-    "build:host:watch": "tsc -p host/tsconfig.json --watch",
+    "build:host": "tsc -p src/web/tsconfig.json",
+    "build:host:watch": "tsc -p src/web/tsconfig.json --watch",
     "serve": "python -m http.server 8080",
     "dev": "npm run build && npm run serve"
   },

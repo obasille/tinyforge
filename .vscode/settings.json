@@ -7,12 +7,12 @@
         "cmd": "npm run build"
       },
       {
-        "match": "games.*\\.ts$",
+        "match": "src/games.*\\.ts$",
         "isAsync": true,
         "cmd": "node scripts/build-game.js ${fileBasename}"
       },
       {
-        "match": "(host.*\\.ts$|memory-map\\.ts$)",
+        "match": "(src/web.*\\.ts$|memory-map\\.ts$)",
         "isAsync": true,
         "cmd": "npm run build:host"
       }
@@ -20,9 +20,9 @@
   },
   "liveServer.settings.ignoreFiles": [
     // Don't watch games and sdk source files
-    "**/games/*.ts",
-    "**/sdk/*.ts",
+    "**/src/games/*.ts",
+    "**/src/sdk/*.ts",
     // Don't watch compiled WebAssembly files
-    "**/*.wasm"
+    "**/dist/cartridges/*.wasm"
   ]
 }
