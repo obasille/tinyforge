@@ -14,97 +14,99 @@
     </script>
   </head>
   <body>
-    <div id="game-container">
-      <canvas id="screen" width="320" height="240"></canvas>
-      
-      <div id="console">
-        <div class="console-header">
-          <span class="console-title">Console</span>
-          <button id="clear-console" class="console-btn">Clear</button>
-        </div>
-        <div id="console-entries" class="console-entries"></div>
-      </div>
-    </div>
-    
-    <div id="devtools">
-      <div class="panel">
-        <h3>Game Select</h3>
-        <select id="game-select" class="game-selector">
-          <option value="spaceinvaders">Space Invaders</option>
-          <option value="breakout">Breakout</option>
-          <option value="dinoworld">Dino World</option>
-          <option value="snake">Snake</option>
-          <option value="pong">Pong</option>
-          <option value="minesweeper">Minesweeper</option>
-          <option value="example">Example</option>
-        </select>
-        <button id="restart-game" class="console-btn" style="margin-top: 8px; width: 100%;">Restart (R)</button>
-        <button id="pause-game" class="console-btn" style="margin-top: 8px; width: 100%;">Pause (P)</button>
-      </div>
-      
-      <div class="panel" id="debug">
-        <h3>Debug Info</h3>
-        <div class="metric">
-          <span class="metric-label">FPS:</span>
-          <span class="metric-value" id="fps">60</span>
-        </div>
-        <div class="metric">
-          <span class="metric-label">Update Time:</span>
-          <span class="metric-value"><span id="update-time">0.00</span> ms</span>
-        </div>
-        <div class="metric">
-          <span class="metric-label">Draw Time:</span>
-          <span class="metric-value"><span id="draw-time">0.00</span> ms</span>
-        </div>
-        <div class="metric">
-          <span class="metric-label">Updates/Frame:</span>
-          <span class="metric-value" id="updates">1</span>
-        </div>
-        <div class="metric">
-          <span class="metric-label">Accumulator:</span>
-          <span class="metric-value"><span id="acc">0</span> ms</span>
-        </div>
-        <div class="metric">
-          <span class="metric-label">Input Mask:</span>
-          <span class="metric-value" id="input">0x00</span>
-        </div>
-        <div class="metric">
-          <span class="metric-label">Mouse:</span>
-          <span class="metric-value" id="mouse">-1, -1</span>
-        </div>
-        <div class="metric">
-          <span class="metric-label">Mouse Buttons:</span>
-          <span class="metric-value" id="mouse-buttons">0x00</span>
+    <main>
+      <div id="main-column">
+        <canvas id="screen" width="320" height="240"></canvas>
+        
+        <div id="console">
+          <div class="console-header">
+            <span class="console-title">Console</span>
+            <button id="clear-console" class="console-btn">Clear</button>
+          </div>
+          <div id="console-entries" class="console-entries"></div>
         </div>
       </div>
       
-      <div class="panel">
-        <h3>Controls</h3>
-        <div class="help">
-          <strong>Arrow Keys:</strong> D-Pad<br>
-          <strong>Z:</strong> A Button<br>
-          <strong>X:</strong> B Button<br>
-          <strong>Enter:</strong> Start
+      <div id="devtools">
+        <div class="panel">
+          <h3>Game Select</h3>
+          <select id="game-select" class="game-selector">
+            <option value="spaceinvaders">Space Invaders</option>
+            <option value="breakout">Breakout</option>
+            <option value="dinoworld">Dino World</option>
+            <option value="snake">Snake</option>
+            <option value="pong">Pong</option>
+            <option value="minesweeper">Minesweeper</option>
+            <option value="example">Example</option>
+          </select>
+          <button id="restart-game" class="console-btn" style="margin-top: 8px; width: 100%;">Restart (R)</button>
+          <button id="pause-game" class="console-btn" style="margin-top: 8px; width: 100%;">Pause (P)</button>
+        </div>
+        
+        <div class="panel" id="debug">
+          <h3>Debug Info</h3>
+          <div class="metric">
+            <span class="metric-label">FPS:</span>
+            <span class="metric-value" id="fps">60</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Update Time:</span>
+            <span class="metric-value"><span id="update-time">0.00</span> ms</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Draw Time:</span>
+            <span class="metric-value"><span id="draw-time">0.00</span> ms</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Updates/Frame:</span>
+            <span class="metric-value" id="updates">1</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Accumulator:</span>
+            <span class="metric-value"><span id="acc">0</span> ms</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Input Mask:</span>
+            <span class="metric-value" id="input">0x00</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Mouse:</span>
+            <span class="metric-value" id="mouse">-1, -1</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Mouse Buttons:</span>
+            <span class="metric-value" id="mouse-buttons">0x00</span>
+          </div>
+        </div>
+        
+        <div class="panel">
+          <h3>Controls</h3>
+          <div class="help">
+            <strong>Arrow Keys:</strong> D-Pad<br>
+            <strong>Z:</strong> A Button<br>
+            <strong>X:</strong> B Button<br>
+            <strong>Enter:</strong> Start
+          </div>
+        </div>
+        
+        <div class="panel">
+          <h3>System</h3>
+          <div class="metric">
+            <span class="metric-label">Resolution:</span>
+            <span class="metric-value">320×240</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Tick Rate:</span>
+            <span class="metric-value">60 Hz</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Memory:</span>
+            <span class="metric-value">1 MB</span>
+          </div>
+          <button id="open-memory-viewer" class="console-btn" style="margin-top: 8px; width: 100%;">Open Memory Viewer</button>
         </div>
       </div>
-      
-      <div class="panel">
-        <h3>System</h3>
-        <div class="metric">
-          <span class="metric-label">Resolution:</span>
-          <span class="metric-value">320×240</span>
-        </div>
-        <div class="metric">
-          <span class="metric-label">Tick Rate:</span>
-          <span class="metric-value">60 Hz</span>
-        </div>
-        <div class="metric">
-          <span class="metric-label">Memory:</span>
-          <span class="metric-value">1 MB</span>
-        </div>
-        <button id="open-memory-viewer" class="console-btn" style="margin-top: 8px; width: 100%;">Open Memory Viewer</button>
-      </div>
-    </div>
+    </main>
     
     <script type="module" src="dist/web/main.js"></script>
   </body>

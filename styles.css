@@ -1,23 +1,28 @@
-* {
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+}
+
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
-html {
-  margin: 0;
-  background: #000;
+body {
+  font-family: 'Consolas', 'Monaco', monospace;
+  color: #fff;
 }
 
-body {
+main {
   display: flex;
   gap: 20px;
   align-items: flex-start;
   justify-content: center;
   padding: 20px;
-  font-family: 'Consolas', 'Monaco', monospace;
-  color: #fff;
 }
 
-#game-container {
+#main-column {
   display: flex;
   flex-direction: column;
   gap: 0;
