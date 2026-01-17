@@ -88,8 +88,8 @@ It only sees memory and exported functions.
 tinyforge/
 ├─ index.html           # Canvas and page shell
 ├─ memory-viewer.html   # Memory inspector UI
-├─ host/
-│  └─ styles.css        # Host styling
+├─ styles.css           # Host styling
+├─ stylesVC.css         # Virtual console controls styling (mobile and WPA)
 ├─ icons/
 │  └─ favicon.svg
 │

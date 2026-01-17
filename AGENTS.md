@@ -6,6 +6,19 @@ applyTo: "**"
 
 This section provides detailed instructions for AI agents tasked with creating games for TinyForge, based on patterns established in three reference games: **minesweeper.ts**, **pong.ts**, and **snake.ts**.
 
+### Project Layout (Current)
+- `index.html`, `memory-viewer.html` live at the repo root
+- `styles.css` and `styles2.css` are at the repo root
+- `icons/` holds favicon/app icons
+- `src/web/` contains host/runtime TypeScript
+- `src/sdk/` contains the AssemblyScript SDK
+- `src/games/` contains game cartridges (AssemblyScript)
+- `src/memory-map.ts` is the shared memory map source
+- `dist/web/` contains built host JS
+- `dist/cartridges/` contains built WASM cartridges
+- `dist/memory-map.js` is the built memory map module
+- `assets/` holds sprites, sfx, and music
+
 ### Core Architecture Patterns
 
 #### 1. File Structure
@@ -342,6 +355,10 @@ function random(): i32 {
 - When modifying an **SDK file** (e.g., `src/sdk/drawing.ts`, `src/sdk/input.ts`), rebuild all games:
   ```bash
   npm run build
+  ```
+- After any change in **src/web** (host/runtime), rebuild host output:
+  ```bash
+  npm run build:host
   ```
 - This saves time by avoiding unnecessary recompilation of unchanged games.
 

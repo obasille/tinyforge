@@ -19,10 +19,7 @@
     ]
   },
   "liveServer.settings.ignoreFiles": [
-    // Don't watch games and sdk source files
-    "**/src/games/*.ts",
-    "**/src/sdk/*.ts",
-    // Don't watch compiled WebAssembly files
-    "**/dist/cartridges/*.wasm"
+    // Don't watch any source file
+    "**/src/**"
   ]
 }
