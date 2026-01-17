@@ -1,4 +1,4 @@
-// cspell:language fr
+// cspell:language en,fr
 // NOTE: Tous les commentaires doivent être en français !
 // Exemple de jeu TinyForge
 
@@ -38,7 +38,7 @@ const vert = c(0x00ff00);
 export function init(): void {
   clearFramebuffer(noir);
 
-  // Initialise la position du joueur dans la RAM
+  // Initialise la position du joueur
   vars.posAxe1 = 160;
   vars.posAxe2 = 120;
   vars.modeGomme = false;
@@ -75,7 +75,7 @@ export function update(): void {
       bouge = true;
     }
   } else {
-    // Mouvement pas à pas
+    // Mouvement uniquement au moment où le bouton est pressé (pas à pas)
     // Gauche
     if (buttonPressed(Button.LEFT)) {
       vars.posAxe1 -= 1
@@ -103,7 +103,7 @@ export function update(): void {
     // Sauvegarde la position précédente
     vars.posAxe1Avant = posAxe1Avant;
     vars.posAxe2Avant = posAxe2Avant;
-    // Détermine la couleur à dessiner
+    // Détermine la couleur à dessiner pour la position précédente
     if (vars.modeGomme == true) {
       vars.couleur = noir;
     } else {
