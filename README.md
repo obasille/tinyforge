@@ -693,6 +693,35 @@ A VS Code Live Server or any static server also works.
 
 ---
 
+## FTP Upload
+
+Builds trigger an FTP sync via the `postbuild`, `postbuild:games`, and `postbuild:host` hooks.
+
+### Credentials
+
+Create a `.env` file in the project root:
+
+```
+FTP_HOST=yourdomain.com
+FTP_USER=username
+FTP_PASS=password
+```
+
+The file is ignored by Git.
+
+### What Gets Synced
+
+- `dist/` → `/dist`
+- `*.html`, `*.css`, `manifest.json`, `sw.js` → `/`
+
+### Manual Upload
+
+```
+npm run upload
+```
+
+---
+
 ## Development Notes
 
 ### No Dynamic Allocation
