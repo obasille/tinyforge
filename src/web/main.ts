@@ -375,10 +375,37 @@ window.addEventListener("keyup", e => {
 // Update mouse position when cursor moves over canvas
 canvas.addEventListener("mousemove", e => {
   const rect = canvas.getBoundingClientRect();
-  const scaleX = WIDTH / rect.width;
-  const scaleY = HEIGHT / rect.height;
-  mouseX = Math.floor((e.clientX - rect.left) * scaleX);
-  mouseY = Math.floor((e.clientY - rect.top) * scaleY);
+  const viewWidth = rect.width;
+  const viewHeight = rect.height;
+  const aspect = canvas.width / canvas.height;
+  const viewAspect = viewWidth / viewHeight;
+
+  // In fullscreen the canvas stretches to fill the screen, but the game still renders
+  // into a 4:3 area with letterboxing. Compute the drawn area so mouse input maps
+  // to the actual content instead of the full stretched canvas.
+  let drawWidth = viewWidth;
+  let drawHeight = viewHeight;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  if (viewAspect > aspect) {
+    // Extra horizontal space (pillarbox): center the 4:3 content.
+    drawHeight = viewHeight;
+    drawWidth = drawHeight * aspect;
+    offsetX = (viewWidth - drawWidth) / 2;
+  } else {
+    // Extra vertical space (letterbox): center the 4:3 content.
+    drawWidth = viewWidth;
+    drawHeight = drawWidth / aspect;
+    offsetY = (viewHeight - drawHeight) / 2;
+  }
+
+  const x = e.clientX - rect.left - offsetX;
+  const y = e.clientY - rect.top - offsetY;
+  const scaleX = canvas.width / drawWidth;
+  const scaleY = canvas.height / drawHeight;
+  mouseX = Math.floor(x * scaleX);
+  mouseY = Math.floor(y * scaleY);
 });
 
 // Set coordinates to -1 when mouse leaves canvas
