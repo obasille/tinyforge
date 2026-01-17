@@ -64,6 +64,7 @@ setI32(Var.SCORE, 0);
 - `i32` takes 4 bytes (align to 4-byte boundaries)
 - Arrays: reserve contiguous blocks (e.g., 100 cells = 100 bytes)
 - Leave gaps for alignment when needed
+- SDK RNG seed is reserved in SDK memory; do not allocate it in game RAM
 
 #### 3. Type System and Enums
 
@@ -325,12 +326,9 @@ function getCellData(x: i32, y: i32): u8 {
 
 **Random number generation:**
 ```ts
-function random(): i32 {
-  let seed = getI32(Var.RNG_SEED);
-  seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-  setI32(Var.RNG_SEED, seed);
-  return seed;
-}
+// Use the SDK RNG seed in shared memory.
+const roll = random() % 10;
+const index = randomRange(7); // [0, 7)
 ```
 
 #### 11. Build Configuration

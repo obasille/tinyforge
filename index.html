@@ -135,6 +135,7 @@
           <select id="game-select" class="game-selector">
             <option value="spaceinvaders">Space Invaders</option>
             <option value="breakout">Breakout</option>
+            <option value="tetris">Tetris</option>
             <option value="dinoworld">Dino World</option>
             <option value="snake">Snake</option>
             <option value="pong">Pong</option>
@@ -180,6 +181,13 @@
           <div class="metric">
             <span class="metric-label">Mouse Buttons:</span>
             <span class="metric-value" id="mouse-buttons">0x00</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">RNG Seed:</span>
+            <span class="metric-value">
+              <input id="rng-seed-input" class="metric-input" type="text" value="0x00000000">
+              <button id="rng-seed-apply" class="console-btn metric-btn">Set</button>
+            </span>
           </div>
         </div>
         

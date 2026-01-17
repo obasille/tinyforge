@@ -18,6 +18,7 @@ import {
   fillRect,
   log,
   playSfx,
+  randomRange,
 } from "../sdk";
 
 // === Constants ===
@@ -79,23 +80,14 @@ const spikes: Spike[] = [
 // Collectible coin (one at a time)
 const coin: Coin = { x: 0, y: 0, active: false };
 
-// RNG seed for random coin placement
-let coinRngSeed: i32 = 54321;
-
-// Helper function to get random number
-function randomCoinInt(max: i32): i32 {
-  coinRngSeed = (coinRngSeed * 1103515245 + 12345) & 0x7fffffff;
-  return (coinRngSeed % max);
-}
-
 // Spawn a new coin at a random platform location
 function spawnRandomCoin(): void {
-  const platformIndex = randomCoinInt(platforms.length);
+  const platformIndex = randomRange(platforms.length);
   const plat = platforms[platformIndex];
   
   // Random X position on the platform (with some margin)
   const margin = 20;
-  const coinX = plat.x + margin + randomCoinInt(plat.w - margin * 2);
+  const coinX = plat.x + margin + randomRange(plat.w - margin * 2);
   
   // Y position just above the platform (24x24 sprite)
   const coinY = plat.y - 24;
@@ -157,7 +149,6 @@ export function init(): void {
   vars.coinsCollected = 0;
 
   // Spawn first coin
-  coinRngSeed = 54321 + vars.gameTimer; // Add some variation
   spawnRandomCoin();
 
   // Reset spikes
@@ -293,7 +284,7 @@ export function update(): void {
       spike.y = -20;
       spike.x = 30 + <f32>(i * 100);
       // Increase speed over time
-      const baseSpeed: f32 = (1000 + <f32>randomCoinInt(500)) / 1000;
+      const baseSpeed: f32 = (1000 + <f32>randomRange(500)) / 1000;
       spike.speed = baseSpeed * difficultyMultiplier;
     }
 

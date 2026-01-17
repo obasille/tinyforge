@@ -15,7 +15,7 @@ import {
   log,
   pset,
   RAM_START,
-  random,
+  randomRange,
   setU8,
   WIDTH,
 } from "../sdk";
@@ -56,15 +56,10 @@ class Vars {
   score: u8;      // 9
   speed: u8;      // 10
   moveTimer: u8;  // 11
-  rngSeed: i32;   // 12
 }
 
 const vars = changetype<Vars>(RAM_START);
 const SNAKE_DATA = RAM_START + 16; // 400 bytes - snake body (2 bytes per segment: x, y)
-
-function randomRange(max: i32): i32 {
-  return random(RAM_START + 12) % max; // rngSeed offset
-}
 
 // === Snake Helpers ===
 function getSegmentX(index: i32): u8 {
@@ -208,7 +203,6 @@ export function init(): void {
   vars.moveTimer = INITIAL_SPEED;
 
   // Initialize RNG
-  vars.rngSeed = 12345;
 
   // Spawn first food
   spawnFood();

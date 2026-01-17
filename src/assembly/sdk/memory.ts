@@ -64,6 +64,17 @@ export const SPRITE_DATA_ADDR = memoryMap.SPRITE_DATA_ADDR as usize;
 /** Maximum sprite data size (~128 KB) */
 export const SPRITE_DATA_SIZE = memoryMap.SPRITE_DATA_SIZE as usize;
 
+// === SDK Reserved Memory ===
+
+/** SDK RNG seed address (i32) */
+export const SDK_RNG_SEED_ADDR = memoryMap.SDK_RNG_SEED_ADDR as usize;
+
+/** SDK RNG seed size in bytes */
+export const SDK_RNG_SEED_SIZE = memoryMap.SDK_RNG_SEED_SIZE as usize;
+
+/** SDK RNG seed address (i32) */
+export const RNG_SEED = memoryMap.SDK_RNG_SEED_ADDR as usize;
+
 /** Game RAM start address */
 export const RAM_START = memoryMap.RAM_START as usize;
 

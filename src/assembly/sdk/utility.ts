@@ -3,6 +3,7 @@
 
 import { fillRect, drawRect, drawString } from "./drawing";
 import { c } from "./color";
+import { RNG_SEED } from "./memory";
 
 /**
  * 2D integer vector class for coordinate pairs and offsets
@@ -54,29 +55,32 @@ export class Vec2i {
 
 /**
  * Generate a pseudo-random integer using Linear Congruential Generator (LCG)
- * The seed is stored in RAM at the provided offset and updated on each call
- *
- * @param seedVar Memory address where the seed is stored (typically RAM_START + offset)
+ * The seed is stored in SDK memory at RNG_SEED and updated on each call
  * @returns Random i32 value in range [0, 0x7fffffff]
  *
  * @example
  * ```ts
- * // In your game's Var enum:
- * enum Var {
- *   RNG_SEED = 0,  // 4 bytes
- * }
- *
  * // Generate random number between 0-9:
- * const roll = random(RAM_START + Var.RNG_SEED) % 10;
+ * const roll = random() % 10;
  * ```
  */
 // @ts-expect-error AssemblyScript decorator
 @inline
-export function random(seedVar: usize): i32 {
-  let seed = load<i32>(seedVar);
+export function random(): i32 {
+  let seed = load<i32>(RNG_SEED);
   seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-  store<i32>(seedVar, seed);
+  store<i32>(RNG_SEED, seed);
   return seed;
+}
+
+/**
+ * Generate a pseudo-random integer in range [0, max)
+ * @param max Exclusive upper bound (must be > 0)
+ */
+// @ts-expect-error AssemblyScript decorator
+@inline
+export function randomRange(max: i32): i32 {
+  return random() % max;
 }
 
 /**

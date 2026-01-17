@@ -21,7 +21,7 @@ import {
   playMusic,
   playSfx,
   RAM_START,
-  random,
+  randomRange,
   setU8,
   stopMusic,
 } from "../sdk";
@@ -69,7 +69,6 @@ class Vars {
   revealedCount: u8; // 9
   flagCount: u8;     // 10
   _padding: u8;      // 11
-  rngSeed: i32;      // 12
 }
 
 const vars = changetype<Vars>(RAM_START);
@@ -88,12 +87,6 @@ function getCellData(x: i32, y: i32): u8 {
 function setCellData(x: i32, y: i32, data: u8): void {
   if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return;
   setU8(GRID_START + (y * GRID_SIZE + x), data);
-}
-
-// @ts-expect-error AssemblyScript decorator
-@inline
-function randomRange(max: i32): i32 {
-  return random(RAM_START + 12) % max; // rngSeed offset
 }
 
 // === Game Logic ===
@@ -205,7 +198,6 @@ export function init(): void {
   vars.state = GameState.START_SCREEN as u8;
   vars.revealedCount = 0;
   vars.flagCount = 0;
-  vars.rngSeed = 12345;
 
   // Setup game
   placeMines();

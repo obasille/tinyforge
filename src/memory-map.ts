@@ -73,15 +73,23 @@ export const SPRITE_METADATA_ADDR = MOUSE_ADDR + 8; // 0x04B010
 export const SPRITE_METADATA_SIZE = 8;
 
 /** Sprite pixel data start address */
-export const SPRITE_DATA_ADDR = SPRITE_METADATA_ADDR + 256 * SPRITE_METADATA_SIZE;;
+export const SPRITE_DATA_ADDR = SPRITE_METADATA_ADDR + 256 * SPRITE_METADATA_SIZE;
 
 /** Maximum sprite data size (~128 KB) */
 export const SPRITE_DATA_SIZE = 0x20000;
 
-// Available RAM starts after sprite data
+// === SDK Reserved Memory ===
+
+/** SDK RNG seed address (i32) */
+export const SDK_RNG_SEED_ADDR = SPRITE_DATA_ADDR + SPRITE_DATA_SIZE;
+
+/** SDK RNG seed size in bytes */
+export const SDK_RNG_SEED_SIZE = 4;
+
+// Available RAM starts after SDK reserved data
 
 /** Game RAM start address */
-export const RAM_START = SPRITE_DATA_ADDR + SPRITE_DATA_SIZE;
+export const RAM_START = SDK_RNG_SEED_ADDR + SDK_RNG_SEED_SIZE;
 
 /** Game RAM size in bytes (256 KB) */
 export const RAM_SIZE = 0x80000 - RAM_START;

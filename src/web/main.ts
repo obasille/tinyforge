@@ -3,7 +3,7 @@ import * as loader from '@assemblyscript/loader';
 import { addConsoleEntry } from './console-panel.js';
 import { audioManager } from './audio-manager.js';
 import { spriteManager } from './sprite-manager.js';
-import { INPUT_ADDR, MOUSE_ADDR } from '../memory-map.js';
+import { INPUT_ADDR, MOUSE_ADDR, SDK_RNG_SEED_ADDR } from '../memory-map.js';
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
@@ -39,8 +39,43 @@ const memory = new WebAssembly.Memory({
   maximum: 16    // fixed, no growth
 });
 
+function formatSeedHex(value) {
+  return '0x' + (value >>> 0).toString(16).toUpperCase().padStart(8, '0');
+}
+
+function parseSeedValue(text) {
+  const cleaned = text.trim().toLowerCase();
+  const parsed = cleaned.startsWith('0x')
+    ? parseInt(cleaned, 16)
+    : parseInt(cleaned, 10);
+  if (!Number.isFinite(parsed)) {
+    throw new Error('Seed must be a number');
+  }
+  return (parsed >>> 0) & 0x7fffffff;
+}
+
+function getRngSeed() {
+  const view = new DataView(memory.buffer);
+  return view.getInt32(SDK_RNG_SEED_ADDR, true);
+}
+
+function setRngSeed(value) {
+  const view = new DataView(memory.buffer);
+  view.setInt32(SDK_RNG_SEED_ADDR, value | 0, true);
+}
+
+function initializeRngSeed() {
+  const view = new DataView(memory.buffer);
+  const current = view.getInt32(SDK_RNG_SEED_ADDR, true);
+  if (current === 0) {
+    const seed = (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) & 0x7fffffff;
+    view.setInt32(SDK_RNG_SEED_ADDR, seed, true);
+  }
+}
+
 // Initialize sprite manager with memory
 spriteManager.init(memory);
+initializeRngSeed();
 
 // Create framebuffer views (persistent across game loads)
 const fb = new Uint8ClampedArray(memory.buffer, 0, WIDTH * HEIGHT * 4);
@@ -543,6 +578,32 @@ const accEl = document.getElementById('acc');
 const inputEl = document.getElementById('input');
 const mouseEl = document.getElementById('mouse');
 const mouseButtonsEl = document.getElementById('mouse-buttons');
+const rngSeedInput = document.getElementById('rng-seed-input') as HTMLInputElement | null;
+const rngSeedApply = document.getElementById('rng-seed-apply') as HTMLButtonElement | null;
+
+const applyRngSeedInput = () => {
+  if (!rngSeedInput) return;
+  try {
+    const nextSeed = parseSeedValue(rngSeedInput.value);
+    setRngSeed(nextSeed);
+    rngSeedInput.value = formatSeedHex(nextSeed);
+  } catch (e) {
+    addConsoleEntry('ERROR', `Invalid RNG seed: ${e.message}`);
+  }
+};
+
+if (rngSeedApply) {
+  rngSeedApply.addEventListener('click', applyRngSeedInput);
+}
+
+if (rngSeedInput) {
+  rngSeedInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      applyRngSeedInput();
+    }
+  });
+  rngSeedInput.value = formatSeedHex(getRngSeed());
+}
 
 // Pause game when tab is hidden, resume when visible
 // This stops the animation loop entirely to save CPU when tab is in background
@@ -665,6 +726,9 @@ function frame(now) {
   inputEl.textContent = '0x' + inputMask.toString(16).padStart(2, '0').toUpperCase();
   mouseEl.textContent = `${mouseX}, ${mouseY}`;
   mouseButtonsEl.textContent = '0x' + mouseButtons.toString(16).padStart(2, '0').toUpperCase();
+  if (rngSeedInput && document.activeElement !== rngSeedInput) {
+    rngSeedInput.value = formatSeedHex(getRngSeed());
+  }
 
   // Continue the loop only if document is still visible and no abort occurred
   if (!document.hidden && !hasAborted) {

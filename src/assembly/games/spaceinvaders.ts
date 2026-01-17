@@ -16,6 +16,7 @@ import {
   log,
   playSfx,
   RAM_START,
+  randomRange,
   setU8,
   WIDTH,
   setU16,
@@ -94,18 +95,6 @@ const ALIEN_BULLET_DATA = RAM_START + 132;
 
 // Shield health: 4 shields × 8 blocks each = 32 bytes (0-2 health per block)
 const SHIELD_DATA = RAM_START + 152;
-
-// RNG seed
-let rngSeed: i32 = 12345;
-
-function random(): i32 {
-  rngSeed = (rngSeed * 1103515245 + 12345) & 0x7fffffff;
-  return rngSeed;
-}
-
-function randomInt(max: i32): i32 {
-  return (random() % max);
-}
 
 // === Alien Helpers ===
 function getAlien(col: i32, row: i32): u8 {
@@ -291,7 +280,6 @@ export function init(): void {
     setAlienBullet(i, 0, 0, 0);
   }
   
-  rngSeed = 12345;
 }
 
 export function update(): void {
@@ -452,10 +440,10 @@ export function update(): void {
   }
   
   // Alien shooting
-  if (randomInt(ALIEN_SHOOT_CHANCE) == 0) {
+  if (randomRange(ALIEN_SHOOT_CHANCE) == 0) {
     // Find a random alive alien in bottom row
     for (let attempt: i32 = 0; attempt < 10; attempt++) {
-      const col = randomInt(ALIEN_COLS);
+      const col = randomRange(ALIEN_COLS);
       
       // Find bottom-most alien in this column
       for (let row: i32 = ALIEN_ROWS - 1; row >= 0; row--) {

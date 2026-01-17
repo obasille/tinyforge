@@ -160,7 +160,8 @@ Address        Size        Description
 0x04B008       6 B         Mouse Input (x, y, current + previous buttons)
 0x04B010       2,048 B     Sprite Metadata (256 sprites × 8 bytes)
 0x04B810       128 KB      Sprite Pixel Data (~128 KB, RGBA)
-0x06B810       ~421 KB     Game RAM (available for game state)
+0x06B810       4 B         SDK RNG Seed (i32)
+0x06B814       ~82 KB      Game RAM (available for game state)
 ```
 
 **Detailed Layout:**
@@ -192,7 +193,11 @@ Address        Size        Description
 - Format: RGBA8888 (4 bytes per pixel)
 - Managed by host, loaded from `assets/sprites/`
 
-**Game RAM (0x06B810+):**
+**SDK RNG Seed (0x06B810 - 0x06B813):**
+- 4-byte i32 seed used by SDK `random()` and `randomRange()`
+- Initialized by the host and editable in devtools
+
+**Game RAM (0x06B814+):**
 - Available for game state, variables, and data structures
 - Use `RAM_START` constant from SDK
 - Store persistent game state here (not in module variables)

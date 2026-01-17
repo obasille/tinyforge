@@ -220,6 +220,23 @@ canvas {
   font-weight: bold;
 }
 
+.metric-input {
+  width: 110px;
+  padding: 4px 6px;
+  background: #111;
+  border: 1px solid #333;
+  color: #e0e0e0;
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.metric-btn {
+  margin-left: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
 .help {
   color: #666;
   font-size: 11px;
