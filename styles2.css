@@ -1,0 +1,135 @@
+/* body {
+  padding: env(safe-area-inset-top)
+    env(safe-area-inset-right)
+    env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+  background: #0f172a;;
+  color: #f8fafc;
+  height: 100dvh;
+  overflow: hidden;
+  user-select: none;
+}
+main {
+  height: 100%;
+  display: grid;
+  place-items: center;
+} */
+.virtual-console {
+  width: 100%;
+  height: 100%;
+  max-width: 920px;
+  display: grid;
+  gap: 16px;
+  justify-items: center;
+  align-items: center;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-areas:
+    "screen screen"
+    "dpad buttons";
+}
+.screen {
+  grid-area: screen;
+  width: min(100%, 640px);
+  max-width: min(100%, calc((100dvh - 220px) * 4 / 3));
+  max-height: 60dvh;
+  aspect-ratio: 4 / 3;
+  border: 2px solid #1f2937;
+  display: grid;
+  place-items: center;
+}
+canvas {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+.dpad,
+.buttons {
+  display: grid;
+  justify-items: center;
+}
+.dpad {
+  grid-area: dpad;
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+}
+.dpad-row {
+  display: flex;
+  gap: 32px;
+}
+.btn {
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+  border: none;
+  background: #1f2937;
+  color: #f8fafc;
+  font-weight: 700;
+}
+.btn:active {
+  background: #334155;
+}
+.buttons-wrap {
+  grid-area: buttons;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.buttons-main {
+  display: grid;
+  grid-template-columns: 72px;
+  grid-template-rows: repeat(2, 72px);
+  gap: 16px;
+  justify-items: center;
+}
+.btn-next {
+  border-radius: 14px;
+  padding: 24px;
+  width: auto;
+  height: auto;
+}
+.btn-large {
+  width: 72px;
+  height: 72px;
+  border-radius: 999px;
+  background: #ef4444;
+}
+.btn-secondary {
+  background: #22c55e;
+}
+@media (orientation: portrait) {
+  .btn-next {
+    margin-bottom: 16px;
+  }
+}
+@media (orientation: landscape) {
+  body.landscape-left {
+    /* Ignore right inset when the left side has the cutout. */
+    padding-right: 16px;
+  }
+  body.landscape-right {
+    /* Ignore left inset when the right side has the cutout. */
+    padding-left: 16px;
+  }
+  .virtual-console {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: "dpad screen buttons";
+  }
+  .screen {
+    width: min(100%, 720px);
+    max-width: min(100%, calc((100dvh - 48px) * 4 / 3));
+    max-height: 100%;
+    align-self: end;
+  }
+  .dpad,
+  .buttons-wrap {
+    align-self: end;
+  }
+  .buttons-wrap {
+    height: 100%;
+    justify-content: space-between;
+  }
+  .btn-next {
+    margin-top: 16px;
+  }
+}

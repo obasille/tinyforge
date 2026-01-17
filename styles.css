@@ -11,21 +11,28 @@
 
 body {
   font-family: 'Consolas', 'Monaco', monospace;
-  color: #fff;
+  /* mobile */
+  padding: env(safe-area-inset-top)
+    env(safe-area-inset-right)
+    env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+  background: #0f172a;;
+  color: #f8fafc;
+  height: 100dvh;
+  overflow: hidden;
+  user-select: none;
 }
 
 main {
+  height: 100%;
   display: flex;
-  gap: 20px;
   align-items: flex-start;
   justify-content: center;
-  padding: 20px;
 }
 
 #main-column {
   display: flex;
   flex-direction: column;
-  gap: 0;
 }
 
 canvas {

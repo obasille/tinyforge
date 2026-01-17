@@ -3,8 +3,45 @@
   <head>
     <meta charset="utf-8" />
     <title>TinyForge</title>
+
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0f172a" />
+
+    <link rel="manifest" href="manifest.json" />
+    <link rel="icon" href="icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="TinyForge" />
+
     <link rel="icon" type="image/svg+xml" href="icons/favicon.svg" />
     <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles2.css" />
+
+    <style>
+      @media (pointer: fine) and (min-width: 901px) {
+        /* desktop */
+        .dpad,
+        .buttons-wrap {
+          display: none !important;
+        }
+      }
+      @media (pointer: coarse), (max-width: 900px) {
+        /* mobile */
+        #main-column {
+          width: 100%;
+          height: 100%;
+        }
+        #console,
+        #devtools {
+          display: none !important;
+        }
+      }
+    </style>
     <script type="importmap">
       {
         "imports": {
@@ -16,8 +53,37 @@
   <body>
     <main>
       <div id="main-column">
-        <canvas id="screen" width="320" height="240"></canvas>
-        
+        <section class="virtual-console">
+          <div class="dpad">
+            <button class="btn" data-input="up" aria-label="Up">▲</button>
+            <div class="dpad-row">
+              <button class="btn" data-input="left" aria-label="Left">◀</button>
+              <button class="btn" data-input="right" aria-label="Right">▶</button>
+            </div>
+            <button class="btn" data-input="down" aria-label="Down">▼</button>
+          </div>
+          <div class="screen">
+            <canvas id="screen" width="320" height="240"></canvas>
+          </div>
+          <div class="buttons-wrap">
+            <button class="btn btn-next" data-action="next" aria-label="Next">
+              Next
+            </button>
+            <div class="buttons-main">
+              <button class="btn btn-large" data-input="a" aria-label="Button A">
+                A
+              </button>
+              <button
+                class="btn btn-large btn-secondary"
+                data-input="b"
+                aria-label="Button B"
+              >
+                B
+              </button>
+            </div>
+          </div>
+        </section>
+                
         <div id="console">
           <div class="console-header">
             <span class="console-title">Console</span>
@@ -41,6 +107,7 @@
           </select>
           <button id="restart-game" class="console-btn" style="margin-top: 8px; width: 100%;">Restart (R)</button>
           <button id="pause-game" class="console-btn" style="margin-top: 8px; width: 100%;">Pause (P)</button>
+          <button id="fullscreen-btn" class="console-btn" style="margin-top: 8px; width: 100%;">Fullscreen</button>
         </div>
         
         <div class="panel" id="debug">

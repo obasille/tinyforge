@@ -5,6 +5,26 @@ import { audioManager } from './audio-manager.js';
 import { spriteManager } from './sprite-manager.js';
 import { INPUT_ADDR, MOUSE_ADDR } from '../memory-map.js';
 
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js");
+  });
+}
+
+const getOrientationAngle = () => {
+  const legacyOrientation = (window as Window & { orientation?: number }).orientation;
+  return screen.orientation?.angle ?? legacyOrientation ?? 0;
+};
+
+const setLandscapeClass = () => {
+  const angle = getOrientationAngle();
+  document.body.classList.toggle("landscape-left", angle === 90);
+  document.body.classList.toggle("landscape-right", angle === 270);
+};
+
+window.addEventListener("orientationchange", setLandscapeClass);
+window.addEventListener("load", setLandscapeClass);
+
 const canvas = document.getElementById("screen") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d", { alpha: false });
 
@@ -279,14 +299,24 @@ window.addEventListener('keydown', (e) => {
 });
 
 // Input handling
-const KEYMAP = {
-  ArrowUp:    1 << 0,
-  ArrowDown:  1 << 1,
-  ArrowLeft:  1 << 2,
-  ArrowRight: 1 << 3,
-  KeyZ:       1 << 4,
-  KeyX:       1 << 5,
-  Enter:      1 << 6
+const keyMap = {
+  up:    1 << 0,
+  down:  1 << 1,
+  left:  1 << 2,
+  right: 1 << 3,
+  a:     1 << 4,
+  b:     1 << 5,
+  start: 1 << 6,
+};
+
+const keyCodeMap = {
+  ArrowUp: keyMap.up,
+  ArrowDown: keyMap.down,
+  ArrowLeft: keyMap.left,
+  ArrowRight: keyMap.right,
+  KeyZ: keyMap.a,
+  KeyX: keyMap.b,
+  Enter: keyMap.start,
 };
 
 let inputMask = 0;
@@ -303,15 +333,17 @@ let mouseButtons = 0;
 let prevMouseButtons = 0;
 
 window.addEventListener("keydown", e => {
-  if (KEYMAP[e.code]) {
-    inputMask |= KEYMAP[e.code];
+  const mapped = keyCodeMap[e.code];
+  if (mapped !== undefined) {
+    inputMask |= mapped;
     e.preventDefault();
   }
 });
 
 window.addEventListener("keyup", e => {
-  if (KEYMAP[e.code]) {
-    inputMask &= ~KEYMAP[e.code];
+  const mapped = keyCodeMap[e.code];
+  if (mapped !== undefined) {
+    inputMask &= ~mapped;
     e.preventDefault();
   }
 });
@@ -355,6 +387,71 @@ canvas.addEventListener("mouseup", e => {
     e.preventDefault();
   }
 });
+
+// Onscreen buttons
+
+document.querySelectorAll<HTMLButtonElement>("[data-input]").forEach((button) => {
+  const input = button.dataset.input as keyof typeof keyMap | undefined;
+  if (input && input in keyMap) {
+    const press = () => {
+      inputMask |= keyMap[input];
+    };
+    const release = () => {
+      inputMask &= ~keyMap[input];
+    };
+    button.addEventListener("touchstart", (event) => {
+      event.preventDefault();
+      press();
+    }, { passive: false });
+    button.addEventListener("touchend", (event) => {
+      event.preventDefault();
+      release();
+    }, { passive: false });
+    button.addEventListener("touchcancel", (event) => {
+      event.preventDefault();
+      release();
+    }, { passive: false });
+    button.addEventListener("mousedown", press);
+    button.addEventListener("mouseup", release);
+    button.addEventListener("mouseleave", release);
+  }
+});
+
+const pressStart = (event: Event) => {
+  event.preventDefault();
+  inputMask |= keyMap.start;
+};
+const releaseStart = (event: Event) => {
+  event.preventDefault();
+  inputMask &= ~keyMap.start;
+};
+canvas.addEventListener("touchstart", pressStart, { passive: false });
+canvas.addEventListener("touchend", releaseStart, { passive: false });
+canvas.addEventListener("touchcancel", releaseStart, { passive: false });
+canvas.addEventListener("touchmove", (event) => event.preventDefault(), { passive: false });
+canvas.addEventListener("mousedown", pressStart);
+window.addEventListener("mouseup", releaseStart);
+
+// Next button: switch to next game
+document
+  .querySelectorAll<HTMLButtonElement>("[data-action='next']")
+  .forEach((button) => {
+    const press = () => {
+      const select = document.getElementById('game-select') as HTMLSelectElement;
+      if (select) {
+        const options = Array.from(select.options);
+        const idx = options.findIndex(opt => opt.value === select.value);
+        const nextIdx = (idx + 1) % options.length;
+        select.selectedIndex = nextIdx;
+        select.dispatchEvent(new Event('change'));
+      }
+    };
+    button.addEventListener("touchstart", (event) => {
+      event.preventDefault();
+      press();
+    }, { passive: false });
+    button.addEventListener("mousedown", press);
+  });
 
 // Prevent context menu on right-click
 canvas.addEventListener("contextmenu", e => {
