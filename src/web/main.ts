@@ -284,7 +284,25 @@ pauseBtn.addEventListener('click', togglePause);
 const memoryViewerBtn = document.getElementById('open-memory-viewer');
 memoryViewerBtn.addEventListener('click', openMemoryViewer);
 
-// Keyboard shortcuts: R to restart, P to pause
+function toggleFullscreen() {
+  const target = canvas;
+  const requestFullscreen = target.requestFullscreen?.bind(target);
+  const exitFullscreen = document.exitFullscreen?.bind(document);
+
+  if (!document.fullscreenElement && requestFullscreen) {
+    requestFullscreen().catch(err => {
+      addConsoleEntry('ERROR', `Failed to enter fullscreen: ${err.message}`);
+    });
+  } else if (document.fullscreenElement && exitFullscreen) {
+    exitFullscreen();
+  }
+}
+
+// Fullscreen button
+const fullscreenBtn = document.getElementById('fullscreen-btn') as HTMLButtonElement | null;
+fullscreenBtn?.addEventListener('click', toggleFullscreen);
+
+// Keyboard shortcuts: R to restart, P to pause, F for fullscreen
 window.addEventListener('keydown', (e) => {
   if ((e.key === 'r' || e.key === 'R') && !e.repeat) {
     if (init) {
@@ -294,6 +312,9 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
   } else if ((e.key === 'p' || e.key === 'P') && !e.repeat) {
     togglePause();
+    e.preventDefault();
+  } else if ((e.key === 'f' || e.key === 'F') && !e.repeat) {
+    toggleFullscreen();
     e.preventDefault();
   }
 });
