@@ -46,20 +46,20 @@ enum GameState {
 
 // === RAM Layout ===
 @unmanaged
-class GameVars {
-  length: i32 = 0;    // 0
-  dir: u8 = 0;        // 4
-  nextDir: u8 = 0;    // 5
-  foodX: u8 = 0;      // 6
-  foodY: u8 = 0;      // 7
-  state: u8 = 0;      // 8
-  score: u8 = 0;      // 9
-  speed: u8 = 0;      // 10
-  moveTimer: u8 = 0;  // 11
-  rngSeed: i32 = 0;   // 12
+class Vars {
+  length: i32;    // 0
+  dir: u8;        // 4
+  nextDir: u8;    // 5
+  foodX: u8;      // 6
+  foodY: u8;      // 7
+  state: u8;      // 8
+  score: u8;      // 9
+  speed: u8;      // 10
+  moveTimer: u8;  // 11
+  rngSeed: i32;   // 12
 }
 
-const gameVars = changetype<GameVars>(RAM_START);
+const vars = changetype<Vars>(RAM_START);
 const SNAKE_DATA = RAM_START + 16; // 400 bytes - snake body (2 bytes per segment: x, y)
 
 function randomRange(max: i32): i32 {
@@ -91,7 +91,7 @@ function spawnFood(): void {
 
     // Check if position is occupied by snake
     let occupied = false;
-    const length = gameVars.length;
+    const length = vars.length;
     for (let i: i32 = 0; i < length; i++) {
       if (getSegmentX(i) == fx && getSegmentY(i) == fy) {
         occupied = true;
@@ -100,8 +100,8 @@ function spawnFood(): void {
     }
 
     if (!occupied) {
-      gameVars.foodX = fx;
-      gameVars.foodY = fy;
+      vars.foodX = fx;
+      vars.foodY = fy;
       return;
     }
 
@@ -109,8 +109,8 @@ function spawnFood(): void {
   }
 
   // Fallback: place at 0,0 (shouldn't happen unless grid is full)
-  gameVars.foodX = 0;
-  gameVars.foodY = 0;
+  vars.foodX = 0;
+  vars.foodY = 0;
 }
 
 function checkCollision(x: u8, y: u8): bool {
@@ -120,7 +120,7 @@ function checkCollision(x: u8, y: u8): bool {
   }
 
   // Self collision (check against all body segments except head)
-  const length = gameVars.length;
+  const length = vars.length;
   for (let i: i32 = 1; i < length; i++) {
     if (getSegmentX(i) == x && getSegmentY(i) == y) {
       return true;
@@ -131,8 +131,8 @@ function checkCollision(x: u8, y: u8): bool {
 }
 
 function moveSnake(): void {
-  const dir = gameVars.dir;
-  const length = gameVars.length;
+  const dir = vars.dir;
+  const length = vars.length;
 
   // Get current head position
   let headX = getSegmentX(0);
@@ -146,23 +146,23 @@ function moveSnake(): void {
 
   // Check collision
   if (checkCollision(headX, headY)) {
-    gameVars.state = GameState.GAME_OVER as u8;
+    vars.state = GameState.GAME_OVER as u8;
     log("Game Over!");
     return;
   }
 
   // Check if food is eaten
-  const foodX = gameVars.foodX;
-  const foodY = gameVars.foodY;
+  const foodX = vars.foodX;
+  const foodY = vars.foodY;
   let grow = false;
 
   if (headX == foodX && headY == foodY) {
     grow = true;
-    gameVars.score++;
+    vars.score++;
 
     // Increase speed
-    if (gameVars.speed > 2) {
-      gameVars.speed -= SPEED_INCREMENT;
+    if (vars.speed > 2) {
+      vars.speed -= SPEED_INCREMENT;
     }
 
     spawnFood();
@@ -176,7 +176,7 @@ function moveSnake(): void {
       for (let i: i32 = length; i > 0; i--) {
         setSegment(i, getSegmentX(i - 1), getSegmentY(i - 1));
       }
-      gameVars.length = newLength;
+      vars.length = newLength;
     }
   } else {
     // Not growing: shift all segments (tail disappears)
@@ -195,31 +195,31 @@ export function init(): void {
   const startX = (GRID_WIDTH / 2) as u8;
   const startY = (GRID_HEIGHT / 2) as u8;
 
-  gameVars.length = 3;
+  vars.length = 3;
   setSegment(0, startX, startY);
   setSegment(1, (startX - 1) as u8, startY);
   setSegment(2, (startX - 2) as u8, startY);
 
-  gameVars.dir = Direction.RIGHT as u8;
-  gameVars.nextDir = Direction.RIGHT as u8;
-  gameVars.state = GameState.START_SCREEN as u8;
-  gameVars.score = 0;
-  gameVars.speed = INITIAL_SPEED;
-  gameVars.moveTimer = INITIAL_SPEED;
+  vars.dir = Direction.RIGHT as u8;
+  vars.nextDir = Direction.RIGHT as u8;
+  vars.state = GameState.START_SCREEN as u8;
+  vars.score = 0;
+  vars.speed = INITIAL_SPEED;
+  vars.moveTimer = INITIAL_SPEED;
 
   // Initialize RNG
-  gameVars.rngSeed = 12345;
+  vars.rngSeed = 12345;
 
   // Spawn first food
   spawnFood();
 }
 
 export function update(): void {
-  const state = gameVars.state;
+  const state = vars.state;
 
   // Start game from start screen
   if (state == GameState.START_SCREEN && buttonPressed(Button.START)) {
-    gameVars.state = GameState.PLAYING as u8;
+    vars.state = GameState.PLAYING as u8;
     return;
   }
 
@@ -232,38 +232,38 @@ export function update(): void {
   if (state != GameState.PLAYING) return;
 
   // Handle input (queue direction change)
-  const currentDir = gameVars.dir;
+  const currentDir = vars.dir;
 
   if (buttonPressed(Button.UP)) {
-    if (currentDir != Direction.DOWN) gameVars.nextDir = Direction.UP as u8;
+    if (currentDir != Direction.DOWN) vars.nextDir = Direction.UP as u8;
   } else if (buttonPressed(Button.DOWN)) {
-    if (currentDir != Direction.UP) gameVars.nextDir = Direction.DOWN as u8;
+    if (currentDir != Direction.UP) vars.nextDir = Direction.DOWN as u8;
   } else if (buttonPressed(Button.LEFT)) {
-    if (currentDir != Direction.RIGHT) gameVars.nextDir = Direction.LEFT as u8;
+    if (currentDir != Direction.RIGHT) vars.nextDir = Direction.LEFT as u8;
   } else if (buttonPressed(Button.RIGHT)) {
-    if (currentDir != Direction.LEFT) gameVars.nextDir = Direction.RIGHT as u8;
+    if (currentDir != Direction.LEFT) vars.nextDir = Direction.RIGHT as u8;
   }
 
   // Update movement timer
-  gameVars.moveTimer--;
+  vars.moveTimer--;
 
-  if (gameVars.moveTimer == 0) {
+  if (vars.moveTimer == 0) {
     // Apply queued direction
-    gameVars.dir = gameVars.nextDir;
+    vars.dir = vars.nextDir;
 
     // Move snake
     moveSnake();
 
     // Reset timer
-    gameVars.moveTimer = gameVars.speed;
+    vars.moveTimer = vars.speed;
   }
 }
 
 export function draw(): void {
   clearFramebuffer(c(0x0a0a0a));
 
-  const state = gameVars.state;
-  const length = gameVars.length;
+  const state = vars.state;
+  const length = vars.length;
 
   // Draw grid lines (subtle)
   const colorGrid = c(0x1a1a1a);
@@ -293,13 +293,13 @@ export function draw(): void {
   }
 
   // Draw food
-  const foodX = (gameVars.foodX as i32) * GRID_SIZE;
-  const foodY = (gameVars.foodY as i32) * GRID_SIZE;
+  const foodX = (vars.foodX as i32) * GRID_SIZE;
+  const foodY = (vars.foodY as i32) * GRID_SIZE;
   fillRect(foodX + 2, foodY + 2, GRID_SIZE - 4, GRID_SIZE - 4, c(0xff0000));
 
   // Draw score
   drawString(4, 4, "SCORE:", c(0xaaaaaa));
-  drawNumber(50, 4, gameVars.score as i32, c(0xffffff));
+  drawNumber(50, 4, vars.score as i32, c(0xffffff));
 
   // Game messages
   if (state == GameState.START_SCREEN) {

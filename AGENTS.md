@@ -367,6 +367,7 @@ function random(): i32 {
 **Decorator errors (`@inline`):**
 - These are pre-existing and don't affect compilation
 - Can be ignored unless causing actual build failures
+- For TypeScript IntelliSense, add `// @ts-expect-error AssemblyScript decorator` before `@inline` and `@external`
 
 **"Cannot redeclare block-scoped variable":**
 - Caused by declaring `const pressed` multiple times

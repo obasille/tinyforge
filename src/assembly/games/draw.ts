@@ -1,3 +1,4 @@
+// cspell:language fr
 // NOTE: Tous les commentaires doivent être en français !
 // Exemple de jeu TinyForge
 
@@ -9,7 +10,6 @@ import {
   buttonPressed,
   c,
   clearFramebuffer,
-  log,
   pset,
 } from "../sdk";
 
@@ -17,16 +17,16 @@ import {
 // Allocation de la RAM pour l'état persistant du jeu
 
 @unmanaged
-class GameVars {
-  posAxe1: i32 = 0;
-  posAxe2: i32 = 0;
-  modeGomme: boolean = false;
-  posAxe1Avant: i32 = 0;
-  posAxe2Avant: i32 = 0;
-  couleur: i32 = 0;
+class Vars {
+  posAxe1: i32;
+  posAxe2: i32;
+  modeGomme: boolean;
+  posAxe1Avant: i32;
+  posAxe2Avant: i32;
+  couleur: i32;
 }
 
-const vars = changetype<GameVars>(RAM_START);
+const vars = changetype<Vars>(RAM_START);
 
 // Couleurs
 const blanc = c(0xffffff);

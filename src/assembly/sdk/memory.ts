@@ -4,6 +4,7 @@
 // Memory layout constants are synced with ../../memory-map.ts
 
 /** External WebAssembly memory shared between host and cartridge */
+// @ts-expect-error AssemblyScript decorator
 @external("env", "memory")
 export declare const memory: WebAssembly.Memory;
 
@@ -74,6 +75,7 @@ export const RAM_SIZE = memoryMap.RAM_SIZE as usize;
  * @param offset Byte offset from RAM_START
  * @returns The i32 value at the specified offset
  */
+// @ts-expect-error AssemblyScript decorator
 @inline
 export function getI32(offset: usize): i32 {
   return load<i32>(RAM_START + offset);
@@ -84,6 +86,7 @@ export function getI32(offset: usize): i32 {
  * @param offset Byte offset from RAM_START
  * @param value The i32 value to store
  */
+// @ts-expect-error AssemblyScript decorator
 @inline
 export function setI32(offset: usize, value: i32): void {
   store<i32>(RAM_START + offset, value);
@@ -94,6 +97,7 @@ export function setI32(offset: usize, value: i32): void {
  * @param offset Byte offset from RAM_START
  * @returns The f32 value at the specified offset
  */
+// @ts-expect-error AssemblyScript decorator
 @inline
 export function getF32(offset: usize): f32 {
   return load<f32>(RAM_START + offset);
@@ -104,6 +108,7 @@ export function getF32(offset: usize): f32 {
  * @param offset Byte offset from RAM_START
  * @param value The f32 value to store
  */
+// @ts-expect-error AssemblyScript decorator
 @inline
 export function setF32(offset: usize, value: f32): void {
   store<f32>(RAM_START + offset, value);
@@ -114,6 +119,7 @@ export function setF32(offset: usize, value: f32): void {
  * @param offset Byte offset from RAM_START
  * @returns The u8 value at the specified offset
  */
+// @ts-expect-error AssemblyScript decorator
 @inline
 export function getU8(offset: usize): u8 {
   return load<u8>(RAM_START + offset);
@@ -124,16 +130,19 @@ export function getU8(offset: usize): u8 {
  * @param offset Byte offset from RAM_START
  * @param value The u8 value to store
  */
+// @ts-expect-error AssemblyScript decorator
 @inline
 export function setU8(offset: usize, value: u8): void {
   store<u8>(RAM_START + offset, value);
 }
 
+// @ts-expect-error AssemblyScript decorator
 @inline
 export function getU16(offset: usize): u16 {
   return load<u16>(RAM_START + offset);
 }
 
+// @ts-expect-error AssemblyScript decorator
 @inline
 export function setU16(offset: usize, value: u16): void {
   store<u16>(RAM_START + offset, value);

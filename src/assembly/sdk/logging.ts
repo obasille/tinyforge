@@ -5,6 +5,7 @@
  * Log a message to the HTML console panel
  * @param msg String literal to log (no allocations)
  */
+// @ts-expect-error AssemblyScript decorator
 @external("env", "console.log")
 export declare function log(msg: string): void;
 
@@ -12,6 +13,7 @@ export declare function log(msg: string): void;
  * Log a warning message to the HTML console panel
  * @param msg String literal to log (no allocations)
  */
+// @ts-expect-error AssemblyScript decorator
 @external("env", "console.warn")
 export declare function warn(msg: string): void;
 
@@ -19,5 +21,6 @@ export declare function warn(msg: string): void;
  * Log an error message to the HTML console panel
  * @param msg String literal to log (no allocations)
  */
+// @ts-expect-error AssemblyScript decorator
 @external("env", "console.error")
 export declare function error(msg: string): void;

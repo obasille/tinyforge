@@ -65,23 +65,23 @@ enum GameState {
 
 // === RAM Layout ===
 @unmanaged
-class GameVars {
-  playerX: f32 = 0;           // 0
-  alienGridX: f32 = 0;        // 4
-  alienGridY: f32 = 0;        // 8
-  alienDirection: i32 = 0;    // 12 (1 = right, -1 = left)
-  state: u8 = 0;              // 16
-  lives: i32 = 0;             // 20
-  score: i32 = 0;             // 24
-  aliensRemaining: i32 = 0;   // 28
-  animFrame: i32 = 0;         // 32
-  animTimer: i32 = 0;         // 36
-  shootCooldown: i32 = 0;     // 40
-  gameTimer: i32 = 0;         // 44
-  level: i32 = 0;             // 48
+class Vars {
+  playerX: f32;           // 0
+  alienGridX: f32;        // 4
+  alienGridY: f32;        // 8
+  alienDirection: i32;    // 12 (1 = right, -1 = left)
+  state: u8;              // 16
+  lives: i32;             // 20
+  score: i32;             // 24
+  aliensRemaining: i32;   // 28
+  animFrame: i32;         // 32
+  animTimer: i32;         // 36
+  shootCooldown: i32;     // 40
+  gameTimer: i32;         // 44
+  level: i32;             // 48
 }
 
-const gameVars = changetype<GameVars>(RAM_START);
+const vars = changetype<Vars>(RAM_START);
 
 // Alien data: 1 byte per alien (0 = dead, 1 = alive)
 const ALIEN_DATA = RAM_START + 60; // 55 bytes for aliens
@@ -119,16 +119,16 @@ function setAlien(col: i32, row: i32, value: u8): void {
 }
 
 function initAliens(): void {
-  gameVars.aliensRemaining = 0;
+  vars.aliensRemaining = 0;
   for (let row: i32 = 0; row < ALIEN_ROWS; row++) {
     for (let col: i32 = 0; col < ALIEN_COLS; col++) {
       setAlien(col, row, 1);
-      gameVars.aliensRemaining++;
+      vars.aliensRemaining++;
     }
   }
-  gameVars.alienGridX = (ALIEN_START_X as f32);
-  gameVars.alienGridY = (ALIEN_START_Y as f32);
-  gameVars.alienDirection = 1;
+  vars.alienGridX = (ALIEN_START_X as f32);
+  vars.alienGridY = (ALIEN_START_Y as f32);
+  vars.alienDirection = 1;
 }
 
 // === Bullet Helpers ===
@@ -270,15 +270,15 @@ function drawShield(x: i32, y: i32, shieldIndex: i32): void {
 
 // === Lifecycle ===
 export function init(): void {
-  gameVars.playerX = ((WIDTH / 2 - PLAYER_WIDTH / 2) as f32);
-  gameVars.state = GameState.START_SCREEN as u8;
-  gameVars.lives = STARTING_LIVES;
-  gameVars.score = 0;
-  gameVars.animFrame = 0;
-  gameVars.animTimer = 0;
-  gameVars.shootCooldown = 0;
-  gameVars.gameTimer = 0;
-  gameVars.level = 1;
+  vars.playerX = ((WIDTH / 2 - PLAYER_WIDTH / 2) as f32);
+  vars.state = GameState.START_SCREEN as u8;
+  vars.lives = STARTING_LIVES;
+  vars.score = 0;
+  vars.animFrame = 0;
+  vars.animTimer = 0;
+  vars.shootCooldown = 0;
+  vars.gameTimer = 0;
+  vars.level = 1;
   
   initAliens();
   initShields();
@@ -296,10 +296,10 @@ export function init(): void {
 }
 
 export function update(): void {
-  const state = gameVars.state;
+  const state = vars.state;
   
   if (state == GameState.START_SCREEN && buttonPressed(Button.START)) {
-    gameVars.state = GameState.PLAYING as u8;
+    vars.state = GameState.PLAYING as u8;
     return;
   }
   
@@ -309,26 +309,26 @@ export function update(): void {
   }
   
   if (state == GameState.LEVEL_COMPLETE && buttonPressed(Button.START)) {
-    gameVars.level++;
+    vars.level++;
     initAliens();
     initShields();
-    gameVars.state = GameState.PLAYING as u8;
+    vars.state = GameState.PLAYING as u8;
     return;
   }
   
   if (state != GameState.PLAYING) return;
   
-  gameVars.gameTimer++;
+  vars.gameTimer++;
   
   // Update animation
-  gameVars.animTimer++;
-  if (gameVars.animTimer >= 30) {
-    gameVars.animTimer = 0;
-    gameVars.animFrame = (gameVars.animFrame + 1) % 2;
+  vars.animTimer++;
+  if (vars.animTimer >= 30) {
+    vars.animTimer = 0;
+    vars.animFrame = (vars.animFrame + 1) % 2;
   }
   
   // Player movement
-  let playerX = gameVars.playerX;
+  let playerX = vars.playerX;
   if (buttonDown(Button.LEFT)) {
     playerX -= PLAYER_SPEED;
     if (playerX < 0.0) playerX = 0.0;
@@ -339,21 +339,21 @@ export function update(): void {
       playerX = ((WIDTH - PLAYER_WIDTH) as f32);
     }
   }
-  gameVars.playerX = playerX;
+  vars.playerX = playerX;
   
   // Player shooting
-  if (gameVars.shootCooldown > 0) {
-    gameVars.shootCooldown--;
+  if (vars.shootCooldown > 0) {
+    vars.shootCooldown--;
   }
   
-  if (buttonPressed(Button.A) && gameVars.shootCooldown == 0) {
+  if (buttonPressed(Button.A) && vars.shootCooldown == 0) {
     // Find empty bullet slot
     for (let i: i32 = 0; i < MAX_PLAYER_BULLETS; i++) {
       if (getPlayerBulletActive(i) == 0) {
         const bulletX = (playerX as i32) + PLAYER_WIDTH / 2 - 1;
         const bulletY = PLAYER_Y - BULLET_HEIGHT;
         setPlayerBullet(i, bulletX, bulletY, 1);
-        gameVars.shootCooldown = 20;
+        vars.shootCooldown = 20;
         playSfx(0, 0.3);
         break;
       }
@@ -377,25 +377,25 @@ export function update(): void {
         for (let row: i32 = 0; row < ALIEN_ROWS && !hitAlien; row++) {
           for (let col: i32 = 0; col < ALIEN_COLS && !hitAlien; col++) {
             if (getAlien(col, row) == 1) {
-              const ax = (gameVars.alienGridX as i32) + col * ALIEN_SPACING_X;
-              const ay = (gameVars.alienGridY as i32) + row * ALIEN_SPACING_Y;
+              const ax = (vars.alienGridX as i32) + col * ALIEN_SPACING_X;
+              const ay = (vars.alienGridY as i32) + row * ALIEN_SPACING_Y;
               
               if (bx >= ax && bx < ax + ALIEN_WIDTH &&
                   by >= ay && by < ay + ALIEN_HEIGHT) {
                 setAlien(col, row, 0);
-                gameVars.aliensRemaining--;
+                vars.aliensRemaining--;
                 setPlayerBullet(i, 0, 0, 0);
                 
                 // Score based on alien type
-                if (row == 0) gameVars.score += 30;
-                else if (row <= 2) gameVars.score += 20;
-                else gameVars.score += 10;
+                if (row == 0) vars.score += 30;
+                else if (row <= 2) vars.score += 20;
+                else vars.score += 10;
                 
                 playSfx(0, 0.5);
                 hitAlien = true;
                 
-                if (gameVars.aliensRemaining == 0) {
-                  gameVars.state = GameState.LEVEL_COMPLETE as u8;
+                if (vars.aliensRemaining == 0) {
+                  vars.state = GameState.LEVEL_COMPLETE as u8;
                   log("Level Complete!");
                 }
               }
@@ -429,25 +429,25 @@ export function update(): void {
   }
   
   // Move aliens
-  const moveSpeed = ALIEN_MOVE_SPEED * (1.0 + (gameVars.level as f32) * 0.2);
-  gameVars.alienGridX += (gameVars.alienDirection as f32) * moveSpeed;
+  const moveSpeed = ALIEN_MOVE_SPEED * (1.0 + (vars.level as f32) * 0.2);
+  vars.alienGridX += (vars.alienDirection as f32) * moveSpeed;
   
   // Check if aliens need to drop
   let shouldDrop = false;
-  if (gameVars.alienDirection > 0 && gameVars.alienGridX > ((WIDTH - ALIEN_COLS * ALIEN_SPACING_X - 5) as f32)) {
+  if (vars.alienDirection > 0 && vars.alienGridX > ((WIDTH - ALIEN_COLS * ALIEN_SPACING_X - 5) as f32)) {
     shouldDrop = true;
-    gameVars.alienDirection = -1;
-  } else if (gameVars.alienDirection < 0 && gameVars.alienGridX < 5.0) {
+    vars.alienDirection = -1;
+  } else if (vars.alienDirection < 0 && vars.alienGridX < 5.0) {
     shouldDrop = true;
-    gameVars.alienDirection = 1;
+    vars.alienDirection = 1;
   }
   
   if (shouldDrop) {
-    gameVars.alienGridY += (ALIEN_DROP_DISTANCE as f32);
+    vars.alienGridY += (ALIEN_DROP_DISTANCE as f32);
     
     // Check if aliens reached bottom
-    if (gameVars.alienGridY > ((SHIELD_Y - 20) as f32)) {
-      gameVars.state = GameState.GAME_OVER as u8;
+    if (vars.alienGridY > ((SHIELD_Y - 20) as f32)) {
+      vars.state = GameState.GAME_OVER as u8;
       log("Aliens reached Earth!");
     }
   }
@@ -464,8 +464,8 @@ export function update(): void {
           // Try to spawn bullet
           for (let i: i32 = 0; i < MAX_ALIEN_BULLETS; i++) {
             if (getAlienBulletActive(i) == 0) {
-              const ax = (gameVars.alienGridX as i32) + col * ALIEN_SPACING_X + ALIEN_WIDTH / 2;
-              const ay = (gameVars.alienGridY as i32) + row * ALIEN_SPACING_Y + ALIEN_HEIGHT;
+              const ax = (vars.alienGridX as i32) + col * ALIEN_SPACING_X + ALIEN_WIDTH / 2;
+              const ay = (vars.alienGridY as i32) + row * ALIEN_SPACING_Y + ALIEN_HEIGHT;
               setAlienBullet(i, ax, ay, 1);
               break;
             }
@@ -489,15 +489,15 @@ export function update(): void {
         setAlienBullet(i, bx, by, 1);
         
         // Check player collision
-        const px = gameVars.playerX as i32;
+        const px = vars.playerX as i32;
         if (bx >= px && bx < px + PLAYER_WIDTH &&
             by >= PLAYER_Y && by < PLAYER_Y + PLAYER_HEIGHT) {
-          gameVars.lives--;
+          vars.lives--;
           setAlienBullet(i, 0, 0, 0);
           playSfx(1, 0.3);
           
-          if (gameVars.lives <= 0) {
-            gameVars.state = GameState.GAME_OVER as u8;
+          if (vars.lives <= 0) {
+            vars.state = GameState.GAME_OVER as u8;
             log("Game Over!");
           }
         }
@@ -529,18 +529,18 @@ export function update(): void {
 export function draw(): void {
   clearFramebuffer(c(0x000000));
   
-  const state = gameVars.state;
-  const animFrame = gameVars.animFrame;
+  const state = vars.state;
+  const animFrame = vars.animFrame;
   
   // Draw aliens
   for (let row: i32 = 0; row < ALIEN_ROWS; row++) {
     // Add wave motion: each row has delayed horizontal offset
-    const rowOffset: f32 = Mathf.sin(((gameVars.gameTimer as f32) * 0.05) - ((row as f32) * 0.5)) * 3.0;
+    const rowOffset: f32 = Mathf.sin(((vars.gameTimer as f32) * 0.05) - ((row as f32) * 0.5)) * 3.0;
     
     for (let col: i32 = 0; col < ALIEN_COLS; col++) {
       if (getAlien(col, row) == 1) {
-        const ax = (gameVars.alienGridX as i32) + col * ALIEN_SPACING_X + (rowOffset as i32);
-        const ay = (gameVars.alienGridY as i32) + row * ALIEN_SPACING_Y;
+        const ax = (vars.alienGridX as i32) + col * ALIEN_SPACING_X + (rowOffset as i32);
+        const ay = (vars.alienGridY as i32) + row * ALIEN_SPACING_Y;
         
         if (row == 0) {
           drawAlienType1(ax, ay, animFrame);
@@ -560,7 +560,7 @@ export function draw(): void {
   }
   
   // Draw player
-  const px = gameVars.playerX as i32;
+  const px = vars.playerX as i32;
   drawPlayerShip(px, PLAYER_Y, c(0x00ff00));
   
   // Draw bullets
@@ -582,15 +582,15 @@ export function draw(): void {
   
   // Draw UI
   drawString(4, 4, "SCORE:", c(0xffffff));
-  drawNumber(50, 4, gameVars.score, c(0xffffff));
+  drawNumber(50, 4, vars.score, c(0xffffff));
   
   drawString(WIDTH - 85, 4, "LIVES:", c(0xffffff));
-  for (let i: i32 = 0; i < gameVars.lives; i++) {
+  for (let i: i32 = 0; i < vars.lives; i++) {
     fillRect(WIDTH - 35 + i * 10, 6, 8, 6, c(0x00ff00));
   }
   
   drawString(WIDTH / 2 - 25, 4, "LEVEL:", c(0xffffff));
-  drawNumber(WIDTH / 2 + 20, 4, gameVars.level, c(0xffffff));
+  drawNumber(WIDTH / 2 + 20, 4, vars.level, c(0xffffff));
   
   // Game messages
   if (state == GameState.START_SCREEN) {

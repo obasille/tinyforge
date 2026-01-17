@@ -564,12 +564,12 @@ import { clearFramebuffer, pset, Button, RAM_START } from './console';
 
 // Game state persisted in RAM using @unmanaged struct
 @unmanaged
-class GameVars {
+class Vars {
   x: i32;  // 0 - player x
   y: i32;  // 4 - player y
 }
 
-const gameVars = changetype<GameVars>(RAM_START);
+const vars = changetype<Vars>(RAM_START);
 
 // === lifecycle ===
 
@@ -577,25 +577,25 @@ export function init(): void {
   clearFramebuffer(0xff000000);
 
   // Initialize player position in RAM
-  gameVars.x = 160;
-  gameVars.y = 120;
+  vars.x = 160;
+  vars.y = 120;
 
   log("Starting!");
 }
 
 export function update(input: i32, prevInput: i32): void {
   // Movement logic - use buttonDown() for continuous movement
-  if (input & Button.LEFT)  gameVars.x--;
-  if (input & Button.RIGHT) gameVars.x++;
-  if (input & Button.UP)    gameVars.y--;
-  if (input & Button.DOWN)  gameVars.y++;
+  if (input & Button.LEFT)  vars.x--;
+  if (input & Button.RIGHT) vars.x++;
+  if (input & Button.UP)    vars.y--;
+  if (input & Button.DOWN)  vars.y++;
 }
 
 export function draw(): void {
   // Clear buffer
   clearFramebuffer(0x000000);
   // And draw point at player's position
-  pset(gameVars.x, gameVars.y, c(0xffffff));
+  pset(vars.x, vars.y, c(0xffffff));
 }
 ```
 

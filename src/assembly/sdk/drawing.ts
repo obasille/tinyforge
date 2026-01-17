@@ -8,6 +8,7 @@ import { WIDTH, HEIGHT, SPRITE_METADATA_ADDR, SPRITE_DATA_ADDR } from "./memory"
  * Much faster than a WASM loop for clearing the full screen
  * @param color ABGR color to fill the framebuffer with
  */
+// @ts-expect-error AssemblyScript decorator
 @external("env", "clearFramebuffer")
 export declare function clearFramebuffer(color: u32): void;
 
@@ -18,6 +19,7 @@ export declare function clearFramebuffer(color: u32): void;
  * @param y Y coordinate (0-239)
  * @param color ABGR color value
  */
+// @ts-expect-error AssemblyScript decorator
 @inline
 export function pset(x: i32, y: i32, color: u32): void {
   if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) return;

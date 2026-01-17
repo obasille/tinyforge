@@ -18,6 +18,7 @@
  * const blue = c(0x0000ff);   // Converts to 0xffff0000
  * ```
  */
+// @ts-expect-error AssemblyScript decorator
 @inline
 export function c(rgb: u32): u32 {
   const r = (rgb >> 16) & 0xff;
@@ -44,6 +45,7 @@ export function c(rgb: u32): u32 {
  * const semiTransparent = toColor(255, 128, 64, 128); // Semi-transparent orange
  * ```
  */
+// @ts-expect-error AssemblyScript decorator
 @inline
 export function toColor(r: u8, g: u8, b: u8, a: u8): u32 {
   return ((a as u32) << 24) | ((b as u32) << 16) | ((g as u32) << 8) | (r as u32);

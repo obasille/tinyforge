@@ -19,13 +19,13 @@ import {
 // RAM allocation for persistent game state
 
 @unmanaged
-class GameVars {
-  playerX: i32 = 0;     // 0
-  playerY: i32 = 0;     // 4
-  animFrame: i32 = 0;   // 8
+class Vars {
+  playerX: i32;     // 0
+  playerY: i32;     // 4
+  animFrame: i32;   // 8
 }
 
-const gameVars = changetype<GameVars>(RAM_START);
+const vars = changetype<Vars>(RAM_START);
 
 // === lifecycle ===
   
@@ -33,29 +33,29 @@ export function init(): void {
   clearFramebuffer(c(0xff000000)); // black
 
   // Initialize player position in RAM
-  gameVars.playerX = 160;
-  gameVars.playerY = 120;
+  vars.playerX = 160;
+  vars.playerY = 120;
 
   log("Starting!");
 }
 
 export function update(): void {
   // Movement logic - use buttonDown() for continuous movement
-  if (buttonDown(Button.LEFT)) gameVars.playerX--;
-  if (buttonDown(Button.RIGHT)) gameVars.playerX++;
-  if (buttonDown(Button.UP)) gameVars.playerY--;
-  if (buttonDown(Button.DOWN)) gameVars.playerY++;
+  if (buttonDown(Button.LEFT)) vars.playerX--;
+  if (buttonDown(Button.RIGHT)) vars.playerX++;
+  if (buttonDown(Button.UP)) vars.playerY--;
+  if (buttonDown(Button.DOWN)) vars.playerY++;
 
   // Example: detect button press (not hold) - use buttonPressed() for one-time actions
   // if (buttonPressed(Button.A)) { /* do something once */ }
 
-  gameVars.animFrame++;
+  vars.animFrame++;
 }
 
 export function draw(): void {
   // Load player position from RAM
-  const px = gameVars.playerX;
-  const py = gameVars.playerY;
+  const px = vars.playerX;
+  const py = vars.playerY;
 
   // test pattern
   for (let y = 0; y < HEIGHT; y++) {
@@ -70,8 +70,8 @@ export function draw(): void {
   pset(px, py, c(0xffffff));
 
   const speed = 0.3;
-  const i = <u32>Math.floor(gameVars.animFrame * speed / 2) % 9;
-  const o = <u32>Math.floor(gameVars.animFrame * speed) % 350;
+  const i = <u32>Math.floor(vars.animFrame * speed / 2) % 9;
+  const o = <u32>Math.floor(vars.animFrame * speed) % 350;
   drawSprite(1 + i, -30 + o, 10, true, true); // draw sprite at (10,10)
   // drawNumber(1, 30, i, c(0x0000ff)); // draw animation frame count
 }

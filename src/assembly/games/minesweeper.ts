@@ -24,7 +24,6 @@ import {
   random,
   setU8,
   stopMusic,
-  Vec2i,
 } from "../sdk";
 
 // === Constants ===
@@ -63,32 +62,35 @@ enum GameState {
 }
 
 @unmanaged
-class GameVars {
-  cursorX: i32 = 0;      // 0
-  cursorY: i32 = 0;      // 4
-  state: u8 = 0;         // 8
-  revealedCount: u8 = 0; // 9
-  flagCount: u8 = 0;     // 10
-  _padding: u8 = 0;      // 11
-  rngSeed: i32 = 0;      // 12
+class Vars {
+  cursorX: i32;      // 0
+  cursorY: i32;      // 4
+  state: u8;         // 8
+  revealedCount: u8; // 9
+  flagCount: u8;     // 10
+  _padding: u8;      // 11
+  rngSeed: i32;      // 12
 }
 
-const gameVars = changetype<GameVars>(RAM_START);
-const GRID_START = RAM_START + sizeof<GameVars>(); // 100 bytes - grid data (10×10)
+const vars = changetype<Vars>(RAM_START);
+const GRID_START = RAM_START + sizeof<Vars>(); // 100 bytes - grid data (10×10)
 
 // === Grid Helpers ===
+// @ts-expect-error AssemblyScript decorator
 @inline
 function getCellData(x: i32, y: i32): u8 {
   if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return 0;
   return getU8(GRID_START + (y * GRID_SIZE + x));
 }
 
+// @ts-expect-error AssemblyScript decorator
 @inline
 function setCellData(x: i32, y: i32, data: u8): void {
   if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return;
   setU8(GRID_START + (y * GRID_SIZE + x), data);
 }
 
+// @ts-expect-error AssemblyScript decorator
 @inline
 function randomRange(max: i32): i32 {
   return random(RAM_START + 12) % max; // rngSeed offset
@@ -138,11 +140,11 @@ function revealCell(x: i32, y: i32): void {
   // Reveal this cell
   cell |= CellFlag.REVEALED as u8;
   setCellData(x, y, cell);
-  gameVars.revealedCount++;
+  vars.revealedCount++;
 
   // If mine, game over
   if (cell & CellFlag.MINE) {
-    gameVars.state = GameState.LOST as u8;
+    vars.state = GameState.LOST as u8;
     playSfx(SFX.EXPLODE, 0.8);
     stopMusic();
     log("Game Over!");
@@ -169,21 +171,21 @@ function toggleFlag(x: i32, y: i32): void {
 
   if (cell & CellFlag.FLAGGED) {
     cell &= ~(CellFlag.FLAGGED as u8);
-    gameVars.flagCount--;
+    vars.flagCount--;
     playSfx(SFX.FLAG, 0.4);
-  } else if ((gameVars.flagCount as i32) < MINE_COUNT) {
+  } else if ((vars.flagCount as i32) < MINE_COUNT) {
     cell |= CellFlag.FLAGGED as u8;
-    gameVars.flagCount++;
+    vars.flagCount++;
     playSfx(SFX.FLAG, 0.4);
   }
   setCellData(x, y, cell);
 }
 
 function checkWin(): void {
-  const revealed = gameVars.revealedCount as i32;
+  const revealed = vars.revealedCount as i32;
   const target = GRID_SIZE * GRID_SIZE - MINE_COUNT;
   if (revealed >= target) {
-    gameVars.state = GameState.WON as u8;
+    vars.state = GameState.WON as u8;
     playSfx(SFX.WIN, 0.8);
     stopMusic();
     log("You Win!");
@@ -198,12 +200,12 @@ export function init(): void {
   }
 
   // Initialize state
-  gameVars.cursorX = 5;
-  gameVars.cursorY = 5;
-  gameVars.state = GameState.START_SCREEN as u8;
-  gameVars.revealedCount = 0;
-  gameVars.flagCount = 0;
-  gameVars.rngSeed = 12345;
+  vars.cursorX = 5;
+  vars.cursorY = 5;
+  vars.state = GameState.START_SCREEN as u8;
+  vars.revealedCount = 0;
+  vars.flagCount = 0;
+  vars.rngSeed = 12345;
 
   // Setup game
   placeMines();
@@ -211,7 +213,7 @@ export function init(): void {
 }
 
 export function update(): void {
-  const state = gameVars.state;
+  const state = vars.state;
 
   // Start game from start screen
   if (
@@ -220,7 +222,7 @@ export function update(): void {
       mousePressed(MouseButton.LEFT) ||
       mousePressed(MouseButton.RIGHT))
   ) {
-    gameVars.state = GameState.PLAYING as u8;
+    vars.state = GameState.PLAYING as u8;
     // Start music after user interaction
     playMusic(Music.GAMEPLAY, 0.5);
     return;
@@ -243,8 +245,8 @@ export function update(): void {
   const mx = mouseX();
   const my = mouseY();
 
-  let cx = gameVars.cursorX;
-  let cy = gameVars.cursorY;
+  let cx = vars.cursorX;
+  let cy = vars.cursorY;
 
   // Update cursor position based on mouse hover
   if (mx >= 0 && my >= 0) {
@@ -254,8 +256,8 @@ export function update(): void {
     if (gridX >= 0 && gridX < GRID_SIZE && gridY >= 0 && gridY < GRID_SIZE) {
       cx = gridX;
       cy = gridY;
-      gameVars.cursorX = cx;
-      gameVars.cursorY = cy;
+      vars.cursorX = cx;
+      vars.cursorY = cy;
     }
   }
 
@@ -274,9 +276,9 @@ export function update(): void {
 export function draw(): void {
   clearFramebuffer(c(0x0a0a0a));
 
-  const state = gameVars.state;
-  const cx = gameVars.cursorX;
-  const cy = gameVars.cursorY;
+  const state = vars.state;
+  const cx = vars.cursorX;
+  const cy = vars.cursorY;
 
   // Pre-convert colors
   const colorBg = c(0x1a1a1a);
@@ -329,7 +331,7 @@ export function draw(): void {
   }
 
   // Status bar
-  const flagCount = gameVars.flagCount;
+  const flagCount = vars.flagCount;
   const remaining = MINE_COUNT - flagCount;
 
   // Draw mine count indicator

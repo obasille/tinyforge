@@ -8,7 +8,6 @@ import {
   c,
   clearFramebuffer,
   drawNumber,
-  drawRect,
   drawStartMessageBox,
   drawString,
   fillRect,
@@ -37,70 +36,70 @@ enum GameState {
 
 // === RAM Layout ===
 @unmanaged
-class GameVars {
+class Vars {
   // Player 1 (top paddle)
-  p1X: f32 = 0;      // 0
-  p1Score: i32 = 0;  // 4
+  p1X: f32;      // 0
+  p1Score: i32;  // 4
 
   // Player 2 (bottom paddle)
-  p2X: f32 = 0;      // 8
-  p2Score: i32 = 0;  // 12
+  p2X: f32;      // 8
+  p2Score: i32;  // 12
 
   // Ball
-  ballX: f32 = 0;    // 16
-  ballY: f32 = 0;    // 20
-  ballVX: f32 = 0;   // 24
-  ballVY: f32 = 0;   // 28
+  ballX: f32;    // 16
+  ballY: f32;    // 20
+  ballVX: f32;   // 24
+  ballVY: f32;   // 28
 
   // Game state
-  state: u8 = 0;     // 32
-  winner: u8 = 0;    // 33
-  countdown: i32 = 0; // 36
-  servingPlayer: i32 = 0; // 40
+  state: u8;     // 32
+  winner: u8;    // 33
+  countdown: i32; // 36
+  servingPlayer: i32; // 40
 }
 
-const gameVars = changetype<GameVars>(RAM_START);
+const vars = changetype<Vars>(RAM_START);
 
 // === Helper Functions ===
 function resetBall(servingPlayer: i32): void {
   // Center the ball
-  gameVars.ballX = (WIDTH / 2 - BALL_SIZE / 2) as f32;
-  gameVars.ballY = (HEIGHT / 2 - BALL_SIZE / 2) as f32;
+  vars.ballX = (WIDTH / 2 - BALL_SIZE / 2) as f32;
+  vars.ballY = (HEIGHT / 2 - BALL_SIZE / 2) as f32;
 
   // Stop ball and start countdown
-  gameVars.ballVX = 0.0;
-  gameVars.ballVY = 0.0;
-  gameVars.countdown = 240; // 4 seconds at 60fps
-  gameVars.servingPlayer = servingPlayer;
+  vars.ballVX = 0.0;
+  vars.ballVY = 0.0;
+  vars.countdown = 240; // 4 seconds at 60fps
+  vars.servingPlayer = servingPlayer;
 }
 
 function checkCollision(): void {
-  const ballX = gameVars.ballX;
-  const ballY = gameVars.ballY;
-  let ballVX = gameVars.ballVX;
-  let ballVY = gameVars.ballVY;
+  const ballX = vars.ballX;
+  const ballY = vars.ballY;
+  let ballVX = vars.ballVX;
+  let ballVY = vars.ballVY;
 
   // Left/right wall collisions
   if (ballX <= 0.0) {
-    gameVars.ballX = 0.0;
+    vars.ballX = 0.0;
     ballVX = -ballVX;
-    gameVars.ballVX = ballVX;
+    vars.ballVX = ballVX;
     playSfx(0, 0.3);
   } else if (ballX >= ((WIDTH - BALL_SIZE) as f32)) {
-    gameVars.ballX = (WIDTH - BALL_SIZE) as f32;
+    vars.ballX = (WIDTH - BALL_SIZE) as f32;
     ballVX = -ballVX;
-    gameVars.ballVX = ballVX;
+    vars.ballVX = ballVX;
     playSfx(0, 0.2);
   }
 
   // Top paddle collision (player 1)
-  const p1X = gameVars.p1X;
+  const p1X = vars.p1X;
   if (
     ballY <= (PADDLE_HEIGHT as f32) &&
     ballX + (BALL_SIZE as f32) >= p1X &&
     ballX <= p1X + (PADDLE_WIDTH as f32)
   ) {
-    gameVars.ballY = PADDLE_HEIGHT as f32;
+    vars.ballY = PADDLE_HEIGHT as f32;
     ballVY = -ballVY;
 
     // Add horizontal velocity based on where ball hits paddle
@@ -113,20 +112,20 @@ function checkCollision(): void {
     ballVX = (ballVX * newSpeed) / speed;
     ballVY = (ballVY * newSpeed) / speed;
 
-    gameVars.ballVX = ballVX;
-    gameVars.ballVY = ballVY;
+    vars.ballVX = ballVX;
+    vars.ballVY = ballVY;
     playSfx(0, 0.4);
   }
 
   // Bottom paddle collision (player 2)
-  const p2X = gameVars.p2X;
+  const p2X = vars.p2X;
   const bottomPaddleY = HEIGHT - PADDLE_HEIGHT;
   if (
     ballY + (BALL_SIZE as f32) >= (bottomPaddleY as f32) &&
     ballX + (BALL_SIZE as f32) >= p2X &&
     ballX <= p2X + (PADDLE_WIDTH as f32)
   ) {
-    gameVars.ballY = (bottomPaddleY - BALL_SIZE) as f32;
+    vars.ballY = (bottomPaddleY - BALL_SIZE) as f32;
     ballVY = -ballVY;
 
     // Add horizontal velocity based on where ball hits paddle
@@ -139,20 +138,20 @@ function checkCollision(): void {
     ballVX = (ballVX * newSpeed) / speed;
     ballVY = (ballVY * newSpeed) / speed;
 
-    gameVars.ballVX = ballVX;
-    gameVars.ballVY = ballVY;
+    vars.ballVX = ballVX;
+    vars.ballVY = ballVY;
     playSfx(0, 0.4);
   }
 
   // Top edge (player 2 scores)
   if (ballY < 0.0) {
-    gameVars.p2Score++;
+    vars.p2Score++;
     log("Player 2 scores!");
     playSfx(1, 0.5);
 
-    if (gameVars.p2Score >= MAX_SCORE) {
-      gameVars.state = GameState.GAME_OVER as u8;
-      gameVars.winner = 2;
+    if (vars.p2Score >= MAX_SCORE) {
+      vars.state = GameState.GAME_OVER as u8;
+      vars.winner = 2;
       log("Player 2 wins!");
     } else {
       resetBall(2);
@@ -161,13 +160,13 @@ function checkCollision(): void {
 
   // Bottom edge (player 1 scores)
   if (ballY > (HEIGHT as f32)) {
-    gameVars.p1Score++;
+    vars.p1Score++;
     log("Player 1 scores!");
     playSfx(1, 0.5);
 
-    if (gameVars.p1Score >= MAX_SCORE) {
-      gameVars.state = GameState.GAME_OVER as u8;
-      gameVars.winner = 1;
+    if (vars.p1Score >= MAX_SCORE) {
+      vars.state = GameState.GAME_OVER as u8;
+      vars.winner = 1;
       log("Player 1 wins!");
     } else {
       resetBall(1);
@@ -178,27 +177,27 @@ function checkCollision(): void {
 // === Lifecycle ===
 export function init(): void {
   // Initialize paddles (centered)
-  gameVars.p1X = (WIDTH / 2 - PADDLE_WIDTH / 2) as f32;
-  gameVars.p2X = (WIDTH / 2 - PADDLE_WIDTH / 2) as f32;
+  vars.p1X = (WIDTH / 2 - PADDLE_WIDTH / 2) as f32;
+  vars.p2X = (WIDTH / 2 - PADDLE_WIDTH / 2) as f32;
 
   // Initialize scores
-  gameVars.p1Score = 0;
-  gameVars.p2Score = 0;
-  gameVars.winner = 0;
+  vars.p1Score = 0;
+  vars.p2Score = 0;
+  vars.winner = 0;
 
   // Initialize ball
   resetBall(1);
 
   // Set game state
-  gameVars.state = GameState.START_SCREEN as u8;
+  vars.state = GameState.START_SCREEN as u8;
 }
 
 export function update(): void {
-  const state = gameVars.state;
+  const state = vars.state;
 
   // Start game from start screen
   if (state == GameState.START_SCREEN && buttonPressed(Button.START)) {
-    gameVars.state = GameState.PLAYING as u8;
+    vars.state = GameState.PLAYING as u8;
     return;
   }
 
@@ -211,22 +210,22 @@ export function update(): void {
   if (state != GameState.PLAYING) return;
 
   // Handle countdown
-  if (gameVars.countdown > 0) {
-    gameVars.countdown--;
+  if (vars.countdown > 0) {
+    vars.countdown--;
     
     // Launch ball when countdown reaches 0
-    if (gameVars.countdown == 0) {
-      const servingPlayer = gameVars.servingPlayer;
+    if (vars.countdown == 0) {
+      const servingPlayer = vars.servingPlayer;
       if (servingPlayer == 1) {
-        gameVars.ballVY = BALL_SPEED_INITIAL; // Serve down toward player 2
+        vars.ballVY = BALL_SPEED_INITIAL; // Serve down toward player 2
       } else {
-        gameVars.ballVY = -BALL_SPEED_INITIAL; // Serve up toward player 1
+        vars.ballVY = -BALL_SPEED_INITIAL; // Serve up toward player 1
       }
     }
   }
 
   // Player 1 (top paddle) - A & B buttons
-  let p1X = gameVars.p1X;
+  let p1X = vars.p1X;
   if (buttonDown(Button.A)) {
     p1X -= PADDLE_SPEED;
     if (p1X < 0.0) p1X = 0.0;
@@ -236,10 +235,10 @@ export function update(): void {
     if (p1X > ((WIDTH - PADDLE_WIDTH) as f32))
       p1X = (WIDTH - PADDLE_WIDTH) as f32;
   }
-  gameVars.p1X = p1X;
+  vars.p1X = p1X;
 
   // Player 2 (bottom paddle) - Left & Right arrows
-  let p2X = gameVars.p2X;
+  let p2X = vars.p2X;
   if (buttonDown(Button.LEFT)) {
     p2X -= PADDLE_SPEED;
     if (p2X < 0.0) p2X = 0.0;
@@ -249,12 +248,12 @@ export function update(): void {
     if (p2X > ((WIDTH - PADDLE_WIDTH) as f32))
       p2X = (WIDTH - PADDLE_WIDTH) as f32;
   }
-  gameVars.p2X = p2X;
+  vars.p2X = p2X;
 
   // Update ball position (only if countdown is over)
-  if (gameVars.countdown == 0) {
-    gameVars.ballX += gameVars.ballVX;
-    gameVars.ballY += gameVars.ballVY;
+  if (vars.countdown == 0) {
+    vars.ballX += vars.ballVX;
+    vars.ballY += vars.ballVY;
 
     // Check collisions
     checkCollision();
@@ -264,11 +263,11 @@ export function update(): void {
 export function draw(): void {
   clearFramebuffer(c(0x0a0a0a));
 
-  const state = gameVars.state;
-  const p1X = gameVars.p1X as i32;
-  const p2X = gameVars.p2X as i32;
-  const ballX = gameVars.ballX as i32;
-  const ballY = gameVars.ballY as i32;
+  const state = vars.state;
+  const p1X = vars.p1X as i32;
+  const p2X = vars.p2X as i32;
+  const ballX = vars.ballX as i32;
+  const ballY = vars.ballY as i32;
 
   // Draw center line
   const colorCenterLine = c(0x333333);
@@ -290,12 +289,12 @@ export function draw(): void {
   fillRect(ballX, ballY, BALL_SIZE, BALL_SIZE, c(0xffffff));
 
   // Draw scores
-  drawNumber(10, 10, gameVars.p1Score, c(0x00aaff));
-  drawNumber(10, HEIGHT - 20, gameVars.p2Score, c(0xff5500));
+  drawNumber(10, 10, vars.p1Score, c(0x00aaff));
+  drawNumber(10, HEIGHT - 20, vars.p2Score, c(0xff5500));
 
   // Draw countdown
-  if (state == GameState.PLAYING && gameVars.countdown > 0) {
-    const secondsLeft = gameVars.countdown / 60;
+  if (state == GameState.PLAYING && vars.countdown > 0) {
+    const secondsLeft = vars.countdown / 60;
     let countdownText = "";
     
     if (secondsLeft >= 3) {
@@ -318,7 +317,7 @@ export function draw(): void {
   if (state == GameState.START_SCREEN) {
     drawStartMessageBox("PONG", c(0x1a1a1a), c(0xffffff));
   } else if (state == GameState.GAME_OVER) {
-    if (gameVars.winner == 1) {
+    if (vars.winner == 1) {
       drawStartMessageBox("PLAYER 1 WINS!", c(0x1a1a1a), c(0x00aaff));
     } else {
       drawStartMessageBox("PLAYER 2 WINS!", c(0x1a1a1a), c(0xff5500));

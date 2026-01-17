@@ -25,6 +25,7 @@
  * playSfx(1, 0.5);   // Plays sfx/1-shoot.wav at half volume
  * ```
  */
+// @ts-expect-error AssemblyScript decorator
 @external("env", "audio.playSfx")
 export declare function playSfx(id: u32, volume: f32): void;
 
@@ -53,6 +54,7 @@ export declare function playSfx(id: u32, volume: f32): void;
  * }
  * ```
  */
+// @ts-expect-error AssemblyScript decorator
 @external("env", "audio.playMusic")
 export declare function playMusic(id: u32, volume: f32): void;
 
@@ -60,5 +62,6 @@ export declare function playMusic(id: u32, volume: f32): void;
  * Stop currently playing music
  * Does not affect sound effects
  */
+// @ts-expect-error AssemblyScript decorator
 @external("env", "audio.stopMusic")
 export declare function stopMusic(): void;

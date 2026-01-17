@@ -70,6 +70,7 @@ export class Vec2i {
  * const roll = random(RAM_START + Var.RNG_SEED) % 10;
  * ```
  */
+// @ts-expect-error AssemblyScript decorator
 @inline
 export function random(seedVar: usize): i32 {
   let seed = load<i32>(seedVar);
