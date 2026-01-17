@@ -39,6 +39,14 @@ const memory = new WebAssembly.Memory({
   maximum: 16    // fixed, no growth
 });
 
+function formatGameDisplayName(gameName) {
+  if (!gameName) return '';
+  const withSpaces = gameName
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ');
+  return withSpaces.charAt(0).toUpperCase() + withSpaces.slice(1);
+}
+
 function formatSeedHex(value) {
   return '0x' + (value >>> 0).toString(16).toUpperCase().padStart(8, '0');
 }
@@ -110,7 +118,8 @@ async function loadGame(gameName, { skipInit = false } = {}) {
   audioManager.stopMusic();
   
   hasAborted = false;
-  addConsoleEntry('LOG', `Loading ${gameName}...`);
+  const displayName = formatGameDisplayName(gameName);
+  addConsoleEntry('LOG', `Loading ${displayName}...`);
   
   try {
     const wasm = await loader.instantiateStreaming(
@@ -177,9 +186,9 @@ async function loadGame(gameName, { skipInit = false } = {}) {
     // Initialize the game (skip if hot reloading to preserve state)
     if (!skipInit) {
       init();
-      addConsoleEntry('LOG', `${gameName} loaded successfully`);
+      addConsoleEntry('LOG', `${displayName} loaded successfully`);
     } else {
-      addConsoleEntry('LOG', `${gameName} hot reloaded (memory preserved)`);
+      addConsoleEntry('LOG', `${displayName} hot reloaded (memory preserved)`);
     }
     
     // Start game loop
@@ -190,7 +199,7 @@ async function loadGame(gameName, { skipInit = false } = {}) {
     requestAnimationFrame(frame);
     
   } catch (e) {
-    addConsoleEntry('ERROR', `Failed to load ${gameName}: ${e.message}`);
+    addConsoleEntry('ERROR', `Failed to load ${displayName}: ${e.message}`);
     hasAborted = true;
   }
 }
@@ -198,8 +207,47 @@ async function loadGame(gameName, { skipInit = false } = {}) {
 // Game selector UI
 const gameSelect = document.getElementById('game-select') as HTMLSelectElement;
 
+// Discover cartridge names by listing dist/cartridges/ directory.
+// This relies on the dev server exposing a directory index.
+async function fetchWasmGameList() {
+  try {
+    const response = await fetch('./dist/cartridges/', { cache: 'no-cache' });
+    if (!response.ok) return [];
+    const html = await response.text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const links = Array.from(doc.querySelectorAll('a'));
+    const games = links
+      .map((link) => link.getAttribute('href') || '')
+      .filter((href) => href.endsWith('.wasm'))
+      .map((href) => href.split('/').pop() || '')
+      .map((file) => file.replace(/\.wasm$/, ''));
+    return Array.from(new Set(games)).sort();
+  } catch (e) {
+    return [];
+  }
+}
+
+// Rebuild the dropdown from the current WASM list, preserving selection.
+async function populateGameSelector() {
+  const games = await fetchWasmGameList();
+  if (games.length === 0) return [];
+
+  const previous = gameSelect.value;
+  gameSelect.innerHTML = '';
+  games.forEach((game) => {
+    const option = document.createElement('option');
+    option.value = game;
+    option.textContent = formatGameDisplayName(game);
+    gameSelect.appendChild(option);
+  });
+  if (previous && games.includes(previous)) {
+    gameSelect.value = previous;
+  }
+  return games;
+}
+
 // Initial load - use dropdown value (persisted by browser on reload)
-let currentGame = gameSelect.value;
+let currentGame = '';
 
 // WASM file watcher for auto-reload
 let lastModified = null;
@@ -256,11 +304,17 @@ Promise.all([
     const size = spriteManager.getDataSize();
     addConsoleEntry('LOG', `Sprite system initialized: ${count} sprites, ${(size / 1024).toFixed(1)} KB`);
   })
-]).then(() => {
+]).then(async () => {
   // Load game after all assets are ready
   addConsoleEntry('LOG', 'All assets loaded, starting game...');
+  const games = await populateGameSelector();
+  currentGame = gameSelect.value || games[0] || '';
+  if (!currentGame) {
+    addConsoleEntry('ERROR', 'No game cartridges found.');
+    return;
+  }
   loadGame(currentGame);
-  
+
   // Start watching for WASM changes
   startWasmWatch();
 });

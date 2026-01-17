@@ -118,6 +118,12 @@ Owns everything that would be considered *hardware* on a real console:
 - Rendering
 - Cartridge loading
 
+#### Game selector (WASM auto-discovery)
+The host populates the game dropdown by fetching the `dist/cartridges/` directory
+listing and extracting `.wasm` filenames. This is meant for local dev servers
+that expose directory indexes. If your hosting setup hides directory listings,
+add a fallback list or provide a manifest endpoint.
+
 ### `src/assembly/games/`
 Contains only game code:
 
