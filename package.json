@@ -4,7 +4,8 @@
   "description": "A simplified game platform for rapidly prototyping and experimenting with 2D game ideas",
   "type": "module",
   "scripts": {
-    "build": "node scripts/build-game.js",
+    "build": "npm run build:games && npm run build:host",
+    "build:games": "node scripts/build-game.js",
     "build:debug": "node scripts/build-game.js debug",
     "build:host": "tsc -p src/web/tsconfig.json",
     "build:host:watch": "tsc -p src/web/tsconfig.json --watch",

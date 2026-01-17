@@ -349,12 +349,12 @@ function random(): i32 {
 **Build optimization - selective rebuilds:**
 - When modifying a **game file** (e.g., `src/assembly/games/dinoworld.ts`), rebuild only that game:
   ```bash
-  npm run build gamename
-  # Example: npm run build dinoworld
+  npm run build:games gamename
+  # Example: npm run build:games dinoworld
   ```
 - When modifying an **SDK file** (e.g., `src/assembly/sdk/drawing.ts`, `src/assembly/sdk/input.ts`), rebuild all games:
   ```bash
-  npm run build
+  npm run build:games
   ```
 - After any change in **src/web** (host/runtime), rebuild host output:
   ```bash
@@ -470,8 +470,9 @@ error("Invalid state");  // Unexpected conditions
    ```json
    {
      "scripts": {
-       "build": "npm run build:minesweeper && npm run build:pong && npm run build:snake && npm run build:yourgame",
+       "build": "npm run build:games && npm run build:host",
        "build:debug": "npm run build:minesweeper:debug && npm run build:pong:debug && npm run build:snake:debug && npm run build:yourgame:debug",
+       "build:games": "node scripts/build-game.js",
        "build:yourgame": "asc src/assembly/games/yourgame.ts -o dist/cartridges/yourgame.wasm --config src/assembly/games/asconfig.json",
        "build:yourgame:debug": "asc src/assembly/games/yourgame.ts -o dist/cartridges/yourgame.wasm --config src/assembly/games/asconfig.json --target debug"
      }

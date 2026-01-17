@@ -640,26 +640,27 @@ npm install
 
 ### Build
 
-The project includes three games: **minesweeper**, **pong**, and **snake**. Each compiles to its own WASM file.
-
-**Build all games:**
-```
-npm run build:debug
-```
-
-**Build individual games:**
-```
-npm run build:minesweeper:debug
-npm run build:pong:debug
-npm run build:snake:debug
-```
-
-**Production builds (optimized):**
+**Build everything (games + host):**
 ```
 npm run build
 ```
 
-This creates:
+**Build all games (WASM only):**
+```
+npm run build:games
+```
+
+**Build all games (debug):**
+```
+npm run build:debug
+```
+
+**Build host only (web runtime):**
+```
+npm run build:host
+```
+
+Build output for games:
 - `dist/cartridges/minesweeper.wasm`
 - `dist/cartridges/pong.wasm`
 - `dist/cartridges/snake.wasm`
