@@ -167,7 +167,7 @@ function checkCollisions(): void {
   // Bottom edge (lose life)
   if (ballY > (HEIGHT as f32)) {
     gameVars.lives--;
-    playSfx(1, 0.6);
+    playSfx(1, 0.2);
     
     if (gameVars.lives <= 0) {
       gameVars.state = GameState.GAME_OVER as u8;
