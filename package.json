@@ -5,16 +5,18 @@
   "type": "module",
   "scripts": {
     "build": "npm run build:games && npm run build:host",
-    "build:games": "node scripts/build-game.js",
-    "build:debug": "node scripts/build-game.js debug",
     "build:host": "tsc -p src/web/tsconfig.json",
     "build:host:watch": "tsc -p src/web/tsconfig.json --watch",
+    "build:games": "node scripts/build-game.js",
+    "build:debug": "node scripts/build-game.js debug",
+    "watch:host": "npm run build:host:watch",
+    "watch:games": "node scripts/watch-games.js",
     "upload": "node scripts/upload.js",
-    "postbuild": "npm run upload",
-    "postbuild:games": "npm run upload",
-    "postbuild:host": "npm run upload",
     "serve": "python -m http.server 8080",
-    "dev": "npm run build && npm run serve"
+    "dev": "npm run build && npm run serve",
+    "postbuild": "npm run upload",
+    "postbuild:host": "npm run upload",
+    "postbuild:games": "npm run upload"
   },
   "keywords": [
     "tinyforge",
@@ -28,6 +30,7 @@
   "devDependencies": {
     "assemblyscript": "^0.28.9",
     "basic-ftp": "^5.0.5",
+    "chokidar": "^3.6.0",
     "dotenv": "^16.6.1",
     "prettier": "3.7.4",
     "typescript": "^5.9.3"

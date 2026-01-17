@@ -660,6 +660,18 @@ npm run build:debug
 npm run build:host
 ```
 
+### Watch (build on save)
+
+**Web runtime:**
+```
+npm run watch:host
+```
+
+**WASM games:**
+```
+npm run watch:games
+```
+
 Build output for games:
 - `dist/cartridges/minesweeper.wasm`
 - `dist/cartridges/pong.wasm`
