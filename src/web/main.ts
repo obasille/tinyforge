@@ -344,6 +344,13 @@ let inputMask = 0;
 let prevInputMask = 0;
 let isPaused = false;
 
+const blockTouchScroll = window.matchMedia("(pointer: coarse)").matches;
+const preventIfTouchScrollBlocked = (event: Event) => {
+  if (blockTouchScroll) {
+    event.preventDefault();
+  }
+};
+
 // Mouse state
 // Coordinates are in virtual screen space (0-319, 0-239)
 // Set to -1 when mouse is outside canvas
@@ -448,15 +455,15 @@ document.querySelectorAll<HTMLButtonElement>("[data-input]").forEach((button) =>
       inputMask &= ~keyMap[input];
     };
     button.addEventListener("touchstart", (event) => {
-      event.preventDefault();
+      preventIfTouchScrollBlocked(event);
       press();
     }, { passive: false });
     button.addEventListener("touchend", (event) => {
-      event.preventDefault();
+      preventIfTouchScrollBlocked(event);
       release();
     }, { passive: false });
     button.addEventListener("touchcancel", (event) => {
-      event.preventDefault();
+      preventIfTouchScrollBlocked(event);
       release();
     }, { passive: false });
     button.addEventListener("mousedown", press);
@@ -466,17 +473,17 @@ document.querySelectorAll<HTMLButtonElement>("[data-input]").forEach((button) =>
 });
 
 const pressStart = (event: Event) => {
-  event.preventDefault();
+  preventIfTouchScrollBlocked(event);
   inputMask |= keyMap.start;
 };
 const releaseStart = (event: Event) => {
-  event.preventDefault();
+  preventIfTouchScrollBlocked(event);
   inputMask &= ~keyMap.start;
 };
 canvas.addEventListener("touchstart", pressStart, { passive: false });
 canvas.addEventListener("touchend", releaseStart, { passive: false });
 canvas.addEventListener("touchcancel", releaseStart, { passive: false });
-canvas.addEventListener("touchmove", (event) => event.preventDefault(), { passive: false });
+canvas.addEventListener("touchmove", (event) => preventIfTouchScrollBlocked(event), { passive: false });
 canvas.addEventListener("mousedown", pressStart);
 window.addEventListener("mouseup", releaseStart);
 
@@ -495,7 +502,7 @@ document
       }
     };
     button.addEventListener("touchstart", (event) => {
-      event.preventDefault();
+      preventIfTouchScrollBlocked(event);
       press();
     }, { passive: false });
     button.addEventListener("mousedown", press);

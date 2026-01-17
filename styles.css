@@ -18,9 +18,23 @@ body {
     env(safe-area-inset-left);
   background: #0f172a;;
   color: #f8fafc;
-  height: 100dvh;
-  overflow: hidden;
+  min-height: 100dvh;
   user-select: none;
+}
+
+@media (pointer: coarse) {
+  body {
+    height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: none;
+  }
+}
+
+@media (display-mode: standalone) and (pointer: coarse) and (orientation: portrait) {
+  body {
+    padding-top: 0;
+  }
 }
 
 main {

@@ -30,32 +30,47 @@
     <link rel="stylesheet" href="stylesVC.css" />
 
     <style>
+      /* desktop */
       @media (pointer: fine) and (min-width: 901px) {
-        /* desktop */
         .dpad,
         .buttons-wrap {
           display: none !important;
         }
       }
+      /* mobile */
       @media (pointer: coarse), (max-width: 900px) {
-        /* mobile */
+        body {
+            overflow: hidden;
+            overscroll-behavior: none;
+            touch-action: none;
+        }
+        /* block scroll on mobile */
         #main-column {
+          /* height: 100dvh; */
+          overflow: hidden;
           width: 100%;
           height: 100%;
         }
+        /* Hide console and devtools on mobile */
         #console,
         #devtools {
           display: none !important;
         }
       }
-
+      /* Remove top padding on iOS PWA */
+      @media (display-mode: standalone) and (pointer: coarse) and (orientation: portrait) {
+        body {
+          padding-top: 0;
+          height: 100dvh;
+        }
+      }
+      /* Fullscreen canvas */
       canvas:fullscreen {
         width: 100vw;
         height: 100vh;
         display: block;
         background: #000;
       }
-
       canvas:-webkit-full-screen {
         width: 100vw;
         height: 100vh;
