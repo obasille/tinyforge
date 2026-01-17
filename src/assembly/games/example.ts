@@ -73,5 +73,5 @@ export function draw(): void {
   const i = <u32>Math.floor(vars.animFrame * speed / 2) % 9;
   const o = <u32>Math.floor(vars.animFrame * speed) % 350;
   drawSprite(1 + i, -30 + o, 10, true, true); // draw sprite at (10,10)
-  // drawNumber(1, 30, i, c(0x0000ff)); // draw animation frame count
+  drawNumber(1, 30, i, c(0x0000ff)); // draw animation frame count
 }

@@ -292,7 +292,6 @@ export function init(): void {
   }
   
   rngSeed = 12345;
-  log("Space Invaders Started!");
 }
 
 export function update(): void {

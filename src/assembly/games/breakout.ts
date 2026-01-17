@@ -244,8 +244,6 @@ export function init(): void {
   vars.lives = STARTING_LIVES;
   vars.score = 0;
   vars.state = GameState.START_SCREEN as u8;
-  
-  log("Breakout Started!");
 }
 
 export function update(): void {

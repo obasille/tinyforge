@@ -21,5 +21,13 @@
   "liveServer.settings.ignoreFiles": [
     // Don't watch any source file
     "**/src/**"
+  ],
+  "cSpell.words": [
+    "changetype",
+    "Cooldown",
+    "invuln",
+    "Mathf",
+    "Platformer",
+    "pset"
   ]
 }
