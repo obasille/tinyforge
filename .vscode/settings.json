@@ -2,17 +2,17 @@
   "emeraldwalk.runonsave": {
     "commands": [
       {
-        "match": "sdk.*\\.ts$",
+        "match": "src/assembly/sdk.*\\.ts|src/memory-map\\.ts$",
         "isAsync": true,
         "cmd": "npm run build"
       },
       {
-        "match": "src/games.*\\.ts$",
+        "match": "src/assembly/games.*\\.ts$",
         "isAsync": true,
         "cmd": "node scripts/build-game.js ${fileBasename}"
       },
       {
-        "match": "(src/web.*\\.ts$|memory-map\\.ts$)",
+        "match": "(src/web.*\\.ts$|src/memory-map\\.ts$)",
         "isAsync": true,
         "cmd": "npm run build:host"
       }

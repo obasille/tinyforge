@@ -1,7 +1,7 @@
 // TinyForge SDK - Memory Management
 // Defines memory layout, external memory interface, and RAM accessors
 // 
-// Memory layout constants are synced with ../memory-map.ts
+// Memory layout constants are synced with ../../memory-map.ts
 
 /** External WebAssembly memory shared between host and cartridge */
 @external("env", "memory")
@@ -9,7 +9,7 @@ export declare const memory: WebAssembly.Memory;
 
 // Import shared memory constants from memory-map.ts
 // These are cast to AssemblyScript types for use in WASM
-import * as memoryMap from '../memory-map';
+import * as memoryMap from '../../memory-map';
 
 /** Display width in pixels */
 export const WIDTH = memoryMap.WIDTH as i32;

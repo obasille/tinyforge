@@ -95,8 +95,10 @@ tinyforge/
 │
 ├─ src/
 │  ├─ web/              # Host runtime (TypeScript)
-│  ├─ sdk/              # Game SDK (AssemblyScript)
-│  ├─ games/            # Game cartridges (AssemblyScript)
+│  ├─ assembly/
+│  │  ├─ sdk/           # Game SDK (AssemblyScript)
+│  │  ├─ games/         # Game cartridges (AssemblyScript)
+│  │  └─ tsconfig.json  # AssemblyScript config
 │  └─ memory-map.ts     # Shared memory constants
 │
 ├─ dist/
@@ -116,7 +118,7 @@ Owns everything that would be considered *hardware* on a real console:
 - Rendering
 - Cartridge loading
 
-### `src/games/`
+### `src/assembly/games/`
 Contains only game code:
 
 - Update logic

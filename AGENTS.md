@@ -8,11 +8,11 @@ This section provides detailed instructions for AI agents tasked with creating g
 
 ### Project Layout (Current)
 - `index.html`, `memory-viewer.html` live at the repo root
-- `styles.css` and `styles2.css` are at the repo root
+- `styles.css` and `stylesVC.css` are at the repo root
 - `icons/` holds favicon/app icons
 - `src/web/` contains host/runtime TypeScript
-- `src/sdk/` contains the AssemblyScript SDK
-- `src/games/` contains game cartridges (AssemblyScript)
+- `src/assembly/sdk/` contains the AssemblyScript SDK
+- `src/assembly/games/` contains game cartridges (AssemblyScript)
 - `src/memory-map.ts` is the shared memory map source
 - `dist/web/` contains built host JS
 - `dist/cartridges/` contains built WASM cartridges
@@ -339,20 +339,20 @@ function random(): i32 {
 ```json
 {
   "scripts": {
-    "build:debug": "asc src/games/yourgame.ts -o dist/cartridges/yourgame.wasm ..."
+    "build:debug": "asc src/assembly/games/yourgame.ts -o dist/cartridges/yourgame.wasm ..."
   }
 }
 ```
 
-**Or use asconfig.json targets** in the src/games/ directory.
+**Or use asconfig.json targets** in the src/assembly/games/ directory.
 
 **Build optimization - selective rebuilds:**
-- When modifying a **game file** (e.g., `src/games/dinoworld.ts`), rebuild only that game:
+- When modifying a **game file** (e.g., `src/assembly/games/dinoworld.ts`), rebuild only that game:
   ```bash
   npm run build gamename
   # Example: npm run build dinoworld
   ```
-- When modifying an **SDK file** (e.g., `src/sdk/drawing.ts`, `src/sdk/input.ts`), rebuild all games:
+- When modifying an **SDK file** (e.g., `src/assembly/sdk/drawing.ts`, `src/assembly/sdk/input.ts`), rebuild all games:
   ```bash
   npm run build
   ```
@@ -394,7 +394,7 @@ error("Invalid state");  // Unexpected conditions
 
 ### Complete Workflow for Creating a New Game
 
-1. **Create game file**: `src/games/yourgame.ts`
+1. **Create game file**: `src/assembly/games/yourgame.ts`
 
 2. **Import required APIs**:
    ```ts
@@ -471,8 +471,8 @@ error("Invalid state");  // Unexpected conditions
      "scripts": {
        "build": "npm run build:minesweeper && npm run build:pong && npm run build:snake && npm run build:yourgame",
        "build:debug": "npm run build:minesweeper:debug && npm run build:pong:debug && npm run build:snake:debug && npm run build:yourgame:debug",
-       "build:yourgame": "asc src/games/yourgame.ts -o dist/cartridges/yourgame.wasm --config src/games/asconfig.json",
-       "build:yourgame:debug": "asc src/games/yourgame.ts -o dist/cartridges/yourgame.wasm --config src/games/asconfig.json --target debug"
+       "build:yourgame": "asc src/assembly/games/yourgame.ts -o dist/cartridges/yourgame.wasm --config src/assembly/games/asconfig.json",
+       "build:yourgame:debug": "asc src/assembly/games/yourgame.ts -o dist/cartridges/yourgame.wasm --config src/assembly/games/asconfig.json --target debug"
      }
    }
    ```
@@ -481,7 +481,7 @@ error("Invalid state");  // Unexpected conditions
    - Add both production and debug build scripts
    - Output to `dist/cartridges/` folder
    - Update the main `build` and `build:debug` scripts to include your new game
-   - Use the existing `asconfig.json` in the src/games folder
+   - Use the existing `asconfig.json` in the src/assembly/games folder
 
 8. **Add game to selector in index.html**:
    

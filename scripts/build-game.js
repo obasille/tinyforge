@@ -24,7 +24,7 @@ function buildGame(fileName, showMode = false) {
   
   try {
     execSync(
-      `npx asc src/games/${fileName}.ts -o dist/cartridges/${fileName}.wasm --config src/games/asconfig.json ${target}`,
+      `npx asc src/assembly/games/${fileName}.ts -o dist/cartridges/${fileName}.wasm --config src/assembly/games/asconfig.json ${target}`,
       { stdio: 'inherit' }
     );
     console.log(`✓ ${fileName}`);
@@ -37,14 +37,14 @@ function buildGame(fileName, showMode = false) {
 
 // Mode 1: Build all games
 if (files.length === 0) {
-  const gamesDir = 'src/games';
+  const gamesDir = 'src/assembly/games';
   
   const gameFiles = readdirSync(gamesDir)
     .filter(file => file.endsWith('.ts'))
     .map(file => file.replace('.ts', ''));
 
   if (gameFiles.length === 0) {
-    console.log('No game files found in src/games/ directory');
+    console.log('No game files found in src/assembly/games/ directory');
     process.exit(0);
   }
 
@@ -77,15 +77,15 @@ for (const filePath of files) {
   
   // Check if path includes directory
   const parts = filePath.split(/[\/\\]/);
-  const dir = parts.length > 1 ? `${parts[0]}/${parts[1]}` : 'src/games';
+  const dir = parts.length > 2 ? `${parts[0]}/${parts[1]}/${parts[2]}` : 'src/assembly/games';
   
   // For simple filenames, extract just the basename
   if (parts.length === 1) {
     fileName = parts[0].replace(/\.ts$/, '');
   }
 
-  if (dir !== 'src/games') {
-    console.error(`Skipping ${filePath} - not in src/games/ directory`);
+  if (dir !== 'src/assembly/games') {
+    console.error(`Skipping ${filePath} - not in src/assembly/games/ directory`);
     failed++;
     continue;
   }
