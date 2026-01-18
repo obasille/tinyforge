@@ -1,23 +1,4 @@
 {
-  "emeraldwalk.runonsave": {
-    "commands": [
-      {
-        "match": "src/assembly/sdk.*\\.ts|src/memory-map\\.ts$",
-        "isAsync": true,
-        "cmd": "npm run build"
-      },
-      {
-        "match": "src/assembly/games.*\\.ts$",
-        "isAsync": true,
-        "cmd": "node scripts/build-game.js ${fileBasename}"
-      },
-      {
-        "match": "(src/web.*\\.ts$|src/memory-map\\.ts$)",
-        "isAsync": true,
-        "cmd": "npm run build:host"
-      }
-    ]
-  },
   "liveServer.settings.ignoreFiles": [
     // Don't watch any source file
     "**/src/**"

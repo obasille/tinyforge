@@ -345,10 +345,10 @@ const index = randomRange(7); // [0, 7)
 **Or use asconfig.json targets** in the src/assembly/games/ directory.
 
 **Build optimization - selective rebuilds:**
-- When modifying a **game file** (e.g., `src/assembly/games/dinoworld.ts`), rebuild only that game:
+- When modifying a **game file** (e.g., `src/assembly/games/dinoWorld.ts`), rebuild only that game:
   ```bash
-  npm run build:games gamename
-  # Example: npm run build:games dinoworld
+  npm run build:games gameName
+  # Example: npm run build:games dinoWorld
   ```
 - When modifying an **SDK file** (e.g., `src/assembly/sdk/drawing.ts`, `src/assembly/sdk/input.ts`), rebuild all games:
   ```bash
@@ -462,64 +462,34 @@ error("Invalid state");  // Unexpected conditions
    }
    ```
 
-7. **Update build configuration in package.json**:
+7. **Do NOT update the game selector in index.html**:
    
-   Add build scripts for your new game:
-   ```json
-   {
-     "scripts": {
-       "build": "npm run build:games && npm run build:host",
-       "build:debug": "npm run build:minesweeper:debug && npm run build:pong:debug && npm run build:snake:debug && npm run build:yourgame:debug",
-       "build:games": "node scripts/build-game.js",
-       "build:yourgame": "asc src/assembly/games/yourgame.ts -o dist/cartridges/yourgame.wasm --config src/assembly/games/asconfig.json",
-       "build:yourgame:debug": "asc src/assembly/games/yourgame.ts -o dist/cartridges/yourgame.wasm --config src/assembly/games/asconfig.json --target debug"
-     }
-   }
-   ```
-   
-   **Key points:**
-   - Add both production and debug build scripts
-   - Output to `dist/cartridges/` folder
-   - Update the main `build` and `build:debug` scripts to include your new game
-   - Use the existing `asconfig.json` in the src/assembly/games folder
+   The game list is now populated at runtime by scanning `dist/cartridges/` for WASM files.
+   Adding or removing `<option>` entries in `index.html` is a leftover pattern and should be avoided.
 
-8. **Add game to selector in index.html**:
-   
-   Add an option to the game select dropdown:
-   ```html
-   <select id="game-select" class="game-selector">
-     <option value="minesweeper">Minesweeper</option>
-     <option value="pong">Pong</option>
-     <option value="snake">Snake</option>
-     <option value="yourgame">Your Game Name</option>
-   </select>
-   ```
-   
-   **Key points:**
-   - The `value` attribute must match the WASM filename (without `.wasm` extension)
-   - The display text can be anything user-friendly
-   - Add the option inside the existing `<select id="game-select">` element
-
-9. **Build and test**:
+8. **Build and test (use CLI so postbuild uploads)**:
    ```bash
-   npm run build:debug
+   npm run build:games gameName
    ```
-   
+  
+   `gameName` must be the exact `.ts` filename without the extension.
+   Run builds from the command line so the `postbuild` step runs and auto-uploads.
+   **Always build after creating a game or making any game changes.**
    The game will be compiled to `dist/cartridges/yourgame.wasm` and can be selected from the dropdown.
 
-10. **Fix compilation errors**:
+9. **Fix compilation errors**:
    - Add missing casts for enums: `as u8`, `as i32`
    - Add parentheses for operator precedence
    - Remove duplicate variable declarations
    - Check bounds and types match
 
-11. **Test the game selector**:
+10. **Test the game selector**:
    - Start the server: `npm run serve`
    - Open `http://localhost:8080/index.html`
-   - Your game should appear in the dropdown
+   - Your game should appear in the dropdown once its WASM exists in `dist/cartridges/`
    - Selecting it loads the game without page refresh
 
-12. **Verify game over flow**:
+11. **Verify game over flow**:
     - Game transitions to GAME_OVER state
     - "PRESS START" message displays
     - START button calls `init()` to restart

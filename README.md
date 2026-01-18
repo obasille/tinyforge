@@ -661,6 +661,12 @@ npm run build
 npm run build:games
 ```
 
+**Build a single game (WASM only):**
+```
+npm run build:games gameName
+```
+`gameName` must be the exact `.ts` filename without the extension.
+
 **Build all games (debug):**
 ```
 npm run build:debug
