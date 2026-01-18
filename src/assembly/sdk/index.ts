@@ -10,5 +10,6 @@ export * from "./input";
 export * from "./logging";
 export * from "./color";
 export * from "./drawing";
+export * from "./strings";
 export * from "./utility";
 export * from "./audio";

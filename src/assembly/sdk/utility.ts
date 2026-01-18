@@ -1,7 +1,8 @@
 // TinyForge SDK - Utility Functions
 // Helper classes and convenience functions for common game tasks
 
-import { fillRect, drawRect, drawString } from "./drawing";
+import { fillRect, drawRect } from "./drawing";
+import { drawString } from "./strings";
 import { c } from "./color";
 import { RNG_SEED } from "./memory";
 
