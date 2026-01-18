@@ -206,6 +206,27 @@ async function loadGame(gameName, { skipInit = false } = {}) {
 
 // Game selector UI
 const gameSelect = document.getElementById('game-select') as HTMLSelectElement;
+const GAME_STORAGE_KEY = 'tinyforge.selectedGame';
+
+function getStoredGame() {
+  try {
+    return localStorage.getItem(GAME_STORAGE_KEY) || '';
+  } catch (e) {
+    return '';
+  }
+}
+
+function setStoredGame(gameName) {
+  try {
+    if (gameName) {
+      localStorage.setItem(GAME_STORAGE_KEY, gameName);
+    } else {
+      localStorage.removeItem(GAME_STORAGE_KEY);
+    }
+  } catch (e) {
+    // Ignore storage errors (private mode, disabled storage, etc.)
+  }
+}
 
 function setGameSelectPlaceholder(label) {
   gameSelect.innerHTML = '';
@@ -240,6 +261,7 @@ async function fetchWasmGameList() {
 // Rebuild the dropdown from the current WASM list, preserving selection.
 async function populateGameSelector() {
   const previous = gameSelect.value;
+  const stored = getStoredGame();
   setGameSelectPlaceholder('Loading...');
 
   const games = await fetchWasmGameList();
@@ -255,7 +277,9 @@ async function populateGameSelector() {
     option.textContent = formatGameDisplayName(game);
     gameSelect.appendChild(option);
   });
-  if (previous && games.includes(previous)) {
+  if (stored && games.includes(stored)) {
+    gameSelect.value = stored;
+  } else if (previous && games.includes(previous)) {
     gameSelect.value = previous;
   }
   return games;
@@ -328,6 +352,7 @@ Promise.all([
     addConsoleEntry('ERROR', 'No game cartridges found.');
     return;
   }
+  setStoredGame(currentGame);
   loadGame(currentGame);
 
   // Start watching for WASM changes
@@ -338,6 +363,7 @@ gameSelect.addEventListener('change', () => {
   const selectedGame = gameSelect.value;
   if (selectedGame !== currentGame) {
     currentGame = selectedGame;
+    setStoredGame(currentGame);
     stopWasmWatch();
     loadGame(currentGame);
     startWasmWatch();
