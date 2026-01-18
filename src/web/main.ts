@@ -207,6 +207,16 @@ async function loadGame(gameName, { skipInit = false } = {}) {
 // Game selector UI
 const gameSelect = document.getElementById('game-select') as HTMLSelectElement;
 
+function setGameSelectPlaceholder(label) {
+  gameSelect.innerHTML = '';
+  const option = document.createElement('option');
+  option.value = '';
+  option.textContent = label;
+  option.disabled = true;
+  option.selected = true;
+  gameSelect.appendChild(option);
+}
+
 // Discover cartridge names by listing dist/cartridges/ directory.
 // This relies on the dev server exposing a directory index.
 async function fetchWasmGameList() {
@@ -229,10 +239,15 @@ async function fetchWasmGameList() {
 
 // Rebuild the dropdown from the current WASM list, preserving selection.
 async function populateGameSelector() {
-  const games = await fetchWasmGameList();
-  if (games.length === 0) return [];
-
   const previous = gameSelect.value;
+  setGameSelectPlaceholder('Loading...');
+
+  const games = await fetchWasmGameList();
+  if (games.length === 0) {
+    setGameSelectPlaceholder('No games found');
+    return [];
+  }
+
   gameSelect.innerHTML = '';
   games.forEach((game) => {
     const option = document.createElement('option');
@@ -291,7 +306,7 @@ function stopWasmWatch() {
   }
 }
 
-// Load audio and sprites, then load the game
+// Load audio, sprites, and game list in parallel
 Promise.all([
   audioManager.loadAudio().then(() => {
     const sfxCount = audioManager.getSfxCount();
@@ -303,11 +318,11 @@ Promise.all([
     const count = spriteManager.getSpriteCount();
     const size = spriteManager.getDataSize();
     addConsoleEntry('LOG', `Sprite system initialized: ${count} sprites, ${(size / 1024).toFixed(1)} KB`);
-  })
-]).then(async () => {
-  // Load game after all assets are ready
+  }),
+  populateGameSelector()
+]).then(([_, __, games]) => {
+  // Load game after assets and game list are ready
   addConsoleEntry('LOG', 'All assets loaded, starting game...');
-  const games = await populateGameSelector();
   currentGame = gameSelect.value || games[0] || '';
   if (!currentGame) {
     addConsoleEntry('ERROR', 'No game cartridges found.');
