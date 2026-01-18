@@ -42,7 +42,7 @@ class SpriteManager {
 
     try {
       const spriteAssets = await AssetLoader.scanDirectory(
-        '../assets/sprites/',
+        './assets/sprites/',
         /\.(png|jpg|jpeg)$/i,
         0,
         255

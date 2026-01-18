@@ -103,8 +103,9 @@ tinyforge/
 │
 ├─ dist/
 │  ├─ web/              # Compiled host JS
-│  ├─ cartridges/       # Compiled WASM files
 │  └─ memory-map.js
+├─ assets/
+│  └─ cartridges/       # Compiled WASM files
 │
 └─ package.json         # Build scripts and dependencies
 ```
@@ -119,7 +120,7 @@ Owns everything that would be considered *hardware* on a real console:
 - Cartridge loading
 
 #### Game selector (WASM auto-discovery)
-The host populates the game dropdown by fetching the `dist/cartridges/` directory
+The host populates the game dropdown by fetching the `assets/cartridges/` directory
 listing and extracting `.wasm` filenames. This is meant for local dev servers
 that expose directory indexes. If your hosting setup hides directory listings,
 add a fallback list or provide a manifest endpoint.
@@ -688,11 +689,6 @@ npm run watch:host
 ```
 npm run watch:games
 ```
-
-Build output for games:
-- `dist/cartridges/minesweeper.wasm`
-- `dist/cartridges/pong.wasm`
-- `dist/cartridges/snake.wasm`
 
 ### Switching Games
 

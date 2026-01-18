@@ -123,7 +123,7 @@ async function loadGame(gameName, { skipInit = false } = {}) {
   
   try {
     const wasm = await loader.instantiateStreaming(
-      fetch(`./dist/cartridges/${gameName}.wasm`),
+      fetch(`./assets/cartridges/${gameName}.wasm`),
       {
         env: {
           memory,
@@ -217,11 +217,11 @@ function setGameSelectPlaceholder(label) {
   gameSelect.appendChild(option);
 }
 
-// Discover cartridge names by listing dist/cartridges/ directory.
+// Discover cartridge names by listing assets/cartridges/ directory.
 // This relies on the dev server exposing a directory index.
 async function fetchWasmGameList() {
   try {
-    const response = await fetch('./dist/cartridges/', { cache: 'no-cache' });
+    const response = await fetch('./assets/cartridges/', { cache: 'no-cache' });
     if (!response.ok) return [];
     const html = await response.text();
     const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -275,7 +275,7 @@ function hotReload() {
 
 async function checkWasmUpdate() {
   try {
-    const response = await fetch(`./dist/cartridges/${currentGame}.wasm`, {
+    const response = await fetch(`./assets/cartridges/${currentGame}.wasm`, {
       method: 'HEAD',
       cache: 'no-cache'
     });

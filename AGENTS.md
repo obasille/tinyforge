@@ -15,9 +15,9 @@ This section provides detailed instructions for AI agents tasked with creating g
 - `src/assembly/games/` contains game cartridges (AssemblyScript)
 - `src/memory-map.ts` is the shared memory map source
 - `dist/web/` contains built host JS
-- `dist/cartridges/` contains built WASM cartridges
 - `dist/memory-map.js` is the built memory map module
 - `assets/` holds sprites, sfx, and music
+- `assets/cartridges/` contains built WASM cartridges
 
 ### Core Architecture Patterns
 
@@ -337,7 +337,7 @@ const index = randomRange(7); // [0, 7)
 ```json
 {
   "scripts": {
-    "build:debug": "asc src/assembly/games/yourgame.ts -o dist/cartridges/yourgame.wasm ..."
+    "build:debug": "asc src/assembly/games/gameName.ts -o assets/cartridges/gameName.wasm ..."
   }
 }
 ```
@@ -393,7 +393,7 @@ error("Invalid state");  // Unexpected conditions
 
 ### Complete Workflow for Creating a New Game
 
-1. **Create game file**: `src/assembly/games/yourgame.ts`
+1. **Create game file**: `src/assembly/games/gameName.ts`
 
 2. **Import required APIs**:
    ```ts
@@ -464,7 +464,7 @@ error("Invalid state");  // Unexpected conditions
 
 7. **Do NOT update the game selector in index.html**:
    
-   The game list is now populated at runtime by scanning `dist/cartridges/` for WASM files.
+   The game list is now populated at runtime by scanning `assets/cartridges/` for WASM files.
    Adding or removing `<option>` entries in `index.html` is a leftover pattern and should be avoided.
 
 8. **Build and test (use CLI so postbuild uploads)**:
@@ -475,7 +475,7 @@ error("Invalid state");  // Unexpected conditions
    `gameName` must be the exact `.ts` filename without the extension.
    Run builds from the command line so the `postbuild` step runs and auto-uploads.
    **Always build after creating a game or making any game changes.**
-   The game will be compiled to `dist/cartridges/yourgame.wasm` and can be selected from the dropdown.
+   The game will be compiled to `assets/cartridges/gameName.wasm` and can be selected from the dropdown.
 
 9. **Fix compilation errors**:
    - Add missing casts for enums: `as u8`, `as i32`
@@ -486,7 +486,7 @@ error("Invalid state");  // Unexpected conditions
 10. **Test the game selector**:
    - Start the server: `npm run serve`
    - Open `http://localhost:8080/index.html`
-   - Your game should appear in the dropdown once its WASM exists in `dist/cartridges/`
+   - Your game should appear in the dropdown once its WASM exists in `assets/cartridges/`
    - Selecting it loads the game without page refresh
 
 11. **Verify game over flow**:

@@ -17,6 +17,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..');
 const distPath = path.join(repoRoot, 'dist');
+const assetsPath = path.join(repoRoot, 'assets');
+const iconsPath = path.join(repoRoot, 'icons');
 
 async function fileExists(filePath) {
   try {
@@ -41,24 +43,30 @@ async function collectFiles(dir) {
   return results;
 }
 
-async function uploadDist(client) {
-  if (!(await fileExists(distPath))) {
-    throw new Error('Missing dist/ directory. Run a build before uploading.');
+async function uploadDirectory(client, { localPath, remotePath, required, clean }) {
+  const exists = await fileExists(localPath);
+  if (!exists) {
+    if (required) {
+      throw new Error(`Missing ${path.basename(localPath)}/ directory. Run a build before uploading.`);
+    }
+    return;
   }
 
-  try {
-    await client.removeDir('/dist');
-  } catch {
-    // Ignore if /dist doesn't exist yet.
+  if (clean) {
+    try {
+      await client.removeDir(remotePath);
+    } catch {
+      // Ignore if the directory doesn't exist yet.
+    }
   }
-  await client.ensureDir('/dist');
+  await client.ensureDir(remotePath);
 
-  const files = await collectFiles(distPath);
+  const files = await collectFiles(localPath);
   for (const filePath of files) {
-    const relative = path.relative(distPath, filePath).replace(/\\/g, '/');
-    const remoteDir = path.posix.join('/dist', path.posix.dirname(relative));
+    const relative = path.relative(localPath, filePath).replace(/\\/g, '/');
+    const remoteDir = path.posix.join(remotePath, path.posix.dirname(relative));
     await client.ensureDir(remoteDir);
-    await client.uploadFrom(filePath, path.posix.join('/dist', relative));
+    await client.uploadFrom(filePath, path.posix.join(remotePath, relative));
   }
 }
 
@@ -87,7 +95,24 @@ try {
   });
 
   await uploadRootFiles(client);
-  await uploadDist(client);
+  await uploadDirectory(client, {
+    localPath: assetsPath,
+    remotePath: '/assets',
+    required: true,
+    clean: true
+  });
+  await uploadDirectory(client, {
+    localPath: iconsPath,
+    remotePath: '/icons',
+    required: false,
+    clean: true
+  });
+  await uploadDirectory(client, {
+    localPath: distPath,
+    remotePath: '/dist',
+    required: true,
+    clean: true
+  });
   console.log('Upload complete.');
 } catch (error) {
   console.error(`FTP upload failed: ${error.message}`);

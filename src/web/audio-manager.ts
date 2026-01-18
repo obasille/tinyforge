@@ -56,7 +56,7 @@ class AudioManager {
     try {
       // Load SFX files
       const sfxAssets = await AssetLoader.scanDirectory(
-        '../assets/sfx/',
+        './assets/sfx/',
         /\.(wav|mp3|ogg)$/i
       );
       
@@ -66,7 +66,7 @@ class AudioManager {
 
       // Load music files
       const musicAssets = await AssetLoader.scanDirectory(
-        '../assets/music/',
+        './assets/music/',
         /\.(wav|mp3|ogg)$/i
       );
       

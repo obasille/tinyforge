@@ -8,7 +8,7 @@
 //   node build-game.js debug <f1> <f2>... - build multiple games (debug)
 
 import { execSync } from 'child_process';
-import { readdirSync } from 'fs';
+import { mkdirSync, readdirSync } from 'fs';
 import { basename } from 'path';
 
 const args = process.argv.slice(2);
@@ -17,14 +17,16 @@ const files = isDebug ? args.slice(1) : args;
 
 const mode = isDebug ? 'debug' : 'release';
 const target = isDebug ? '--target debug' : '';
+const outputDir = 'assets/cartridges';
 
 function buildGame(fileName, showMode = false) {
   const modeLabel = showMode && isDebug ? ' (debug)' : '';
   console.log(`Building ${fileName}${modeLabel}...`);
   
   try {
+    mkdirSync(outputDir, { recursive: true });
     execSync(
-      `npx asc src/assembly/games/${fileName}.ts -o dist/cartridges/${fileName}.wasm --config src/assembly/games/asconfig.json ${target}`,
+      `npx asc src/assembly/games/${fileName}.ts -o ${outputDir}/${fileName}.wasm --config src/assembly/games/asconfig.json ${target}`,
       { stdio: 'inherit' }
     );
     console.log(`✓ ${fileName}`);
