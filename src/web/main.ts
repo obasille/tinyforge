@@ -432,6 +432,45 @@ function toggleFullscreen() {
 const fullscreenBtn = document.getElementById('fullscreen-btn') as HTMLButtonElement | null;
 fullscreenBtn?.addEventListener('click', toggleFullscreen);
 
+function formatScreenshotFilename(gameName) {
+  const safeName = (gameName || 'game').replace(/[^a-z0-9-_]+/gi, '_');
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  return `tinyforge-${safeName}-${stamp}.png`;
+}
+
+function triggerDownload(dataUrl, filename) {
+  const link = document.createElement('a');
+  link.href = dataUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+function takeScreenshot() {
+  const filename = formatScreenshotFilename(currentGame);
+  if (canvas.toBlob) {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        addConsoleEntry('ERROR', 'Screenshot failed (no data).');
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      triggerDownload(url, filename);
+      URL.revokeObjectURL(url);
+      addConsoleEntry('LOG', 'Screenshot saved.');
+    }, 'image/png');
+  } else {
+    const dataUrl = canvas.toDataURL('image/png');
+    triggerDownload(dataUrl, filename);
+    addConsoleEntry('LOG', 'Screenshot saved.');
+  }
+}
+
+// Screenshot button
+const screenshotBtn = document.getElementById('screenshot-btn') as HTMLButtonElement | null;
+screenshotBtn?.addEventListener('click', takeScreenshot);
+
 // Keyboard shortcuts: R to restart, P to pause, F for fullscreen
 window.addEventListener('keydown', (e) => {
   if ((e.key === 'r' || e.key === 'R') && !e.repeat) {
@@ -445,6 +484,9 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
   } else if ((e.key === 'f' || e.key === 'F') && !e.repeat) {
     toggleFullscreen();
+    e.preventDefault();
+  } else if ((e.key === 's' || e.key === 'S') && !e.repeat) {
+    takeScreenshot();
     e.preventDefault();
   }
 });
