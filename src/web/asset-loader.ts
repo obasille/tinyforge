@@ -5,6 +5,7 @@
  * Utility class for loading assets with ID-based naming
  */
 export class AssetLoader {
+  static MAX_ID_LENGTH = 16;
   /**
    * Parse asset filename into id/format/info parts.
    * Filename format: {id}~{format}-{info}.ext
@@ -100,6 +101,10 @@ export class AssetLoader {
       for (const file of files) {
         const parsed = this.parseAssetFilename(file);
         if (!parsed) continue;
+        if (parsed.id.length > this.MAX_ID_LENGTH) {
+          console.warn(`Asset ID "${parsed.id}" exceeds ${this.MAX_ID_LENGTH} characters, skipping ${file}`);
+          continue;
+        }
 
         if (minId !== null || maxId !== null) {
           const numericId = parseInt(parsed.id, 10);

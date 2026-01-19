@@ -382,7 +382,7 @@ export function draw(): void {
     // Animate through 8 frames (10-17) every 8 frames
     const coinFrame = (vars.gameTimer / 8) % 8;
     const coinSpriteId = 10 + coinFrame;
-    drawSprite(coinSpriteId, coin.x, coin.y);
+    drawSprite(coinSpriteId.toString(), coin.x, coin.y);
   }
 
   // Draw player (dinosaur sprite) - flash when invulnerable
@@ -391,7 +391,7 @@ export function draw(): void {
     const py = <i32>vars.playerY;
     const spriteId = 1 + <u32>vars.animFrame;
     
-    drawSprite(spriteId, px, py, vars.facingRight == 0);
+    drawSprite(spriteId.toString(), px, py, vars.facingRight == 0);
   }
 
   // Draw title and lives
@@ -403,7 +403,7 @@ export function draw(): void {
   }
 
   // Draw coins collected in top-right
-  drawSprite(14, WIDTH - 70, 2);
+  drawSprite("14", WIDTH - 70, 2);
   // Number of coins
   drawNumber(WIDTH - 40, 8, vars.coinsCollected, c(0xFFFFFF));
 

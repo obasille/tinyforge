@@ -75,7 +75,7 @@ export function draw(): void {
   const speed = 0.3;
   const i = <u32>Math.floor(vars.animFrame * speed / 2) % 9;
   const o = <u32>Math.floor(vars.animFrame * speed) % 350;
-  drawSprite(1 + i, -30 + o, 10, true, true); // draw sprite at (10,10)
+  drawSprite((1 + i).toString(), -30 + o, 10, true, true); // draw sprite at (10,10)
   drawNumber(1, 30, i, c(0x0000ff)); // draw animation frame count
 
   drawCircle(10, 100, 30, c(0x0000ff));
@@ -83,11 +83,11 @@ export function draw(): void {
   drawLine(100, 100, 200, 200, c(0x0000ff));
   // drawString(100, 100, "Hello, world!", c(0x0000ff));
   // drawNumber(100, 100, 10, c(0x0000ff));
-  // drawSprite(1, 100, 100);
+  // drawSprite("1", 100, 100);
   // drawSpriteFrame(1, 100, 100, 0, 10, 10);
   // drawSpriteScaled(1, 100, 100, 2, 2);
   // drawSpriteFrameScaled(1, 100, 100, 0, 10, 10, 2, 2);
 
-  drawSprite(18, 200, 200);
-  drawSprite(19, 150, 200);
+  drawSprite("18", 200, 200);
+  drawSprite("19", 150, 200);
 }

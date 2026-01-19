@@ -1,11 +1,19 @@
 // Sprite Manager - Handles sprite loading and memory management
 
 import { AssetLoader } from './asset-loader.js';
-import { SPRITE_METADATA_ADDR, SPRITE_DATA_ADDR, SPRITE_DATA_SIZE } from '../memory-map.js';
+import {
+  SPRITE_ID_LOOKUP_ADDR,
+  SPRITE_ID_ENTRY_SIZE,
+  SPRITE_ID_MAX_CHARS,
+  SPRITE_METADATA_ADDR,
+  SPRITE_DATA_ADDR,
+  SPRITE_DATA_SIZE
+} from '../memory-map.js';
 
 class SpriteManager {
   #memory = null;
   #sprites = new Map(); // id -> {width, height, data: Uint8Array (RGBA)}
+  #spriteNames = new Map(); // id -> string
   #nextDataOffset = 0;
 
   /**
@@ -96,6 +104,8 @@ class SpriteManager {
         // Single sprite
         await this.#loadSingleSprite(image, numericId, url);
       }
+
+      this.#spriteNames.set(numericId, id);
     } catch (e) {
       console.warn(`Failed to load sprite ${asset.id} from ${asset.url}:`, e.message);
     }
@@ -168,6 +178,7 @@ class SpriteManager {
             height: spriteHeight,
             data: imageData.data
           });
+          this.#spriteNames.set(currentId, currentId.toString());
           currentId++;
         } else {
           console.warn(`Sprite ID ${currentId} exceeds maximum (255), skipping remaining sprites`);
@@ -185,6 +196,27 @@ class SpriteManager {
   #writeSpritesToMemory() {
     let dataOffset = 0;
     const view = new DataView(this.#memory.buffer);
+
+    // Reset lookup table
+    const lookup = new Uint16Array(
+      this.#memory.buffer,
+      SPRITE_ID_LOOKUP_ADDR,
+      (SPRITE_ID_ENTRY_SIZE / 2) * 256
+    );
+    lookup.fill(0);
+
+    // Write lookup table (UTF-16 code units)
+    for (const [id, sprite] of this.#sprites) {
+      const name = this.#spriteNames.get(id) ?? id.toString();
+      if (name.length > SPRITE_ID_MAX_CHARS) {
+        console.warn(`Sprite ID "${name}" exceeds ${SPRITE_ID_MAX_CHARS} chars, skipping lookup entry`);
+        continue;
+      }
+      const baseIndex = id * (SPRITE_ID_ENTRY_SIZE / 2);
+      for (let i = 0; i < name.length; i++) {
+        lookup[baseIndex + i] = name.charCodeAt(i);
+      }
+    }
     
     // Write metadata for each sprite
     for (const [id, sprite] of this.#sprites) {

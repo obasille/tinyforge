@@ -54,6 +54,7 @@ export const MOUSE_BUTTONS_PREV_ADDR = MOUSE_ADDR + 5;
 // === Sprite Memory Map ===
 
 // Sprite data is stored after input memory.
+// Sprite ID lookup table is stored before metadata for string->id mapping.
 // Layout for each sprite entry (8 bytes of metadata per sprite):
 //   Sprite N metadata at: SPRITE_METADATA + (N * 8)
 //     +0: u16 width       - Sprite width in pixels
@@ -66,8 +67,20 @@ export const MOUSE_BUTTONS_PREV_ADDR = MOUSE_ADDR + 5;
 // Maximum: 256 sprites (IDs 0-255), metadata table = 2048 bytes
 // Sprite data region: ~128 KB available for pixel data
 
-/** Sprite metadata start address */
-export const SPRITE_METADATA_ADDR = MOUSE_ADDR + 8; // 0x04B010
+/** Maximum sprite ID length (characters) */
+export const SPRITE_ID_MAX_CHARS = 16;
+
+/** Sprite ID lookup entry size (UTF-16, 2 bytes each) */
+export const SPRITE_ID_ENTRY_SIZE = SPRITE_ID_MAX_CHARS * 2;
+
+/** Sprite ID lookup table size (256 entries) */
+export const SPRITE_ID_TABLE_SIZE = 256 * SPRITE_ID_ENTRY_SIZE;
+
+/** Sprite ID lookup table start address */
+export const SPRITE_ID_LOOKUP_ADDR = MOUSE_ADDR + 8; // 0x04B010
+
+/** Sprite metadata start address (after lookup table) */
+export const SPRITE_METADATA_ADDR = SPRITE_ID_LOOKUP_ADDR + SPRITE_ID_TABLE_SIZE;
 
 /** Sprite metadata entry size (8 bytes) */
 export const SPRITE_METADATA_SIZE = 8;

@@ -52,6 +52,15 @@ export const MOUSE_BUTTONS_PREV_ADDR = memoryMap.MOUSE_BUTTONS_PREV_ADDR as usiz
 
 // === Sprite Memory Map ===
 
+/** Maximum sprite ID length (characters) */
+export const SPRITE_ID_MAX_CHARS = memoryMap.SPRITE_ID_MAX_CHARS as i32;
+
+/** Sprite ID lookup entry size (bytes) */
+export const SPRITE_ID_ENTRY_SIZE = memoryMap.SPRITE_ID_ENTRY_SIZE as usize;
+
+/** Sprite ID lookup table base address */
+export const SPRITE_ID_LOOKUP_ADDR = memoryMap.SPRITE_ID_LOOKUP_ADDR as usize;
+
 /** Sprite metadata table base address */
 export const SPRITE_METADATA_ADDR = memoryMap.SPRITE_METADATA_ADDR as usize;
 
