@@ -121,12 +121,12 @@ function checkCollisions(): void {
     vars.ballX = 0.0;
     ballVX = -ballVX;
     vars.ballVX = ballVX;
-    playSfx("0", 0.3);
+    playSfx("tap", 0.3);
   } else if (ballX >= ((WIDTH - BALL_SIZE) as f32)) {
     vars.ballX = (WIDTH - BALL_SIZE) as f32;
     ballVX = -ballVX;
     vars.ballVX = ballVX;
-    playSfx("0", 0.3);
+    playSfx("tap", 0.3);
   }
 
   // Top wall collision
@@ -134,7 +134,7 @@ function checkCollisions(): void {
     vars.ballY = 0.0;
     ballVY = -ballVY;
     vars.ballVY = ballVY;
-    playSfx("0", 0.3);
+    playSfx("tap", 0.3);
   }
 
   // Paddle collision
@@ -161,13 +161,13 @@ function checkCollisions(): void {
     
     vars.ballVX = ballVX;
     vars.ballVY = ballVY;
-    playSfx("0", 0.4);
+    playSfx("tap", 0.4);
   }
 
   // Bottom edge (lose life)
   if (ballY > (HEIGHT as f32)) {
     vars.lives--;
-    playSfx("1", 0.2);
+    playSfx("explosion", 0.2);
     
     if (vars.lives <= 0) {
       vars.state = GameState.GAME_OVER as u8;
@@ -199,7 +199,7 @@ function checkCollisions(): void {
         setBrick(col, row, 0);
         vars.bricksRemaining--;
         vars.score += 10 * (row + 1); // Higher rows worth more
-        playSfx("0", 0.5);
+        playSfx("tap", 0.5);
         
         // Determine bounce direction based on hit side
         const prevBallX = ballX - ballVX;

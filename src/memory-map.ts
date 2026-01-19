@@ -53,40 +53,41 @@ export const MOUSE_BUTTONS_PREV_ADDR = MOUSE_ADDR + 5;
 
 // === Sprite Memory Map ===
 
-// Sprite data is stored after input memory.
-// Sprite ID lookup table is stored before metadata for string->id mapping.
-// Layout for each sprite entry (8 bytes of metadata per sprite):
-//   Sprite N metadata at: SPRITE_METADATA + (N * 8)
-//     +0: u16 width       - Sprite width in pixels
-//     +2: u16 height      - Sprite height in pixels
-//     +4: u32 dataOffset  - Offset to pixel data (relative to SPRITE_DATA)
+// Sprite tables are stored after input memory.
+// Layout:
+//   SPRITE_TABLE header (fixed size)
+//   Sprite ID lookup table (N entries)
+//   Sprite info table (N entries)
+//   Sprite pixel data (starts immediately after info table)
 //
-// Pixel data starts at SPRITE_DATA and contains RGBA values (4 bytes per pixel)
-// All sprite pixel data is stored sequentially after metadata table
+// Pixel data contains RGBA values (4 bytes per pixel).
+// Table sizes are dynamic based on loaded sprite count (N).
 //
-// Maximum: 256 sprites (IDs 0-255), metadata table = 2048 bytes
-// Sprite data region: ~128 KB available for pixel data
+// Maximum: 256 sprite entries, sprite data region: ~128 KB available.
 
 /** Maximum sprite ID length (characters) */
 export const SPRITE_ID_MAX_CHARS = 16;
 
+/** Sprite table header size (bytes) */
+export const SPRITE_TABLE_HEADER_SIZE = 16;
+
+/** Sprite table base address */
+export const SPRITE_TABLE_ADDR = MOUSE_ADDR + 8; // 0x04B010
+
 /** Sprite ID lookup entry size (UTF-16, 2 bytes each) */
 export const SPRITE_ID_ENTRY_SIZE = SPRITE_ID_MAX_CHARS * 2;
 
-/** Sprite ID lookup table size (256 entries) */
-export const SPRITE_ID_TABLE_SIZE = 256 * SPRITE_ID_ENTRY_SIZE;
+/** Sprite info entry size (16 bytes) */
+export const SPRITE_INFO_ENTRY_SIZE = 16;
 
-/** Sprite ID lookup table start address */
-export const SPRITE_ID_LOOKUP_ADDR = MOUSE_ADDR + 8; // 0x04B010
+/** Maximum sprite ID lookup table size (256 entries) */
+export const SPRITE_ID_TABLE_MAX_SIZE = 256 * SPRITE_ID_ENTRY_SIZE;
 
-/** Sprite metadata start address (after lookup table) */
-export const SPRITE_METADATA_ADDR = SPRITE_ID_LOOKUP_ADDR + SPRITE_ID_TABLE_SIZE;
+/** Maximum sprite info table size (256 entries) */
+export const SPRITE_INFO_TABLE_MAX_SIZE = 256 * SPRITE_INFO_ENTRY_SIZE;
 
-/** Sprite metadata entry size (8 bytes) */
-export const SPRITE_METADATA_SIZE = 8;
-
-/** Sprite pixel data start address */
-export const SPRITE_DATA_ADDR = SPRITE_METADATA_ADDR + 256 * SPRITE_METADATA_SIZE;
+/** Sprite pixel data start address (after max tables) */
+export const SPRITE_DATA_ADDR = SPRITE_TABLE_ADDR + SPRITE_TABLE_HEADER_SIZE + SPRITE_ID_TABLE_MAX_SIZE + SPRITE_INFO_TABLE_MAX_SIZE;
 
 /** Maximum sprite data size (~128 KB) */
 export const SPRITE_DATA_SIZE = 0x20000;

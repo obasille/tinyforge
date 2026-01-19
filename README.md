@@ -165,8 +165,10 @@ Address        Size        Description
 0x000000       307,200 B   Framebuffer (RGBA8888, 320×240×4)
 0x04B000       2 B         Keyboard Input (current + previous buttons)
 0x04B008       6 B         Mouse Input (x, y, current + previous buttons)
-0x04B010       2,048 B     Sprite Metadata (256 sprites × 8 bytes)
-0x04B810       128 KB      Sprite Pixel Data (~128 KB, RGBA)
+0x04B010       16 B        Sprite Table Header
+0x04B020       N entries   Sprite Name Lookup (N × 32 bytes)
+...           N entries   Sprite Info Table (N × 16 bytes)
+...           ~128 KB      Sprite Pixel Data (RGBA)
 0x06B810       4 B         SDK RNG Seed (i32)
 0x06B814       ~82 KB      Game RAM (available for game state)
 ```
@@ -188,16 +190,23 @@ Address        Size        Description
 - `+4`: u8 current button state (bit 0=left, 1=right, 2=middle)
 - `+5`: u8 previous button state (for edge detection)
 
-**Sprite Metadata (0x04B010 - 0x04B80F):**
-- 256 sprite entries × 8 bytes per entry
-- Each entry:
-  - `+0`: u16 width (pixels)
-  - `+2`: u16 height (pixels)
-  - `+4`: u32 dataOffset (relative to SPRITE_DATA_ADDR)
+**Sprite Tables (0x04B010+):**
+- Table header (16 bytes):
+  - `+0`: u16 entry count (N)
+  - `+4`: u32 name lookup offset (from table base)
+  - `+8`: u32 info table offset (from table base)
+  - `+12`: u32 pixel data offset (from table base)
+- Name lookup table (N entries, UTF-16, max 16 chars = 32 bytes each)
+- Sprite info table (N entries, 16 bytes each):
+  - `+0`: u32 dataOffset (absolute address)
+  - `+4`: u32 dataSize (bytes per frame)
+  - `+8`: u16 width
+  - `+10`: u16 height
+  - `+12`: u8 cols
+  - `+13`: u8 rows
 
-**Sprite Pixel Data (0x04B810 - 0x06B80F):**
-- ~128 KB available for sprite pixel data
-- Format: RGBA8888 (4 bytes per pixel)
+**Sprite Pixel Data (follows info table):**
+- RGBA8888 (4 bytes per pixel)
 - Managed by host, loaded from `assets/sprites/`
 
 **SDK RNG Seed (0x06B810 - 0x06B813):**
@@ -315,7 +324,8 @@ assets/
    └─ ...
 ```
 
-Files are **ID-based**: the filename must start with a number (0-255) which becomes the audio ID.
+Files are **ID-based**: the filename ID is a string parsed from the prefix before `~`/`-`.
+Only the ID is required, and it must be ≤ 16 characters.
 
 ### Audio API
 
@@ -323,10 +333,10 @@ Files are **ID-based**: the filename must start with a number (0-255) which beco
 import { playSfx, playMusic, stopMusic } from './console';
 
 // Play a sound effect
-playSfx(sfxId: i32, volume: f32);  // volume: 0.0 - 1.0
+playSfx(sfxId: string, volume: f32);  // volume: 0.0 - 1.0
 
 // Play background music (loops automatically)
-playMusic(musicId: i32, volume: f32);
+playMusic(musicId: string, volume: f32);
 
 // Stop background music
 stopMusic();
@@ -346,13 +356,13 @@ stopMusic();
 ```ts
 // ❌ WRONG - Called in init(), before user interaction
 export function init(): void {
-  playMusic(0, 0.7);  // Will fail silently
+  playMusic("gameplay", 0.7);  // Will fail silently
 }
 
 // ✅ CORRECT - Called after user clicks start button
 export function update(input: i32, prevInput: i32): void {
   if (startButtonPressed) {
-    playMusic(0, 0.7);  // Works!
+    playMusic("gameplay", 0.7);  // Works!
   }
 }
 ```
@@ -369,16 +379,12 @@ export function update(input: i32, prevInput: i32): void {
 import { playSfx, playMusic, stopMusic } from './console';
 
 // Audio IDs
-enum SFX {
-  JUMP = 0,
-  COIN = 1,
-  HIT = 2
-}
+const SFX_JUMP = "jump";
+const SFX_COIN = "coin";
+const SFX_HIT = "hit";
 
-enum Music {
-  GAMEPLAY = 0,
-  GAME_OVER = 1
-}
+const MUSIC_GAMEPLAY = "gameplay";
+const MUSIC_GAME_OVER = "game_over";
 
 let gameStarted = false;
 
@@ -386,19 +392,19 @@ export function update(input: i32, prevInput: i32): void {
   // Start music after user presses start
   if (!gameStarted && (input & Button.START)) {
     gameStarted = true;
-    playMusic(Music.GAMEPLAY, 0.6);
+    playMusic(MUSIC_GAMEPLAY, 0.6);
   }
   
   // Play sound effects during gameplay
   const pressed = input & ~prevInput;
   if (pressed & Button.A) {
-    playSfx(SFX.JUMP, 0.5);
+    playSfx(SFX_JUMP, 0.5);
   }
   
   // Stop music on game over
   if (playerDied) {
     stopMusic();
-    playSfx(SFX.HIT, 0.8);
+    playSfx(SFX_HIT, 0.8);
   }
 }
 ```
@@ -431,23 +437,21 @@ assets/
 ```
 
 **Single sprites:**
-- Format: `{ID}-name.png` (e.g., `0-flag.png`)
-- The numeric ID (0-255) becomes the sprite ID
+- Format: `{id}.png`, `{id}-{info}.png`, or `{id}~{props}.png`
+- The string `id` (≤ 16 chars) becomes the sprite name
 
 **Sprite sheets:**
-- Format: `{ID}~{COLS}x{ROWS}-name.png` (e.g., `10~4x3-tiles.png`)
-- Automatically split into individual sprites
+- Format: `{id}~{COLS}x{ROWS}-name.png` (e.g., `tiles~4x3.png`)
+- Automatically split into frames
 - Grid dimensions: COLS (across) × ROWS (down)
-- Sprites assigned sequential IDs starting from base ID
 - Order: left-to-right, top-to-bottom
 - Everything after dimensions is optional/ignored
 
 **Example sprite sheet:**
 ```
-File: 10~4x3-tiles.png (128x96 pixels)
+File: tiles~4x3.png (128x96 pixels)
 Grid: 4 columns × 3 rows = 12 sprites
 Each sprite: 32×32 pixels
-Assigned IDs: 10-21
 ```
 
 **Supported formats:**
@@ -457,16 +461,13 @@ Assigned IDs: 10-21
 ### Sprite API
 
 ```ts
-import { drawSprite, drawSpriteFlip, drawSprite2x } from './console';
+import { drawSprite, s } from './console';
 
-// Draw sprite at position
-drawSprite(id: u32, x: i32, y: i32);
+// Resolve sprite by name (and optional sheet coords)
+s(name: string, x: i32 = 0, y: i32 = 0): i32;
 
-// Draw sprite with flipping
-drawSpriteFlip(id: u8, x: i32, y: i32, flipH: bool, flipV: bool);
-
-// Draw sprite scaled 2x
-drawSprite2x(id: u8, x: i32, y: i32);
+// Draw sprite at position (packed ID from s())
+drawSprite(id: i32, x: i32, y: i32, flipX?: bool, flipY?: bool);
 ```
 
 ### Alpha Blending
@@ -492,23 +493,23 @@ All pixels written to the framebuffer have alpha = 255 (fully opaque).
 ### Example Usage
 
 ```ts
-import { drawSprite, drawSpriteFlip } from './console';
+import { drawSprite, s } from './console';
 
-// Draw a flag sprite
-drawSprite(0, 100, 100);
+// Draw a single sprite
+drawSprite(s("flag"), 100, 100);
 
-// Draw a player sprite facing left
-drawSpriteFlip(1, 50, 50, true, false);
+// Draw a sprite sheet frame (column, row)
+drawSprite(s("tiles", 1, 0), 50, 50, true, false);
 
 // Sprites with semi-transparent pixels will blend smoothly
-drawSprite(2, 200, 150); // Shadow sprite with alpha = 128
+drawSprite(s("shadow"), 200, 150); // Shadow sprite with alpha = 128
 ```
 
 ### Notes
 
 - Sprites are loaded at startup from `assets/sprites/`
-- Maximum sprite ID: 255
-- Sprite data is stored in dedicated memory region
+- Maximum sprite entries: 256
+- Sprite data is stored after the sprite tables in shared memory
 - Transparency is handled automatically
 - Alpha blending works with any alpha value (0-255)
 

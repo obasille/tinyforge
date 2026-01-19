@@ -10,6 +10,7 @@ import {
   drawRect,
   drawSprite,
   drawStartMessageBox,
+  s,
   fillCircle,
   fillRect,
   getU8,
@@ -32,13 +33,6 @@ const MINE_COUNT: i32 = 15;
 const CELL_SIZE: i32 = 24;
 const GRID_OFFSET_X: i32 = 40; // Center 240px grid in 320px width
 const GRID_OFFSET_Y: i32 = 0;
-
-// Audio IDs
-const SFX_FLAG = "0";    // Flag placement/removal
-const SFX_EXPLODE = "1"; // Mine explosion
-const SFX_WIN = "2";     // Victory sound
-const SFX_REVEAL = "4";  // Cell reveal sound
-const MUSIC_GAMEPLAY = "0"; // Background music
 
 // Cell bit flags
 enum CellFlag {
@@ -133,14 +127,14 @@ function revealCell(x: i32, y: i32): void {
   // If mine, game over
   if (cell & CellFlag.MINE) {
     vars.state = GameState.LOST as u8;
-    playSfx(SFX_EXPLODE, 0.8);
+    playSfx("explosion", 0.8);
     stopMusic();
     log("Game Over!");
     return;
   }
 
   // Play reveal sound
-  playSfx(SFX_REVEAL, 0.3);
+  playSfx("zif", 0.3);
 
   // If zero mines adjacent, flood fill (iterative)
   if ((cell & CellFlag.COUNT_MASK) == 0) {
@@ -160,11 +154,11 @@ function toggleFlag(x: i32, y: i32): void {
   if (cell & CellFlag.FLAGGED) {
     cell &= ~(CellFlag.FLAGGED as u8);
     vars.flagCount--;
-    playSfx(SFX_FLAG, 0.4);
+    playSfx("tap", 0.4);
   } else if ((vars.flagCount as i32) < MINE_COUNT) {
     cell |= CellFlag.FLAGGED as u8;
     vars.flagCount++;
-    playSfx(SFX_FLAG, 0.4);
+    playSfx("tap", 0.4);
   }
   setCellData(x, y, cell);
 }
@@ -174,7 +168,7 @@ function checkWin(): void {
   const target = GRID_SIZE * GRID_SIZE - MINE_COUNT;
   if (revealed >= target) {
     vars.state = GameState.WON as u8;
-    playSfx(SFX_WIN, 0.8);
+    playSfx("victory", 0.8);
     stopMusic();
     log("You Win!");
   }
@@ -211,7 +205,7 @@ export function update(): void {
   ) {
     vars.state = GameState.PLAYING as u8;
     // Start music after user interaction
-    playMusic(MUSIC_GAMEPLAY, 0.5);
+    playMusic("loop_120bpm", 0.5);
     return;
   }
 
@@ -309,7 +303,7 @@ export function draw(): void {
         }
       } else if (cell & CellFlag.FLAGGED) {
         // Draw flag sprite
-        drawSprite("0", sx + 4, sy + 4);
+        drawSprite(s("0"), sx + 4, sy + 4);
       } else if (state == GameState.LOST && cell & CellFlag.MINE) {
         // Reveal all mines when lost
         fillCircle(sx + 12, sy + 12, 6, colorMine);

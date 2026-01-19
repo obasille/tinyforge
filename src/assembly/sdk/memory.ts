@@ -3,6 +3,12 @@
 // 
 // Memory layout constants are synced with ../../memory-map.ts
 
+// Some tooling doesn't include AssemblyScript's WebAssembly types.
+// Declare a minimal type so TS tooling is satisfied.
+declare namespace WebAssembly {
+  class Memory {}
+}
+
 /** External WebAssembly memory shared between host and cartridge */
 // @ts-expect-error AssemblyScript decorator
 @external("env", "memory")
@@ -58,16 +64,16 @@ export const SPRITE_ID_MAX_CHARS = memoryMap.SPRITE_ID_MAX_CHARS as i32;
 /** Sprite ID lookup entry size (bytes) */
 export const SPRITE_ID_ENTRY_SIZE = memoryMap.SPRITE_ID_ENTRY_SIZE as usize;
 
-/** Sprite ID lookup table base address */
-export const SPRITE_ID_LOOKUP_ADDR = memoryMap.SPRITE_ID_LOOKUP_ADDR as usize;
+/** Sprite table header size (bytes) */
+export const SPRITE_TABLE_HEADER_SIZE = memoryMap.SPRITE_TABLE_HEADER_SIZE as usize;
 
-/** Sprite metadata table base address */
-export const SPRITE_METADATA_ADDR = memoryMap.SPRITE_METADATA_ADDR as usize;
+/** Sprite table base address */
+export const SPRITE_TABLE_ADDR = memoryMap.SPRITE_TABLE_ADDR as usize;
 
-/** Sprite metadata entry size (8 bytes) */
-export const SPRITE_METADATA_SIZE = memoryMap.SPRITE_METADATA_SIZE as usize;
+/** Sprite info entry size (16 bytes) */
+export const SPRITE_INFO_ENTRY_SIZE = memoryMap.SPRITE_INFO_ENTRY_SIZE as usize;
 
-/** Sprite pixel data base address (after 256 sprite metadata entries) */
+/** Sprite pixel data base address (after max tables) */
 export const SPRITE_DATA_ADDR = memoryMap.SPRITE_DATA_ADDR as usize;
 
 /** Maximum sprite data size (~128 KB) */

@@ -84,12 +84,12 @@ function checkCollision(): void {
     vars.ballX = 0.0;
     ballVX = -ballVX;
     vars.ballVX = ballVX;
-    playSfx("0", 0.3);
+    playSfx("tap", 0.3);
   } else if (ballX >= ((WIDTH - BALL_SIZE) as f32)) {
     vars.ballX = (WIDTH - BALL_SIZE) as f32;
     ballVX = -ballVX;
     vars.ballVX = ballVX;
-    playSfx("0", 0.2);
+    playSfx("tap", 0.2);
   }
 
   // Top paddle collision (player 1)
@@ -114,7 +114,7 @@ function checkCollision(): void {
 
     vars.ballVX = ballVX;
     vars.ballVY = ballVY;
-    playSfx("0", 0.4);
+    playSfx("tap", 0.4);
   }
 
   // Bottom paddle collision (player 2)
@@ -140,14 +140,14 @@ function checkCollision(): void {
 
     vars.ballVX = ballVX;
     vars.ballVY = ballVY;
-    playSfx("0", 0.4);
+    playSfx("tap", 0.4);
   }
 
   // Top edge (player 2 scores)
   if (ballY < 0.0) {
     vars.p2Score++;
     log("Player 2 scores!");
-    playSfx("1", 0.5);
+    playSfx("explosion", 0.5);
 
     if (vars.p2Score >= MAX_SCORE) {
       vars.state = GameState.GAME_OVER as u8;
@@ -162,7 +162,7 @@ function checkCollision(): void {
   if (ballY > (HEIGHT as f32)) {
     vars.p1Score++;
     log("Player 1 scores!");
-    playSfx("1", 0.5);
+    playSfx("explosion", 0.5);
 
     if (vars.p1Score >= MAX_SCORE) {
       vars.state = GameState.GAME_OVER as u8;

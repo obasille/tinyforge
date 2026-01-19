@@ -19,6 +19,7 @@ import {
   log,
   playSfx,
   randomRange,
+  s,
 } from "../sdk";
 
 // === Constants ===
@@ -343,7 +344,7 @@ export function update(): void {
       py + PLAYER_HEIGHT > coin.y
     ) {
       vars.coinsCollected++;
-      playSfx("0", 0.6); // Coin collect sound
+      playSfx("tap", 0.6); // Coin collect sound
       
       // Spawn new coin at random location
       spawnRandomCoin();
@@ -381,17 +382,14 @@ export function draw(): void {
   if (coin.active) {
     // Animate through 8 frames (10-17) every 8 frames
     const coinFrame = (vars.gameTimer / 8) % 8;
-    const coinSpriteId = 10 + coinFrame;
-    drawSprite(coinSpriteId.toString(), coin.x, coin.y);
+    drawSprite(s("10", coinFrame, 0), coin.x, coin.y);
   }
 
   // Draw player (dinosaur sprite) - flash when invulnerable
   if (vars.invulnTimer <= 0 || (vars.invulnTimer / 5) % 2 == 0) {
     const px = <i32>vars.playerX;
     const py = <i32>vars.playerY;
-    const spriteId = 1 + <u32>vars.animFrame;
-    
-    drawSprite(spriteId.toString(), px, py, vars.facingRight == 0);
+    drawSprite(s("1", vars.animFrame, 0), px, py, vars.facingRight == 0);
   }
 
   // Draw title and lives
@@ -403,7 +401,7 @@ export function draw(): void {
   }
 
   // Draw coins collected in top-right
-  drawSprite("14", WIDTH - 70, 2);
+  drawSprite(s("14"), WIDTH - 70, 2);
   // Number of coins
   drawNumber(WIDTH - 40, 8, vars.coinsCollected, c(0xFFFFFF));
 

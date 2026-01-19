@@ -341,7 +341,7 @@ export function update(): void {
         const bulletY = PLAYER_Y - BULLET_HEIGHT;
         setPlayerBullet(i, bulletX, bulletY, 1);
         vars.shootCooldown = 20;
-        playSfx("0", 0.3);
+        playSfx("tap", 0.3);
         break;
       }
     }
@@ -378,7 +378,7 @@ export function update(): void {
                 else if (row <= 2) vars.score += 20;
                 else vars.score += 10;
                 
-                playSfx("0", 0.5);
+                playSfx("tap", 0.5);
                 hitAlien = true;
                 
                 if (vars.aliensRemaining == 0) {
@@ -481,7 +481,7 @@ export function update(): void {
             by >= PLAYER_Y && by < PLAYER_Y + PLAYER_HEIGHT) {
           vars.lives--;
           setAlienBullet(i, 0, 0, 0);
-          playSfx("1", 0.3);
+          playSfx("explosion", 0.3);
           
           if (vars.lives <= 0) {
             vars.state = GameState.GAME_OVER as u8;

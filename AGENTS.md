@@ -380,6 +380,10 @@ const index = randomRange(7); // [0, 7)
 - AssemblyScript version may not support `@inline` on constants
 - Can be safely ignored if build succeeds
 
+**"Cannot find name 'WebAssemblyMemory'" / "Cannot find namespace 'WebAssembly'":**
+- Some TS tooling doesn't include AssemblyScript's WebAssembly types
+- Add a minimal local `WebAssembly` namespace with a `Memory` class in `src/assembly/sdk/memory.ts`
+
 #### 13. Logging and Debugging
 
 **Use logging strategically:**
