@@ -16,18 +16,18 @@
  * 
  * ⚠️ Requires prior user interaction (click/keypress) due to browser autoplay policy
  * 
- * @param id Sound effect ID (corresponds to assets/sfx/{id}-*.wav file)
+ * @param id Sound effect ID (corresponds to assets/sfx/{id}*.wav file)
  * @param volume Volume level (0.0 to 1.0, default: 1.0)
  * 
  * @example
  * ```ts
- * playSfx(0, 1.0);   // Plays sfx/0-jump.wav at full volume
- * playSfx(1, 0.5);   // Plays sfx/1-shoot.wav at half volume
+ * playSfx("jump", 1.0);   // Plays sfx/jump.wav at full volume
+ * playSfx("shoot", 0.5);  // Plays sfx/shoot-quiet.wav at half volume
  * ```
  */
 // @ts-expect-error AssemblyScript decorator
 @external("env", "audio.playSfx")
-export declare function playSfx(id: u32, volume: f32): void;
+export declare function playSfx(id: string, volume: f32): void;
 
 /**
  * Play background music by ID
@@ -36,27 +36,27 @@ export declare function playSfx(id: u32, volume: f32): void;
  * ⚠️ Requires prior user interaction (click/keypress) due to browser autoplay policy
  * Call this AFTER user clicks start button, not in init()
  * 
- * @param id Music track ID (corresponds to assets/music/{id}-*.mp3 file)
+ * @param id Music track ID (corresponds to assets/music/{id}*.mp3 file)
  * @param volume Volume level (0.0 to 1.0, default: 1.0)
  * 
  * @example
  * ```ts
  * // ❌ WRONG - Called in init(), before user interaction
  * export function init() {
- *   playMusic(0, 0.7);  // Will fail silently
+ *   playMusic("theme", 0.7);  // Will fail silently
  * }
  * 
  * // ✅ CORRECT - Called after user clicks start button
  * export function update() {
  *   if (startButtonPressed) {
- *     playMusic(0, 0.7);  // Works!
+ *     playMusic("theme", 0.7);  // Works!
  *   }
  * }
  * ```
  */
 // @ts-expect-error AssemblyScript decorator
 @external("env", "audio.playMusic")
-export declare function playMusic(id: u32, volume: f32): void;
+export declare function playMusic(id: string, volume: f32): void;
 
 /**
  * Stop currently playing music

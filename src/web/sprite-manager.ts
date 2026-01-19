@@ -49,7 +49,7 @@ class SpriteManager {
       );
 
       for (const asset of spriteAssets) {
-        await this.#loadSprite(asset.id, asset.url);
+        await this.#loadSprite(asset);
       }
 
       // Write all loaded sprites to WASM memory
@@ -61,17 +61,27 @@ class SpriteManager {
 
   /**
    * Load a single sprite file or sprite sheet
-   * Sprite sheet format: ID~COLSxROWS-name.png (e.g., "10~4x3-tiles.png")
+   * Sprite sheet format: {id}~COLSxROWS-name.png (e.g., "10~4x3-tiles.png")
    * where COLS = sprites across, ROWS = sprites down
    * Everything after dimensions is ignored (just like single sprite names)
    */
-  async #loadSprite(id, url) {
+  async #loadSprite(asset) {
     try {
-      AssetLoader.checkDuplicate(this.#sprites, id, url, 'Sprite');
+      const { id, format, url } = asset;
+      const numericId = parseInt(id, 10);
+      if (Number.isNaN(numericId)) {
+        console.warn(`Sprite ID "${id}" is not numeric, skipping ${url}`);
+        return;
+      }
+      if (numericId < 0 || numericId > 255) {
+        console.warn(`Sprite ID ${numericId} out of range (0-255), skipping ${url}`);
+        return;
+      }
+
+      AssetLoader.checkDuplicate(this.#sprites, numericId, url, 'Sprite');
 
       // Check if this is a sprite sheet (format: ID~COLSxROWS-*.ext)
-      const basename = url.split('/').pop();
-      const sheetMatch = basename.match(/^(\d+)~(\d+)x(\d+)/);
+      const sheetMatch = format.match(/^(\d+)x(\d+)$/);
       
       // Load image
       const img = await AssetLoader.loadImage(url);
@@ -79,15 +89,15 @@ class SpriteManager {
       
       if (sheetMatch) {
         // Sprite sheet detected
-        const cols = parseInt(sheetMatch[2], 10);
-        const rows = parseInt(sheetMatch[3], 10);
-        await this.#loadSpriteSheet(image, id, cols, rows, url);
+        const cols = parseInt(sheetMatch[1], 10);
+        const rows = parseInt(sheetMatch[2], 10);
+        await this.#loadSpriteSheet(image, numericId, cols, rows, url);
       } else {
         // Single sprite
-        await this.#loadSingleSprite(image, id, url);
+        await this.#loadSingleSprite(image, numericId, url);
       }
     } catch (e) {
-      console.warn(`Failed to load sprite ${id} from ${url}:`, e.message);
+      console.warn(`Failed to load sprite ${asset.id} from ${asset.url}:`, e.message);
     }
   }
 

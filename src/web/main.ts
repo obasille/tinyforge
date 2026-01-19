@@ -155,10 +155,12 @@ async function loadGame(gameName, { skipInit = false } = {}) {
           },
           // Audio functions
           'audio.playSfx': (id, volume) => {
-            audioManager.playSfx(id, volume);
+            const idString = wasmExports.__getString(id);
+            audioManager.playSfx(idString, volume);
           },
           'audio.playMusic': (id, volume) => {
-            audioManager.playMusic(id, volume);
+            const idString = wasmExports.__getString(id);
+            audioManager.playMusic(idString, volume);
           },
           'audio.stopMusic': () => {
             audioManager.stopMusic();

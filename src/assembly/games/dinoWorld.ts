@@ -343,7 +343,7 @@ export function update(): void {
       py + PLAYER_HEIGHT > coin.y
     ) {
       vars.coinsCollected++;
-      playSfx(0, 0.6); // Coin collect sound
+      playSfx("0", 0.6); // Coin collect sound
       
       // Spawn new coin at random location
       spawnRandomCoin();

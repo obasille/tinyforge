@@ -6,15 +6,44 @@
  */
 export class AssetLoader {
   /**
-   * Extract numeric ID from filename (e.g., "0-player.png" -> 0)
-   * Supports various separators: dash, underscore, space
-   * Handles paths by extracting basename first
+   * Parse asset filename into id/format/info parts.
+   * Filename format: {id}~{format}-{info}.ext
+   * Only id is required.
    */
-  static extractId(filename) {
-    // Extract basename from path (handle both / and \ separators)
+  static parseAssetFilename(filename) {
     const basename = filename.split(/[\/\\]/).pop();
-    const match = basename.match(/^(\d+)/);
-    return match ? parseInt(match[1], 10) : null;
+    let decoded = basename;
+    try {
+      decoded = decodeURIComponent(basename);
+    } catch {
+      // Keep original if decoding fails
+    }
+    const name = decoded.replace(/\.[^/.]+$/, '');
+
+    let id = name;
+    let format = '';
+    let info = '';
+
+    const tildeIndex = name.indexOf('~');
+    const dashIndex = name.indexOf('-');
+
+    if (tildeIndex >= 0) {
+      id = name.slice(0, tildeIndex);
+      const remainder = name.slice(tildeIndex + 1);
+      const remainderDash = remainder.indexOf('-');
+      if (remainderDash >= 0) {
+        format = remainder.slice(0, remainderDash);
+        info = remainder.slice(remainderDash + 1);
+      } else {
+        format = remainder;
+      }
+    } else if (dashIndex >= 0) {
+      id = name.slice(0, dashIndex);
+      info = name.slice(dashIndex + 1);
+    }
+
+    if (!id) return null;
+    return { id, format, info };
   }
 
   /**
@@ -53,11 +82,11 @@ export class AssetLoader {
    * Load files from a directory with ID extraction and filtering
    * @param dirUrl - Directory URL to scan
    * @param filePattern - Regex pattern for file extensions
-   * @param minId - Minimum allowed ID (default: 0)
-   * @param maxId - Maximum allowed ID (default: 255)
-   * @returns Array of {id, filename, url} objects
+   * @param minId - Minimum allowed numeric ID (optional)
+   * @param maxId - Maximum allowed numeric ID (optional)
+   * @returns Array of {id, format, info, filename, url} objects
    */
-  static async scanDirectory(dirUrl, filePattern, minId = 0, maxId = 255) {
+  static async scanDirectory(dirUrl, filePattern, minId = null, maxId = null) {
     try {
       const response = await fetch(dirUrl);
       if (!response.ok) {
@@ -69,14 +98,23 @@ export class AssetLoader {
       
       const assets = [];
       for (const file of files) {
-        const id = this.extractId(file);
-        if (id !== null && id >= minId && id <= maxId) {
-          assets.push({
-            id,
-            filename: file,
-            url: `${dirUrl}${file}`
-          });
+        const parsed = this.parseAssetFilename(file);
+        if (!parsed) continue;
+
+        if (minId !== null || maxId !== null) {
+          const numericId = parseInt(parsed.id, 10);
+          if (Number.isNaN(numericId)) continue;
+          if (minId !== null && numericId < minId) continue;
+          if (maxId !== null && numericId > maxId) continue;
         }
+
+        assets.push({
+          id: parsed.id,
+          format: parsed.format,
+          info: parsed.info,
+          filename: file,
+          url: `${dirUrl}${file}`
+        });
       }
       
       return assets;
