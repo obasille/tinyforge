@@ -10,6 +10,7 @@ import {
   SPRITE_METADATA_ADDR,
   SPRITE_DATA_ADDR
 } from "./memory";
+import { Vec2i } from "./utility";
 
 /**
  * Efficiently clears entire framebuffer using native JS
@@ -356,6 +357,45 @@ export function drawCircle(cx: i32, cy: i32, r: i32, color: u32): void {
 }
 
 /**
+ * Resolve a sprite string ID to numeric ID via lookup table.
+ * Returns -1 if not found or invalid x or y indices.
+ * @param name Sprite name
+ * @param x For sprite sheet, the column index
+ * @param y For sprite sheet, the row index
+ * @returns Numeric ID
+ */
+export function s(name: string, x: i32 = 0, y: i32 = 0): i32 {
+  const length = name.length;
+  if (length == 0 || length > SPRITE_ID_MAX_CHARS) {
+    return -1;
+  }
+
+  for (let id: i32 = 0; id < 256; id++) {
+    const base = SPRITE_ID_LOOKUP_ADDR + (id as usize) * SPRITE_ID_ENTRY_SIZE;
+    let match = true;
+    for (let i: i32 = 0; i < SPRITE_ID_MAX_CHARS; i++) {
+      const tableChar = load<u16>(base + (i << 1));
+      if (i < length) {
+        if (tableChar != (name.charCodeAt(i) as u16)) {
+          match = false;
+          break;
+        }
+      } else {
+        if (tableChar != 0) {
+          match = false;
+        }
+        break;
+      }
+    }
+    if (match) {
+      return id + x;
+    }
+  }
+
+  return -1;
+}
+
+/**
  * Draw a sprite at the specified position
  * Supports alpha blending for semi-transparent sprites
  * @param id Sprite ID
@@ -369,12 +409,11 @@ export function drawCircle(cx: i32, cy: i32, r: i32, color: u32): void {
  * drawSprite("0", 100, 100, true); // Draw flipped horizontally
  * ```
  */
-export function drawSprite(id: string, x: i32, y: i32, flipX: bool = false, flipY: bool = false): void {
-  const numericId = resolveSpriteId(id);
-  if (numericId < 0) return;
+export function drawSprite(id: i32, x: i32, y: i32, flipX: bool = false, flipY: bool = false): void {
+  if (id < 0) return;
 
   // Read sprite metadata
-  const metadataAddr = SPRITE_METADATA_ADDR + (numericId as usize) * 8;
+  const metadataAddr = SPRITE_METADATA_ADDR + (id as usize) * 8;
   const width = load<u16>(metadataAddr) as i32;
   const height = load<u16>(metadataAddr + 2) as i32;
   const dataOffset = load<u32>(metadataAddr + 4);
@@ -448,35 +487,6 @@ export function drawSprite(id: string, x: i32, y: i32, flipX: bool = false, flip
     rowOffset += width;
     fbRowBase += WIDTH as usize;
   }
-}
-
-// Resolve a sprite string ID to numeric ID via lookup table.
-// Returns -1 if not found or invalid length.
-function resolveSpriteId(name: string): i32 {
-  const length = name.length;
-  if (length == 0 || length > SPRITE_ID_MAX_CHARS) return -1;
-
-  for (let id: i32 = 0; id < 256; id++) {
-    const base = SPRITE_ID_LOOKUP_ADDR + (id as usize) * SPRITE_ID_ENTRY_SIZE;
-    let match = true;
-    for (let i: i32 = 0; i < SPRITE_ID_MAX_CHARS; i++) {
-      const tableChar = load<u16>(base + (i << 1));
-      if (i < length) {
-        if (tableChar != (name.charCodeAt(i) as u16)) {
-          match = false;
-          break;
-        }
-      } else {
-        if (tableChar != 0) {
-          match = false;
-          break;
-        }
-      }
-    }
-    if (match) return id;
-  }
-
-  return -1;
 }
 
 /**

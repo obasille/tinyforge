@@ -16,6 +16,7 @@ import {
   drawSprite,
   log,
   pset,
+  s,
 } from "../sdk";
 
 // === RAM Variable System ===
@@ -75,7 +76,7 @@ export function draw(): void {
   const speed = 0.3;
   const i = <u32>Math.floor(vars.animFrame * speed / 2) % 9;
   const o = <u32>Math.floor(vars.animFrame * speed) % 350;
-  drawSprite((1 + i).toString(), -30 + o, 10, true, true); // draw sprite at (10,10)
+  drawSprite(s((1 + i).toString()), -30 + o, 10, true, true); // draw sprite at (10,10)
   drawNumber(1, 30, i, c(0x0000ff)); // draw animation frame count
 
   drawCircle(10, 100, 30, c(0x0000ff));
@@ -88,6 +89,6 @@ export function draw(): void {
   // drawSpriteScaled(1, 100, 100, 2, 2);
   // drawSpriteFrameScaled(1, 100, 100, 0, 10, 10, 2, 2);
 
-  drawSprite("18", 200, 200);
-  drawSprite("19", 150, 200);
+  drawSprite(s("18"), 200, 200);
+  drawSprite(s("20"), 150, 200);
 }
