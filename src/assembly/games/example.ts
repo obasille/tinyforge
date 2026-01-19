@@ -87,4 +87,7 @@ export function draw(): void {
   // drawSpriteFrame(1, 100, 100, 0, 10, 10);
   // drawSpriteScaled(1, 100, 100, 2, 2);
   // drawSpriteFrameScaled(1, 100, 100, 0, 10, 10, 2, 2);
+
+  drawSprite(18, 200, 200);
+  drawSprite(19, 150, 200);
 }
