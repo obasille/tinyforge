@@ -1,6 +1,8 @@
 // Asset Loader Utility - Common functionality for loading game assets
 // Shared between audio, sprites, and future asset types
 
+import { addConsoleEntry } from "./console-panel.js";
+
 /**
  * Utility class for loading assets with ID-based naming
  */
@@ -73,7 +75,7 @@ export class AssetLoader {
    */
   static checkDuplicate(collection, id, url, type) {
     if (collection.has(id)) {
-      console.warn(`${type} ID ${id} already loaded, overwriting with ${url}`);
+      addConsoleEntry('WARN', `${type} ID ${id} already loaded, overwriting with ${url}`);
       return true;
     }
     return false;
@@ -102,7 +104,7 @@ export class AssetLoader {
         const parsed = this.parseAssetFilename(file);
         if (!parsed) continue;
         if (parsed.id.length > this.MAX_ID_LENGTH) {
-          console.warn(`Asset ID "${parsed.id}" exceeds ${this.MAX_ID_LENGTH} characters, skipping ${file}`);
+          addConsoleEntry('WARN', `Asset ID "${parsed.id}" exceeds ${this.MAX_ID_LENGTH} characters, skipping ${file}`);
           continue;
         }
 
@@ -124,7 +126,7 @@ export class AssetLoader {
       
       return assets;
     } catch (e) {
-      console.warn(`Failed to scan directory ${dirUrl}:`, e.message);
+      addConsoleEntry('WARN', `Failed to scan directory ${dirUrl}: ${e.message}`);
       return [];
     }
   }

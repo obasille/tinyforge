@@ -9,6 +9,7 @@
 // Games should call playMusic() after detecting user input, not in init().
 
 import { AssetLoader } from './asset-loader.js';
+import { addConsoleEntry } from './console-panel.js';
 
 class AudioManager {
   #audioContext = null;
@@ -74,7 +75,7 @@ class AudioManager {
         await this.#loadAudioFile(this.#musicBuffers, asset.id, asset.url, 'Music');
       }
     } catch (e) {
-      console.warn('Audio loading failed:', e.message);
+      addConsoleEntry('WARN', `Audio loading failed: ${e.message}`);
     }
   }
 
@@ -89,7 +90,7 @@ class AudioManager {
       const audioBuffer = await this.#audioContext.decodeAudioData(arrayBuffer);
       bufferMap.set(id, audioBuffer);
     } catch (e) {
-      console.warn(`Failed to load ${type} ${id} from ${url}:`, e.message);
+      addConsoleEntry('WARN', `Failed to load ${type} ${id} from ${url}: ${e.message}`);
     }
   }
 
@@ -99,7 +100,7 @@ class AudioManager {
   playSfx(id, volume = 1.0) {
     const buffer = this.#sfxBuffers.get(id);
     if (!buffer) {
-      console.warn(`SFX ${id} not loaded`);
+      addConsoleEntry('WARN', `SFX ${id} not loaded`);
       return;
     }
 
@@ -122,7 +123,7 @@ class AudioManager {
     
     const buffer = this.#musicBuffers.get(id);
     if (!buffer) {
-      console.warn(`Music ${id} not loaded`);
+      addConsoleEntry('WARN', `Music ${id} not loaded`);
       return;
     }
 

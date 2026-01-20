@@ -9,6 +9,7 @@ import {
   SPRITE_INFO_ENTRY_SIZE,
   SPRITE_DATA_SIZE
 } from '../memory-map.js';
+import { addConsoleEntry } from './console-panel.js';
 
 class SpriteManager {
   #memory = null;
@@ -46,7 +47,7 @@ class SpriteManager {
    */
   async loadSprites() {
     if (!this.#memory) {
-      console.error('SpriteManager not initialized with memory');
+      addConsoleEntry('ERROR', 'SpriteManager not initialized with memory');
       return;
     }
 
@@ -63,7 +64,7 @@ class SpriteManager {
       // Write all loaded sprites to WASM memory
       this.#writeSpritesToMemory();
     } catch (e) {
-      console.warn('Sprite loading failed:', e.message);
+      addConsoleEntry('WARN', `Sprite loading failed: ${e.message}`);
     }
   }
 
@@ -95,7 +96,7 @@ class SpriteManager {
         await this.#loadSingleSprite(image, id, url);
       }
     } catch (e) {
-      console.warn(`Failed to load sprite ${asset.id} from ${asset.url}:`, e.message);
+      addConsoleEntry('WARN', `Failed to load sprite ${asset.id} from ${asset.url}: ${e.message}`);
     }
   }
 
@@ -135,8 +136,6 @@ class SpriteManager {
     const spriteHeight = Math.floor(image.height / rows);
     const totalSprites = cols * rows;
     
-    console.log(`Loading sprite sheet: ${url} (${cols}x${rows} = ${totalSprites} sprites, ${spriteWidth}x${spriteHeight} each)`);
-    
     // Create a temporary canvas for extraction
     const canvas = document.createElement('canvas');
     canvas.width = spriteWidth;
@@ -174,7 +173,6 @@ class SpriteManager {
       frames
     };
     this.#setEntry(id, entry, url);
-    console.log(`Loaded ${totalSprites} sprites from sheet (${id})`);
   }
 
   /**
@@ -214,7 +212,7 @@ class SpriteManager {
     for (const [index, id] of this.#idByIndex) {
       const name = id;
       if (name.length > SPRITE_ID_MAX_CHARS) {
-        console.warn(`Sprite ID "${name}" exceeds ${SPRITE_ID_MAX_CHARS} chars, skipping lookup entry`);
+        addConsoleEntry('WARN', `Sprite ID "${name}" exceeds ${SPRITE_ID_MAX_CHARS} chars, skipping lookup entry`);
         continue;
       }
       const baseIndex = index * (SPRITE_ID_ENTRY_SIZE / 2);
@@ -259,7 +257,7 @@ class SpriteManager {
     
     // Check if we exceeded available memory
     if (this.#nextDataOffset > SPRITE_DATA_SIZE) {
-      console.warn(`Sprite data exceeds allocated memory: ${this.#nextDataOffset} bytes (max: ${SPRITE_DATA_SIZE})`);
+      addConsoleEntry('WARN', `Sprite data exceeds allocated memory: ${this.#nextDataOffset} bytes (max: ${SPRITE_DATA_SIZE})`);
     }
   }
 
@@ -274,7 +272,7 @@ class SpriteManager {
       return this.#indexById.get(id);
     }
     if (this.#nextIndex > 255) {
-      console.warn(`Sprite limit reached (256). Cannot load ${id} from ${url}`);
+      addConsoleEntry('WARN', `Sprite limit reached (256). Cannot load ${id} from ${url}`);
       return -1;
     }
     const index = this.#nextIndex;
