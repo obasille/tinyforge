@@ -553,8 +553,7 @@ window.addEventListener("keyup", e => {
 // Mouse input
 // Tracks mouse position and button state, scaled to virtual 320×240 coordinates
 
-// Update mouse position when cursor moves over canvas
-canvas.addEventListener("mousemove", e => {
+const updateMouseFromClient = (clientX: number, clientY: number) => {
   const rect = canvas.getBoundingClientRect();
   const viewWidth = rect.width;
   const viewHeight = rect.height;
@@ -581,12 +580,17 @@ canvas.addEventListener("mousemove", e => {
     offsetY = (viewHeight - drawHeight) / 2;
   }
 
-  const x = e.clientX - rect.left - offsetX;
-  const y = e.clientY - rect.top - offsetY;
+  const x = clientX - rect.left - offsetX;
+  const y = clientY - rect.top - offsetY;
   const scaleX = canvas.width / drawWidth;
   const scaleY = canvas.height / drawHeight;
   mouseX = Math.floor(x * scaleX);
   mouseY = Math.floor(y * scaleY);
+};
+
+// Update mouse position when cursor moves over canvas
+canvas.addEventListener("mousemove", e => {
+  updateMouseFromClient(e.clientX, e.clientY);
 });
 
 // Set coordinates to -1 when mouse leaves canvas
@@ -616,6 +620,38 @@ canvas.addEventListener("mouseup", e => {
     e.preventDefault();
   }
 });
+
+// Touch input: map taps to left mouse button.
+canvas.addEventListener("touchstart", (event) => {
+  preventIfTouchScrollBlocked(event);
+  const touch = event.touches[0];
+  if (!touch) return;
+  updateMouseFromClient(touch.clientX, touch.clientY);
+  mouseButtons |= 1;
+}, { passive: false });
+
+canvas.addEventListener("touchmove", (event) => {
+  preventIfTouchScrollBlocked(event);
+  const touch = event.touches[0];
+  if (!touch) return;
+  updateMouseFromClient(touch.clientX, touch.clientY);
+}, { passive: false });
+
+canvas.addEventListener("touchend", (event) => {
+  preventIfTouchScrollBlocked(event);
+  mouseButtons &= ~1;
+  if (event.touches.length === 0) {
+    mouseX = -1;
+    mouseY = -1;
+  }
+}, { passive: false });
+
+canvas.addEventListener("touchcancel", (event) => {
+  preventIfTouchScrollBlocked(event);
+  mouseButtons &= ~1;
+  mouseX = -1;
+  mouseY = -1;
+}, { passive: false });
 
 // Onscreen buttons
 
@@ -654,10 +690,6 @@ const releaseStart = (event: Event) => {
   preventIfTouchScrollBlocked(event);
   inputMask &= ~keyMap.start;
 };
-canvas.addEventListener("touchstart", pressStart, { passive: false });
-canvas.addEventListener("touchend", releaseStart, { passive: false });
-canvas.addEventListener("touchcancel", releaseStart, { passive: false });
-canvas.addEventListener("touchmove", (event) => preventIfTouchScrollBlocked(event), { passive: false });
 canvas.addEventListener("mousedown", pressStart);
 window.addEventListener("mouseup", releaseStart);
 
