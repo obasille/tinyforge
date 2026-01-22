@@ -14,6 +14,7 @@ import {
   drawNumber,
   drawRect,
   drawSprite,
+  drawSpriteScaled,
   log,
   pset,
   s,
@@ -73,10 +74,12 @@ export function draw(): void {
   // draw player
   pset(px, py, c(0xffffff));
 
+  drawSpriteScaled(s("level1"), 0, 0, 16, 16);
+
   const speed = 0.3;
   const i = <u32>Math.floor(vars.animFrame * speed / 2) % 9;
   const o = <u32>Math.floor(vars.animFrame * speed) % 350;
-  drawSprite(s("1", i as i32, 0), -30 + o, 10, true, true); // draw sprite at (10,10)
+  drawSprite(s("dino", i as i32, 0), -30 + o, 10, true, true); // draw sprite at (10,10)
   drawNumber(1, 30, i, c(0x0000ff)); // draw animation frame count
 
   drawCircle(10, 100, 30, c(0x0000ff));
@@ -84,11 +87,11 @@ export function draw(): void {
   drawLine(100, 100, 200, 200, c(0x0000ff));
   // drawString(100, 100, "Hello, world!", c(0x0000ff));
   // drawNumber(100, 100, 10, c(0x0000ff));
-  // drawSprite(s("1"), 100, 100);
+  // drawSprite(s("dino"), 100, 100);
   // drawSpriteFrame(1, 100, 100, 0, 10, 10);
   // drawSpriteScaled(1, 100, 100, 2, 2);
   // drawSpriteFrameScaled(1, 100, 100, 0, 10, 10, 2, 2);
 
-  drawSprite(s("18"), 200, 200);
-  drawSprite(s("19"), 150, 200);
+  drawSprite(s("crocodile"), 200, 200);
+  drawSprite(s("crocodile_bloody"), 150, 200);
 }

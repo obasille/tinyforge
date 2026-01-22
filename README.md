@@ -430,9 +430,9 @@ Sprite images are stored in the `assets/sprites/` directory:
 ```
 assets/
 └─ sprites/         # Sprite images
-   ├─ 0-flag.png
-   ├─ 1-player.png
-   ├─ 2~4x3-tiles.png  # Sprite sheet: 4x3 grid
+   ├─ flag.png
+   ├─ player-test#1.png
+   ├─ someTiles~4x3.png  # Sprite sheet: 4x3 grid
    └─ ...
 ```
 
@@ -481,14 +481,6 @@ The sprite system supports full alpha blending:
 The blending formula is: `result = src * alpha + dst * (1 - alpha)`
 
 All pixels written to the framebuffer have alpha = 255 (fully opaque).
-
-### Performance Optimization
-
-`drawSprite()` is optimized for performance:
-- Calculates visible region once before drawing
-- Only iterates over pixels that are on-screen
-- Early exit if sprite is completely off-screen
-- Skips per-pixel bounds checking in the loop
 
 ### Example Usage
 

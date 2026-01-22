@@ -303,7 +303,7 @@ export function draw(): void {
         }
       } else if (cell & CellFlag.FLAGGED) {
         // Draw flag sprite
-        drawSprite(s("0"), sx + 4, sy + 4);
+        drawSprite(s("flag"), sx + 4, sy + 4);
       } else if (state == GameState.LOST && cell & CellFlag.MINE) {
         // Reveal all mines when lost
         fillCircle(sx + 12, sy + 12, 6, colorMine);
