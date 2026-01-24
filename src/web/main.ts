@@ -522,6 +522,7 @@ const keyCodeMap = {
   KeyZ: keyMap.a,
   KeyX: keyMap.b,
   Enter: keyMap.start,
+  Space: keyMap.start,
 };
 
 let inputMask = 0;
