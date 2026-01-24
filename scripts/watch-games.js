@@ -33,9 +33,9 @@ async function runBuild(target) {
   running = true;
   try {
     if (target === 'all') {
-      await run('node', ['scripts/build-game.js']);
+      await run('node', ['scripts/build-games.js']);
     } else {
-      await run('node', ['scripts/build-game.js', target]);
+      await run('node', ['scripts/build-games.js', target]);
     }
   } catch (error) {
     console.error(error.message);
