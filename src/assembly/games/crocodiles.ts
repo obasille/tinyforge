@@ -42,7 +42,7 @@ const COULEUR_CROC_TOOTH: u32 = c(0xe6e6e6);
 const COULEUR_FOND: u32 = c(0x0a0a10);
 const COULEUR_GRILLE_SOMBRE: u32 = c(0x141428);
 const COULEUR_GRILLE_CLAIR: u32 = c(0x1c1c36);
-const COULEUR_MUR: u32 = c(0x0000ff);
+const COULEUR_MUR: u32 = c(0x04e5ff);
 
 enum Direction {
   HAUT = 0,
@@ -215,15 +215,21 @@ export function update(): void {
     else if (buttonDown(Button.UP)) dy = -1;
     else if (buttonDown(Button.DOWN)) dy = 1;
 
-    // Si une direction est pressée, tenter de déplacer le joueur
+    // Si une direction est pressée, déplace le joueur
     if (dx != 0 || dy != 0) {
-      const nx = vars.joueurX + dx;
-      const ny = vars.joueurY + dy;
+      // Calcule la nouvelle position
+      let posx = vars.joueurX + dx;
+      let posy = vars.joueurY + dy;
+
+      if (posx == -1) posx = LARGEUR_GRILLE - 1;
+      if (posx == LARGEUR_GRILLE) posx = 0;
+      if (posy == -1) posy = HAUTEUR_GRILLE - 1;
+      if (posy == HAUTEUR_GRILLE) posy = 0;
       
       // Déplacer uniquement si la position est valide
-      if (peutBouger(nx, ny)) {
-        vars.joueurX = nx as u8;
-        vars.joueurY = ny as u8;
+      if (peutBouger(posx, posy)) {
+        vars.joueurX = posx as u8;
+        vars.joueurY = posy as u8;
       }
       
       // Réinitialiser le minuteur de mouvement
@@ -261,13 +267,13 @@ export function draw(): void {
 
   dessineGrille();
 
-  // dessineCroco(vars.croc0X, vars.croc0Y);
-  // dessineCroco(vars.croc1X, vars.croc1Y);
-  // dessineCroco(vars.croc2X, vars.croc2Y);
+  dessineCroco(vars.croc0X, vars.croc0Y);
+  dessineCroco(vars.croc1X, vars.croc1Y);
+  dessineCroco(vars.croc2X, vars.croc2Y);
 
   dessineTeteJoueur(vars.joueurX, vars.joueurY);
 
   if (vars.etat == EtatJeu.PARTIE_TERMINEE) {
-    drawStartMessageBox("DEVORÉ !", c(0x2a1a1a), c(0xffaa00));
+    drawStartMessageBox("IL VA TE MANGER...", c(0x2a1a1a), c(0xffaa00));
   }
 }
