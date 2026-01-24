@@ -1,7 +1,8 @@
-// CROCODILES - TinyForge Game
-// Pacman-like chase on a single screen with a 16x16 grid.
-// You control a blocky head while crocodiles patrol the maze.
-// Avoid crocodiles; press START to restart after game over.
+// cspell:language en,fr
+// CROCODILES - Jeu TinyForge
+// Poursuite façon Pacman sur un écran unique avec une grille 16x16 pixels.
+// Vous contrôlez une tête cubique tandis que les crocodiles patrouillent le labyrinthe.
+// Évitez les crocodiles; appuyez sur START pour redémarrer après game over.
 
 import {
   Button,
@@ -16,45 +17,48 @@ import {
   drawRect,
   fillRect,
   randomRange,
+  drawSpriteScaled,
+  s,
 } from "../sdk";
 
-// === Constants ===
-const GRID_SIZE: i32 = 16;
-const GRID_WIDTH: i32 = WIDTH / GRID_SIZE;
-const GRID_HEIGHT: i32 = HEIGHT / GRID_SIZE;
+// === Constantes ===
+const CASE_DIM_PIXELS: i32 = 16;
+const LARGEUR_GRILLE: i32 = WIDTH / CASE_DIM_PIXELS;
+const HAUTEUR_GRILLE: i32 = HEIGHT / CASE_DIM_PIXELS;
 
-const PLAYER_MOVE_DELAY: u8 = 6;
-const CROC_MOVE_DELAY: u8 = 10;
+const PLAYER_DEPL_DELAI: u8 = 6;
+const CROC_DEPL_DELAI: u8 = 10;
 
-const COLOR_BG: u32 = c(0x0a0a10);
-const COLOR_GRID_DARK: u32 = c(0x141428);
-const COLOR_GRID_LIGHT: u32 = c(0x1c1c36);
-const COLOR_PLAYER: u32 = c(0xf2c9a0);
-const COLOR_PLAYER_EYE: u32 = c(0x1b1b1b);
-const COLOR_CROC: u32 = c(0x1c8b3a);
-const COLOR_CROC_EYE: u32 = c(0xffffff);
-const COLOR_CROC_TOOTH: u32 = c(0xe6e6e6);
+const COULEUR_PLAYER: u32 = c(0xf2c9a0);
+const COULEUR_PLAYER_EYE: u32 = c(0x1b1b1b);
+const COULEUR_CROC: u32 = c(0x1c8b3a);
+const COULEUR_CROC_EYE: u32 = c(0xffffff);
+const COULEUR_CROC_TOOTH: u32 = c(0xe6e6e6);
+
+const COULEUR_FOND: u32 = c(0x0a0a10);
+const COULEUR_GRILLE_SOMBRE: u32 = c(0x141428);
+const COULEUR_GRILLE_CLAIR: u32 = c(0x1c1c36);
 
 enum Direction {
-  UP = 0,
-  RIGHT = 1,
-  DOWN = 2,
-  LEFT = 3,
+  HAUT = 0,
+  DROITE = 1,
+  BAS = 2,
+  GAUCHE = 3,
 }
 
-enum GameState {
-  PLAYING = 0,
-  GAME_OVER = 1,
+enum EtatJeu {
+  EN_COURS = 0,
+  PARTIE_TERMINEE = 1,
 }
 
-// === RAM Variable System ===
+// === Système de variables en RAM ===
 @unmanaged
-class Vars {
-  playerX: u8; // 0
-  playerY: u8; // 1
-  state: u8; // 2
-  playerMoveTimer: u8; // 3
-  crocMoveTimer: u8; // 4
+class Variables {
+  joueurX: u8; // 0
+  joueurY: u8; // 1
+  etat: u8; // 2
+  minuteurMouvementJoueur: u8; // 3
+  minuteurMouvementCroc: u8; // 4
   croc0X: u8; // 5
   croc0Y: u8; // 6
   croc0Dir: u8; // 7
@@ -66,77 +70,47 @@ class Vars {
   croc2Dir: u8; // 13
 }
 
-const vars = changetype<Vars>(RAM_START);
+const vars = changetype<Variables>(RAM_START);
 
-// === Helpers ===
-function canMove(x: i32, y: i32): bool {
-  return x >= 0 && x < GRID_WIDTH && y >= 0 && y < GRID_HEIGHT;
+// === Fonctions auxiliaires ===
+
+function peutBouger(x: i32, y: i32): bool {
+  return x >= 0 && x < LARGEUR_GRILLE && y >= 0 && y < HAUTEUR_GRILLE;
 }
 
-function dirDeltaX(dir: u8): i32 {
-  if (dir == Direction.LEFT) return -1;
-  if (dir == Direction.RIGHT) return 1;
+function deltaDirX(dir: u8): i32 {
+  if (dir == Direction.GAUCHE) return -1;
+  if (dir == Direction.DROITE) return 1;
   return 0;
 }
 
-function dirDeltaY(dir: u8): i32 {
-  if (dir == Direction.UP) return -1;
-  if (dir == Direction.DOWN) return 1;
+function deltaDirY(dir: u8): i32 {
+  if (dir == Direction.HAUT) return -1;
+  if (dir == Direction.BAS) return 1;
   return 0;
 }
 
-function chooseValidDir(x: u8, y: u8, dir: u8): u8 {
-  let nextDir = dir;
-  let tries: i32 = 0;
-  while (tries < 4) {
-    const nx = (x as i32) + dirDeltaX(nextDir);
-    const ny = (y as i32) + dirDeltaY(nextDir);
-    if (canMove(nx, ny)) return nextDir;
-    nextDir = randomRange(4) as u8;
-    tries++;
+function choisisDirValide(x: u8, y: u8, dir: u8): u8 {
+  let prochDir = dir;
+  let essais: i32 = 0;
+  while (essais < 4) {
+    const nx = (x as i32) + deltaDirX(prochDir);
+    const ny = (y as i32) + deltaDirY(prochDir);
+    if (peutBouger(nx, ny)) return prochDir;
+    prochDir = randomRange(4) as u8;
+    essais++;
   }
   return dir;
 }
 
-function moveCroc(x: u8, y: u8, dir: u8): u32 {
-  const nextDir = chooseValidDir(x, y, dir);
-  const nx = ((x as i32) + dirDeltaX(nextDir)) as u8;
-  const ny = ((y as i32) + dirDeltaY(nextDir)) as u8;
-  return ((nextDir as u32) << 16) | ((ny as u32) << 8) | (nx as u32);
+function deplaceCroc(x: u8, y: u8, dir: u8): u32 {
+  const prochDir = choisisDirValide(x, y, dir);
+  const nx = ((x as i32) + deltaDirX(prochDir)) as u8;
+  const ny = ((y as i32) + deltaDirY(prochDir)) as u8;
+  return ((prochDir as u32) << 16) | ((ny as u32) << 8) | (nx as u32);
 }
 
-function drawGrid(): void {
-  for (let y: i32 = 0; y < GRID_HEIGHT; y++) {
-    for (let x: i32 = 0; x < GRID_WIDTH; x++) {
-      const color = ((x + y) & 1) == 0 ? COLOR_GRID_DARK : COLOR_GRID_LIGHT;
-      fillRect(x * GRID_SIZE, y * GRID_SIZE, GRID_SIZE, GRID_SIZE, color);
-    }
-  }
-}
-
-function drawPlayerHead(x: u8, y: u8): void {
-  const baseX = (x as i32) * GRID_SIZE;
-  const baseY = (y as i32) * GRID_SIZE;
-  const headSize: i32 = 12;
-  const inset: i32 = (GRID_SIZE - headSize) / 2;
-  fillRect(baseX + inset, baseY + inset, headSize, headSize, COLOR_PLAYER);
-  drawRect(baseX + inset, baseY + inset, headSize, headSize, COLOR_PLAYER_EYE);
-  fillRect(baseX + inset + 3, baseY + inset + 4, 2, 2, COLOR_PLAYER_EYE);
-  fillRect(baseX + inset + 7, baseY + inset + 4, 2, 2, COLOR_PLAYER_EYE);
-}
-
-function drawCroc(x: u8, y: u8): void {
-  const baseX = (x as i32) * GRID_SIZE;
-  const baseY = (y as i32) * GRID_SIZE;
-  fillRect(baseX + 2, baseY + 5, 12, 7, COLOR_CROC);
-  drawRect(baseX + 1, baseY + 4, 14, 9, COLOR_CROC);
-  fillRect(baseX + 4, baseY + 6, 2, 2, COLOR_CROC_EYE);
-  fillRect(baseX + 9, baseY + 6, 2, 2, COLOR_CROC_EYE);
-  fillRect(baseX + 4, baseY + 12, 2, 2, COLOR_CROC_TOOTH);
-  fillRect(baseX + 8, baseY + 12, 2, 2, COLOR_CROC_TOOTH);
-}
-
-function checkPlayerHit(px: u8, py: u8): bool {
+function verifiePositionJoueur(px: u8, py: u8): bool {
   return (
     (vars.croc0X == px && vars.croc0Y == py) ||
     (vars.croc1X == px && vars.croc1Y == py) ||
@@ -144,90 +118,139 @@ function checkPlayerHit(px: u8, py: u8): bool {
   );
 }
 
-// === lifecycle ===
+function dessineGrille(): void {
+  for (let y: i32 = 0; y < HAUTEUR_GRILLE; y++) {
+    for (let x: i32 = 0; x < LARGEUR_GRILLE; x++) {
+      const couleur = ((x + y) & 1) == 0 ? COULEUR_GRILLE_SOMBRE : COULEUR_GRILLE_CLAIR;
+      fillRect(x * CASE_DIM_PIXELS, y * CASE_DIM_PIXELS, CASE_DIM_PIXELS, CASE_DIM_PIXELS, couleur);
+    }
+  }
+}
+
+function dessineTeteJoueur(x: u8, y: u8): void {
+  const baseX = (x as i32) * CASE_DIM_PIXELS;
+  const baseY = (y as i32) * CASE_DIM_PIXELS;
+  const tailleTete: i32 = 12;
+  const decalage: i32 = (CASE_DIM_PIXELS - tailleTete) / 2;
+  fillRect(baseX + decalage, baseY + decalage, tailleTete, tailleTete, COULEUR_PLAYER);
+  drawRect(baseX + decalage, baseY + decalage, tailleTete, tailleTete, COULEUR_PLAYER_EYE);
+  fillRect(baseX + decalage + 3, baseY + decalage + 4, 2, 2, COULEUR_PLAYER_EYE);
+  fillRect(baseX + decalage + 7, baseY + decalage + 4, 2, 2, COULEUR_PLAYER_EYE);
+}
+
+function dessineCroco(x: u8, y: u8): void {
+  const baseX = (x as i32) * CASE_DIM_PIXELS;
+  const baseY = (y as i32) * CASE_DIM_PIXELS;
+  fillRect(baseX + 2, baseY + 5, 12, 7, COULEUR_CROC);
+  drawRect(baseX + 1, baseY + 4, 14, 9, COULEUR_CROC);
+  fillRect(baseX + 4, baseY + 6, 2, 2, COULEUR_CROC_EYE);
+  fillRect(baseX + 9, baseY + 6, 2, 2, COULEUR_CROC_EYE);
+  fillRect(baseX + 4, baseY + 12, 2, 2, COULEUR_CROC_TOOTH);
+  fillRect(baseX + 8, baseY + 12, 2, 2, COULEUR_CROC_TOOTH);
+}
+
+// === Cycle de vie ===
+
+// Initialisation du jeu
 export function init(): void {
-  vars.playerX = (GRID_WIDTH / 2) as u8;
-  vars.playerY = (GRID_HEIGHT / 2) as u8;
-  vars.state = GameState.PLAYING as u8;
-  vars.playerMoveTimer = 0;
-  vars.crocMoveTimer = 0;
+  vars.joueurX = (LARGEUR_GRILLE / 2) as u8;
+  vars.joueurY = (HAUTEUR_GRILLE / 2) as u8;
+  vars.etat = EtatJeu.EN_COURS as u8;
+  vars.minuteurMouvementJoueur = 0;
+  vars.minuteurMouvementCroc = 0;
 
   vars.croc0X = 1;
   vars.croc0Y = 1;
-  vars.croc0Dir = Direction.RIGHT as u8;
-  vars.croc1X = (GRID_WIDTH - 2) as u8;
+  vars.croc0Dir = Direction.DROITE as u8;
+  vars.croc1X = (LARGEUR_GRILLE - 2) as u8;
   vars.croc1Y = 1;
-  vars.croc1Dir = Direction.DOWN as u8;
+  vars.croc1Dir = Direction.BAS as u8;
   vars.croc2X = 1;
-  vars.croc2Y = (GRID_HEIGHT - 2) as u8;
-  vars.croc2Dir = Direction.UP as u8;
+  vars.croc2Y = (HAUTEUR_GRILLE - 2) as u8;
+  vars.croc2Dir = Direction.HAUT as u8;
 }
 
+// Mise à jour du jeu
 export function update(): void {
-  const state = vars.state;
-  if (state != GameState.PLAYING && buttonPressed(Button.START)) {
+  const etat = vars.etat;
+  
+  // Gestion du redémarrage : appuyer sur START après la fin de partie
+  if (etat != EtatJeu.EN_COURS && buttonPressed(Button.START)) {
     init();
     return;
   }
-  if (state != GameState.PLAYING) return;
+  
+  // Ne rien faire si le jeu n'est pas en cours
+  if (etat != EtatJeu.EN_COURS) return;
 
-  if (vars.playerMoveTimer > 0) vars.playerMoveTimer--;
-  if (vars.crocMoveTimer > 0) vars.crocMoveTimer--;
+  // Décrémenter les minuteurs de mouvement
+  if (vars.minuteurMouvementJoueur > 0) vars.minuteurMouvementJoueur--;
+  if (vars.minuteurMouvementCroc > 0) vars.minuteurMouvementCroc--;
 
-  if (vars.playerMoveTimer == 0) {
+  // Gestion du mouvement du joueur
+  if (vars.minuteurMouvementJoueur == 0) {
     let dx: i32 = 0;
     let dy: i32 = 0;
+    
+    // Détection des touches directionnelles
     if (buttonDown(Button.LEFT)) dx = -1;
     else if (buttonDown(Button.RIGHT)) dx = 1;
     else if (buttonDown(Button.UP)) dy = -1;
     else if (buttonDown(Button.DOWN)) dy = 1;
 
+    // Si une direction est pressée, tenter de déplacer le joueur
     if (dx != 0 || dy != 0) {
-      const nx = (vars.playerX as i32) + dx;
-      const ny = (vars.playerY as i32) + dy;
-      if (canMove(nx, ny)) {
-        vars.playerX = nx as u8;
-        vars.playerY = ny as u8;
+      const nx = vars.joueurX + dx;
+      const ny = vars.joueurY + dy;
+      
+      // Déplacer uniquement si la position est valide
+      if (peutBouger(nx, ny)) {
+        vars.joueurX = nx as u8;
+        vars.joueurY = ny as u8;
       }
-      vars.playerMoveTimer = PLAYER_MOVE_DELAY;
+      
+      // Réinitialiser le minuteur de mouvement
+      vars.minuteurMouvementJoueur = PLAYER_DEPL_DELAI;
     }
   }
 
-  if (vars.crocMoveTimer == 0) {
-    let packed = moveCroc(vars.croc0X, vars.croc0Y, vars.croc0Dir);
-    vars.croc0X = (packed & 0xff) as u8;
-    vars.croc0Y = ((packed >> 8) & 0xff) as u8;
-    vars.croc0Dir = ((packed >> 16) & 0xff) as u8;
+  if (vars.minuteurMouvementCroc == 0) {
+    let empaquete = deplaceCroc(vars.croc0X, vars.croc0Y, vars.croc0Dir);
+    vars.croc0X = (empaquete & 0xff) as u8;
+    vars.croc0Y = ((empaquete >> 8) & 0xff) as u8;
+    vars.croc0Dir = ((empaquete >> 16) & 0xff) as u8;
 
-    packed = moveCroc(vars.croc1X, vars.croc1Y, vars.croc1Dir);
-    vars.croc1X = (packed & 0xff) as u8;
-    vars.croc1Y = ((packed >> 8) & 0xff) as u8;
-    vars.croc1Dir = ((packed >> 16) & 0xff) as u8;
+    empaquete = deplaceCroc(vars.croc1X, vars.croc1Y, vars.croc1Dir);
+    vars.croc1X = (empaquete & 0xff) as u8;
+    vars.croc1Y = ((empaquete >> 8) & 0xff) as u8;
+    vars.croc1Dir = ((empaquete >> 16) & 0xff) as u8;
 
-    packed = moveCroc(vars.croc2X, vars.croc2Y, vars.croc2Dir);
-    vars.croc2X = (packed & 0xff) as u8;
-    vars.croc2Y = ((packed >> 8) & 0xff) as u8;
-    vars.croc2Dir = ((packed >> 16) & 0xff) as u8;
+    empaquete = deplaceCroc(vars.croc2X, vars.croc2Y, vars.croc2Dir);
+    vars.croc2X = (empaquete & 0xff) as u8;
+    vars.croc2Y = ((empaquete >> 8) & 0xff) as u8;
+    vars.croc2Dir = ((empaquete >> 16) & 0xff) as u8;
 
-    vars.crocMoveTimer = CROC_MOVE_DELAY;
+    vars.minuteurMouvementCroc = CROC_DEPL_DELAI;
   }
 
-  if (checkPlayerHit(vars.playerX, vars.playerY)) {
-    vars.state = GameState.GAME_OVER as u8;
+  if (verifiePositionJoueur(vars.joueurX, vars.joueurY)) {
+    vars.etat = EtatJeu.PARTIE_TERMINEE as u8;
   }
 }
 
+// Dessine la grille et les crocodiles
 export function draw(): void {
-  clearFramebuffer(COLOR_BG);
-  drawGrid();
+  clearFramebuffer(COULEUR_FOND);
 
-  drawCroc(vars.croc0X, vars.croc0Y);
-  drawCroc(vars.croc1X, vars.croc1Y);
-  drawCroc(vars.croc2X, vars.croc2Y);
+  dessineGrille();
 
-  drawPlayerHead(vars.playerX, vars.playerY);
+  dessineCroco(vars.croc0X, vars.croc0Y);
+  dessineCroco(vars.croc1X, vars.croc1Y);
+  dessineCroco(vars.croc2X, vars.croc2Y);
 
-  if (vars.state == GameState.GAME_OVER) {
-    drawStartMessageBox("CHOMPED!", c(0x2a1a1a), c(0xffaa00));
+  dessineTeteJoueur(vars.joueurX, vars.joueurY);
+
+  if (vars.etat == EtatJeu.PARTIE_TERMINEE) {
+    drawStartMessageBox("DEVORÉ !", c(0x2a1a1a), c(0xffaa00));
   }
 }
