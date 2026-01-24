@@ -23,6 +23,7 @@ import {
   getLastSpriteWidth,
   getLastSpriteAddress,
   getLastSpriteHeight,
+  drawSprite,
 } from "../sdk";
 
 // === Constantes ===
@@ -64,15 +65,15 @@ class Variables {
   etat: u8; // 2
   minuteurMouvementJoueur: u8; // 3
   minuteurMouvementCroc: u8; // 4
-  croc0X: u8; // 5
-  croc0Y: u8; // 6
-  croc0Dir: u8; // 7
-  croc1X: u8; // 8
-  croc1Y: u8; // 9
-  croc1Dir: u8; // 10
-  croc2X: u8; // 11
-  croc2Y: u8; // 12
-  croc2Dir: u8; // 13
+  croco0X: u8; // 5
+  croco0Y: u8; // 6
+  croco0Dir: u8; // 7
+  croco1X: u8; // 8
+  croco1Y: u8; // 9
+  croco1Dir: u8; // 10
+  croco2X: u8; // 11
+  croco2Y: u8; // 12
+  croco2Dir: u8; // 13
 }
 
 const vars = changetype<Variables>(RAM_START);
@@ -128,9 +129,9 @@ function deplaceCroc(x: u8, y: u8, dir: u8): u32 {
 
 function verifiePositionJoueur(px: u8, py: u8): bool {
   return (
-    (vars.croc0X == px && vars.croc0Y == py) ||
-    (vars.croc1X == px && vars.croc1Y == py) ||
-    (vars.croc2X == px && vars.croc2Y == py)
+    (vars.croco0X == px && vars.croco0Y == py) ||
+    (vars.croco1X == px && vars.croco1Y == py) ||
+    (vars.croco2X == px && vars.croco2Y == py)
   );
 }
 
@@ -158,12 +159,7 @@ function dessineTeteJoueur(x: u8, y: u8): void {
 function dessineCroco(x: u8, y: u8): void {
   const baseX = (x as i32) * CASE_DIM_PIXELS;
   const baseY = (y as i32) * CASE_DIM_PIXELS;
-  fillRect(baseX + 2, baseY + 5, 12, 7, COULEUR_CROC);
-  drawRect(baseX + 1, baseY + 4, 14, 9, COULEUR_CROC);
-  fillRect(baseX + 4, baseY + 6, 2, 2, COULEUR_CROC_EYE);
-  fillRect(baseX + 9, baseY + 6, 2, 2, COULEUR_CROC_EYE);
-  fillRect(baseX + 4, baseY + 12, 2, 2, COULEUR_CROC_TOOTH);
-  fillRect(baseX + 8, baseY + 12, 2, 2, COULEUR_CROC_TOOTH);
+  drawSprite(s("crocodile"), baseX, baseY);
 }
 
 // === Cycle de vie ===
@@ -176,15 +172,15 @@ export function init(): void {
   vars.minuteurMouvementJoueur = 0;
   vars.minuteurMouvementCroc = 0;
 
-  vars.croc0X = 1;
-  vars.croc0Y = 1;
-  vars.croc0Dir = Direction.DROITE as u8;
-  vars.croc1X = (LARGEUR_GRILLE - 2) as u8;
-  vars.croc1Y = 1;
-  vars.croc1Dir = Direction.BAS as u8;
-  vars.croc2X = 1;
-  vars.croc2Y = (HAUTEUR_GRILLE - 2) as u8;
-  vars.croc2Dir = Direction.HAUT as u8;
+  vars.croco0X = 1;
+  vars.croco0Y = 1;
+  vars.croco0Dir = Direction.DROITE as u8;
+  vars.croco1X = (LARGEUR_GRILLE - 2) as u8;
+  vars.croco1Y = 1;
+  vars.croco1Dir = Direction.BAS as u8;
+  vars.croco2X = 1;
+  vars.croco2Y = (HAUTEUR_GRILLE - 2) as u8;
+  vars.croco2Dir = Direction.HAUT as u8;
 }
 
 // Mise à jour du jeu
@@ -238,20 +234,20 @@ export function update(): void {
   }
 
   // if (vars.minuteurMouvementCroc == 0) {
-  //   let empaquete = deplaceCroc(vars.croc0X, vars.croc0Y, vars.croc0Dir);
-  //   vars.croc0X = (empaquete & 0xff) as u8;
-  //   vars.croc0Y = ((empaquete >> 8) & 0xff) as u8;
-  //   vars.croc0Dir = ((empaquete >> 16) & 0xff) as u8;
+  //   let posXYDir = deplaceCroc(vars.croco0X, vars.croco0Y, vars.croco0Dir);
+  //   vars.croco0X = (posXYDir & 0xff) as u8;
+  //   vars.croco0Y = ((posXYDir >> 8) & 0xff) as u8;
+  //   vars.croco0Dir = ((posXYDir >> 16) & 0xff) as u8;
 
-  //   empaquete = deplaceCroc(vars.croc1X, vars.croc1Y, vars.croc1Dir);
-  //   vars.croc1X = (empaquete & 0xff) as u8;
-  //   vars.croc1Y = ((empaquete >> 8) & 0xff) as u8;
-  //   vars.croc1Dir = ((empaquete >> 16) & 0xff) as u8;
+  //   posXYDir = deplaceCroc(vars.croco1X, vars.croco1Y, vars.croco1Dir);
+  //   vars.croco1X = (posXYDir & 0xff) as u8;
+  //   vars.croco1Y = ((posXYDir >> 8) & 0xff) as u8;
+  //   vars.croco1Dir = ((posXYDir >> 16) & 0xff) as u8;
 
-  //   empaquete = deplaceCroc(vars.croc2X, vars.croc2Y, vars.croc2Dir);
-  //   vars.croc2X = (empaquete & 0xff) as u8;
-  //   vars.croc2Y = ((empaquete >> 8) & 0xff) as u8;
-  //   vars.croc2Dir = ((empaquete >> 16) & 0xff) as u8;
+  //   posXYDir = deplaceCroc(vars.croco2X, vars.croco2Y, vars.croco2Dir);
+  //   vars.croco2X = (posXYDir & 0xff) as u8;
+  //   vars.croco2Y = ((posXYDir >> 8) & 0xff) as u8;
+  //   vars.croco2Dir = ((posXYDir >> 16) & 0xff) as u8;
 
   //   vars.minuteurMouvementCroc = CROC_DEPL_DELAI;
   // }
@@ -267,9 +263,9 @@ export function draw(): void {
 
   dessineGrille();
 
-  dessineCroco(vars.croc0X, vars.croc0Y);
-  dessineCroco(vars.croc1X, vars.croc1Y);
-  dessineCroco(vars.croc2X, vars.croc2Y);
+  dessineCroco(vars.croco0X, vars.croco0Y);
+  dessineCroco(vars.croco1X, vars.croco1Y);
+  dessineCroco(vars.croco2X, vars.croco2Y);
 
   dessineTeteJoueur(vars.joueurX, vars.joueurY);
 
