@@ -473,7 +473,7 @@ function takeScreenshot() {
 const screenshotBtn = document.getElementById('screenshot-btn') as HTMLButtonElement | null;
 screenshotBtn?.addEventListener('click', takeScreenshot);
 
-// Keyboard shortcuts: R to restart, P to pause, F for fullscreen
+// Keyboard shortcuts: R to restart, P to pause, F for fullscreen, C to copy color
 window.addEventListener('keydown', (e) => {
   if ((e.key === 'r' || e.key === 'R') && !e.repeat) {
     if (init) {
@@ -489,6 +489,16 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
   } else if ((e.key === 's' || e.key === 'S') && !e.repeat) {
     takeScreenshot();
+    e.preventDefault();
+  } else if ((e.key === 'c' || e.key === 'C') && !e.repeat) {
+    const colorValue = colorRgbEl?.textContent;
+    if (colorValue && colorValue !== '--') {
+      navigator.clipboard.writeText(colorValue).then(() => {
+        addConsoleEntry('LOG', `Copied color: ${colorValue}`);
+      }).catch(err => {
+        addConsoleEntry('ERROR', `Failed to copy color: ${err.message}`);
+      });
+    }
     e.preventDefault();
   }
 });
