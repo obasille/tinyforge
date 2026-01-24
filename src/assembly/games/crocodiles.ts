@@ -20,6 +20,8 @@ import {
   getLastSpriteAddress,
   getLastSpriteHeight,
   drawSprite,
+  pset,
+  fillRect,
 } from "../sdk";
 
 // === Constantes ===
@@ -81,7 +83,7 @@ function peutBouger(x: i32, y: i32): bool {
       const width = getLastSpriteWidth();
       const height = getLastSpriteHeight();
       const addr = getLastSpriteAddress();
-      const pixel = load<u32>(addr + (y * width + x) * 4);
+      const pixel = litPixel(addr, width, x, y);
       if (pixel != COULEUR_MUR) {
         return true;
       }
@@ -97,11 +99,15 @@ function caseCouleur(x: i32, y: i32, cc: u32): bool {
       const width = getLastSpriteWidth();
       const height = getLastSpriteHeight();
       const addr = getLastSpriteAddress();
-      const pixel = load<u32>(addr + (y * width + x) * 4);
+      const pixel = litPixel(addr, width, x, y);
       return pixel == couleur;
     }
   }
   return false;
+}
+
+function litPixel(addr: usize, width: i32, x: i32, y: i32): u32 {
+  return load<u32>(addr + (y * width + x) * 4);
 }
 
 function deltaDirX(dir: u8): i32 {
@@ -195,7 +201,7 @@ function trouvePointDepart(couleur: u32): u16 {
     const addr = getLastSpriteAddress();
     for (let y: i32 = 0; y < height; y++) {
       for (let x: i32 = 0; x < width; x++) {
-        const pixel = load<u32>(addr + (y * width + x) * 4);
+        const pixel = litPixel(addr, width, x, y);
         if (pixel == couleur) {
           return ((y as u16) << 8) | (x as u16);
         }
@@ -347,6 +353,21 @@ export function update(): void {
 // Dessine la grille et les crocodiles
 export function draw(): void {
   dessineGrille();
+  // Colorie tous les pixels qui ne sont pas du mur
+  for (let y: i32 = 0; y < HAUTEUR_GRILLE; y++) {
+    for (let x: i32 = 0; x < LARGEUR_GRILLE; x++) {
+      if (!caseCouleur(x, y, COULEUR_MUR)) {
+        // Colorie la case
+        fillRect(
+          x * CASE_DIM_PIXELS,
+          y * CASE_DIM_PIXELS,
+          CASE_DIM_PIXELS,
+          CASE_DIM_PIXELS,
+          COULEUR_SOL
+        );
+      }
+    }
+  }
 
   dessineCroco(vars.croco0X, vars.croco0Y);
   dessineCroco(vars.croco1X, vars.croco1Y);
