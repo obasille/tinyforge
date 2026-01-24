@@ -19,6 +19,10 @@ import {
   randomRange,
   drawSpriteScaled,
   s,
+  readSpriteInfo,
+  getLastSpriteWidth,
+  getLastSpriteAddress,
+  getLastSpriteHeight,
 } from "../sdk";
 
 // === Constantes ===
@@ -38,6 +42,7 @@ const COULEUR_CROC_TOOTH: u32 = c(0xe6e6e6);
 const COULEUR_FOND: u32 = c(0x0a0a10);
 const COULEUR_GRILLE_SOMBRE: u32 = c(0x141428);
 const COULEUR_GRILLE_CLAIR: u32 = c(0x1c1c36);
+const COULEUR_MUR: u32 = c(0x0000ff);
 
 enum Direction {
   HAUT = 0,
@@ -75,7 +80,18 @@ const vars = changetype<Variables>(RAM_START);
 // === Fonctions auxiliaires ===
 
 function peutBouger(x: i32, y: i32): bool {
-  return x >= 0 && x < LARGEUR_GRILLE && y >= 0 && y < HAUTEUR_GRILLE;
+  if (x >= 0 && x < LARGEUR_GRILLE && y >= 0 && y < HAUTEUR_GRILLE) {
+    if (readSpriteInfo(s("level1"))) {
+      const width = getLastSpriteWidth();
+      const height = getLastSpriteHeight();
+      const addr = getLastSpriteAddress();
+      const pixel = load<u32>(addr + (y * width + x) * 4);
+      if (pixel != COULEUR_MUR) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 function deltaDirX(dir: u8): i32 {
@@ -119,12 +135,13 @@ function verifiePositionJoueur(px: u8, py: u8): bool {
 }
 
 function dessineGrille(): void {
-  for (let y: i32 = 0; y < HAUTEUR_GRILLE; y++) {
-    for (let x: i32 = 0; x < LARGEUR_GRILLE; x++) {
-      const couleur = ((x + y) & 1) == 0 ? COULEUR_GRILLE_SOMBRE : COULEUR_GRILLE_CLAIR;
-      fillRect(x * CASE_DIM_PIXELS, y * CASE_DIM_PIXELS, CASE_DIM_PIXELS, CASE_DIM_PIXELS, couleur);
-    }
-  }
+  // for (let y: i32 = 0; y < HAUTEUR_GRILLE; y++) {
+  //   for (let x: i32 = 0; x < LARGEUR_GRILLE; x++) {
+  //     const couleur = ((x + y) & 1) == 0 ? COULEUR_GRILLE_SOMBRE : COULEUR_GRILLE_CLAIR;
+  //     fillRect(x * CASE_DIM_PIXELS, y * CASE_DIM_PIXELS, CASE_DIM_PIXELS, CASE_DIM_PIXELS, couleur);
+  //   }
+  // }
+  drawSpriteScaled(s("level1"), 0, 0, 16, 16);
 }
 
 function dessineTeteJoueur(x: u8, y: u8): void {
@@ -214,24 +231,24 @@ export function update(): void {
     }
   }
 
-  if (vars.minuteurMouvementCroc == 0) {
-    let empaquete = deplaceCroc(vars.croc0X, vars.croc0Y, vars.croc0Dir);
-    vars.croc0X = (empaquete & 0xff) as u8;
-    vars.croc0Y = ((empaquete >> 8) & 0xff) as u8;
-    vars.croc0Dir = ((empaquete >> 16) & 0xff) as u8;
+  // if (vars.minuteurMouvementCroc == 0) {
+  //   let empaquete = deplaceCroc(vars.croc0X, vars.croc0Y, vars.croc0Dir);
+  //   vars.croc0X = (empaquete & 0xff) as u8;
+  //   vars.croc0Y = ((empaquete >> 8) & 0xff) as u8;
+  //   vars.croc0Dir = ((empaquete >> 16) & 0xff) as u8;
 
-    empaquete = deplaceCroc(vars.croc1X, vars.croc1Y, vars.croc1Dir);
-    vars.croc1X = (empaquete & 0xff) as u8;
-    vars.croc1Y = ((empaquete >> 8) & 0xff) as u8;
-    vars.croc1Dir = ((empaquete >> 16) & 0xff) as u8;
+  //   empaquete = deplaceCroc(vars.croc1X, vars.croc1Y, vars.croc1Dir);
+  //   vars.croc1X = (empaquete & 0xff) as u8;
+  //   vars.croc1Y = ((empaquete >> 8) & 0xff) as u8;
+  //   vars.croc1Dir = ((empaquete >> 16) & 0xff) as u8;
 
-    empaquete = deplaceCroc(vars.croc2X, vars.croc2Y, vars.croc2Dir);
-    vars.croc2X = (empaquete & 0xff) as u8;
-    vars.croc2Y = ((empaquete >> 8) & 0xff) as u8;
-    vars.croc2Dir = ((empaquete >> 16) & 0xff) as u8;
+  //   empaquete = deplaceCroc(vars.croc2X, vars.croc2Y, vars.croc2Dir);
+  //   vars.croc2X = (empaquete & 0xff) as u8;
+  //   vars.croc2Y = ((empaquete >> 8) & 0xff) as u8;
+  //   vars.croc2Dir = ((empaquete >> 16) & 0xff) as u8;
 
-    vars.minuteurMouvementCroc = CROC_DEPL_DELAI;
-  }
+  //   vars.minuteurMouvementCroc = CROC_DEPL_DELAI;
+  // }
 
   if (verifiePositionJoueur(vars.joueurX, vars.joueurY)) {
     vars.etat = EtatJeu.PARTIE_TERMINEE as u8;
@@ -244,9 +261,9 @@ export function draw(): void {
 
   dessineGrille();
 
-  dessineCroco(vars.croc0X, vars.croc0Y);
-  dessineCroco(vars.croc1X, vars.croc1Y);
-  dessineCroco(vars.croc2X, vars.croc2Y);
+  // dessineCroco(vars.croc0X, vars.croc0Y);
+  // dessineCroco(vars.croc1X, vars.croc1Y);
+  // dessineCroco(vars.croc2X, vars.croc2Y);
 
   dessineTeteJoueur(vars.joueurX, vars.joueurY);
 
