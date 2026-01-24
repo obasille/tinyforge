@@ -5,23 +5,26 @@
 // Attention : Évitez de vous faire attraper par les crocodiles qui patrouillent le niveau.
 // Contrôles : Flèches pour se déplacer, START pour redémarrer.
 
+// Quand le joueur est sur le chemin d'un crocodile (tel qu'identifé par la couleur du pixel correspondant dans le sprite du level), double la vitesse du croco concerné. Utilise CrocoInfo pour stocker la vitesse
+
 import {
   Button,
+  HEIGHT,
   RAM_START,
   WIDTH,
-  HEIGHT,
   buttonDown,
   buttonPressed,
   c,
-  drawStartMessageBox,
+  drawSprite,
   drawSpriteScaled,
-  s,
-  readSpriteInfo,
-  getLastSpriteWidth,
+  drawStartMessageBox,
+  fillRect,
   getLastSpriteAddress,
   getLastSpriteHeight,
-  drawSprite,
-  fillRect,
+  getLastSpriteWidth,
+  randomRange,
+  readSpriteInfo,
+  s,
   warn,
 } from "../sdk";
 
@@ -32,12 +35,16 @@ const HAUTEUR_GRILLE: i32 = HEIGHT / TAILLE_CASE;
 
 const JOUEUR_DEPL_DELAI: u8 = 6;
 const CROCO_DEPL_DELAI: u8 = 30;
+const NB_CROCOS: i32 = 3;
 
-const INVALIDE: u16 = 0xffff;
+const INVALIDE: u8 = 0xff;
+const INVALIDE_POS: u16 = 0xffff;
 
 enum Couleurs {
   MessageBoxFond = c(0x2a1a1a),
   MessageBoxTexte = c(0xffaa00),
+  MessageBoxFondVictoire = c(0x1a2a1a),
+  MessageBoxTexteVictoire = c(0x00ff00),
   CrocoRouge = c(0xff0000),
   CrocoViolet = c(0xff00ff),
   CrocoVert = c(0x00ff00),
@@ -64,41 +71,57 @@ enum EtatJeu {
 }
 
 // === Système de variables en RAM ===
+
 @unmanaged
-class Variables {
-  joueurX: u8; // 0
-  joueurY: u8; // 1
-  etat: u8; // 2
-  minuteurDeplJoueur: u8; // 3
-  minuteurDeplCroc: u8; // 4
-  croco0X: u8; // 5
-  croco0Y: u8; // 6
-  croco0Dir: u8; // 7
-  croco1X: u8; // 8
-  croco1Y: u8; // 9
-  croco1Dir: u8; // 10
-  croco2X: u8; // 11
-  croco2Y: u8; // 12
-  croco2Dir: u8; // 13
-  viande0X: u8; // 14
-  viande0Y: u8; // 15
-  viande1X: u8; // 16
-  viande1Y: u8; // 17
-  viande2X: u8; // 18
-  viande2Y: u8; // 19
-  gamelle0X: u8; // 20
-  gamelle0Y: u8; // 21
-  gamelle1X: u8; // 22
-  gamelle1Y: u8; // 23
-  gamelle2X: u8; // 24
-  gamelle2Y: u8; // 25
-  viandePortee: u8; // 26 (0xff = aucune, 0 = viande0, 1 = viande1, 2 = viande2)
-  gamelle0Remplie: u8; // 27 (0 = vide, 1 = remplie)
-  gamelle1Remplie: u8; // 28 (0 = vide, 1 = remplie)
-  gamelle2Remplie: u8; // 29 (0 = vide, 1 = remplie)
+class Jeu {
+  etat: u8;
+  minuteurDeplJoueur: u8;
+  minuteurDeplCroc: u8;
+  viande0PosX: u8;
+  viande0PosY: u8;
+  viande1PosX: u8;
+  viande1PosY: u8;
+  viande2PosX: u8;
+  viande2PosY: u8;
+  _fin: u8;
 }
 
-const vars = changetype<Variables>(RAM_START);
+@unmanaged
+class Joueur {
+  x: u8;
+  y: u8;
+  viandePortee: u8;
+}
+
+@unmanaged
+class Croco {
+  posX: u8;
+  posY: u8;
+  dir: u8;
+  gamelleX: u8;
+  gamelleY: u8;
+  gamelleRemplie: u8; // 0 = vide, 1 = remplie
+}
+
+const jeu = changetype<Jeu>(RAM_START);
+const szVars = offsetof<Jeu>("_fin");
+const szJoueur: usize = (offsetof<Joueur>("viandePortee") + 4) & ~3;
+const szCroco: usize = (offsetof<Croco>("gamelleRemplie") + 4) & ~3;
+let offset: usize = RAM_START + szVars;
+const joueur = changetype<Joueur>(offset);
+offset += szJoueur;
+const croco0 = changetype<Croco>(offset);
+offset += szCroco;
+const croco1 = changetype<Croco>(offset);
+offset += szCroco;
+const croco2 = changetype<Croco>(offset);
+
+const lesCrocos: Croco[] = [croco0, croco1, croco2];
+const couleursCrocos: u32[] = [
+  Couleurs.CrocoRouge,
+  Couleurs.CrocoViolet,
+  Couleurs.CrocoVert,
+];
 
 // === Fonctions auxiliaires ===
 
@@ -106,7 +129,6 @@ function peutBouger(x: i32, y: i32): bool {
   if (x >= 0 && x < LARGEUR_GRILLE && y >= 0 && y < HAUTEUR_GRILLE) {
     if (readSpriteInfo(NIVEAU_1)) {
       const width = getLastSpriteWidth();
-      const height = getLastSpriteHeight();
       const addr = getLastSpriteAddress();
       const pixel = litPixel(addr, width, x, y);
       if (pixel != Couleurs.Mur) {
@@ -122,7 +144,6 @@ function caseCouleur(x: i32, y: i32, cc: u32): bool {
   if (x >= 0 && x < LARGEUR_GRILLE && y >= 0 && y < HAUTEUR_GRILLE) {
     if (readSpriteInfo(NIVEAU_1)) {
       const width = getLastSpriteWidth();
-      const height = getLastSpriteHeight();
       const addr = getLastSpriteAddress();
       const pixel = litPixel(addr, width, x, y);
       return pixel == couleur;
@@ -189,11 +210,11 @@ function deplaceCroc(x: u8, y: u8, dir: u8, couleur: u32): u32 {
 }
 
 function verifiePositionJoueur(px: u8, py: u8): bool {
-  return (
-    (vars.croco0X == px && vars.croco0Y == py) ||
-    (vars.croco1X == px && vars.croco1Y == py) ||
-    (vars.croco2X == px && vars.croco2Y == py)
-  );
+  for (let i: i32 = 0; i < NB_CROCOS; i++) {
+    const croco = lesCrocos[i];
+    if (croco.posX == px && croco.posY == py) return true;
+  }
+  return false;
 }
 
 function dessineGrille(): void {
@@ -212,7 +233,7 @@ function dessineTeteJoueur(x: u8, y: u8): void {
   drawSprite(s("player"), baseX, baseY);
   
   // Dessine la viande portée au-dessus du joueur
-  if (vars.viandePortee != 0xff) {
+  if (joueur.viandePortee != INVALIDE) {
     drawSprite(s("meat"), baseX + TAILLE_CASE / 3, baseY + TAILLE_CASE / 3);
   }
 }
@@ -224,16 +245,16 @@ function dessineCroco(x: u8, y: u8): void {
 }
 
 function dessineViande(x: u8, y: u8): void {
-  // Ne dessine pas si la position est invalide (0xff)
-  if (x == 0xff || y == 0xff) return;
+  // Ne dessine pas si la position est invalide
+  if (x == INVALIDE || y == INVALIDE) return;
   const baseX = (x as i32) * TAILLE_CASE;
   const baseY = (y as i32) * TAILLE_CASE;
   drawSprite(s("meat"), baseX, baseY);
 }
 
 function dessineGamelle(x: u8, y: u8, remplie: u8): void {
-  // Ne dessine pas si la position est invalide (0xff)
-  if (x == 0xff || y == 0xff) return;
+  // Ne dessine pas si la position est invalide
+  if (x == INVALIDE || y == INVALIDE) return;
   const baseX = (x as i32) * TAILLE_CASE;
   const baseY = (y as i32) * TAILLE_CASE;
   drawSprite(s("plate"), baseX, baseY);
@@ -258,7 +279,7 @@ function trouvePointDepart(couleur: u32): u16 {
       }
     }
   }
-  return INVALIDE;
+  return INVALIDE_POS;
 }
 
 function trouveNiemePoint(couleur: u32, index: i32): u16 {
@@ -279,128 +300,193 @@ function trouveNiemePoint(couleur: u32, index: i32): u16 {
       }
     }
   }
+  return INVALIDE_POS;
+}
+
+function trouveCrocoPourGamelle(x: u8, y: u8): u8 {
+  if (!readSpriteInfo(NIVEAU_1)) return INVALIDE;
+  const width = getLastSpriteWidth();
+  const height = getLastSpriteHeight();
+  const addr = getLastSpriteAddress();
+  const gx = x as i32;
+  const gy = y as i32;
+
+  function indexCouleur(couleur: u32): u8 {
+    for (let i: i32 = 0; i < NB_CROCOS; i++) {
+      if (couleursCrocos[i] == couleur) return i as u8;
+    }
+    return INVALIDE;
+  }
+
+  const dx: i32[] = [0, 0, -1, 1];
+  const dy: i32[] = [-1, 1, 0, 0];
+  for (let i: i32 = 0; i < 4; i++) {
+    const nx = gx + dx[i];
+    const ny = gy + dy[i];
+    if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+    const idx = indexCouleur(litPixel(addr, width, nx, ny));
+    if (idx != INVALIDE) return idx;
+  }
   return INVALIDE;
+}
+
+function initCroco(index: u8, croco: Croco, couleur: u32, dir: u8): void {
+  const pos = trouvePointDepart(couleur);
+  if (pos == INVALIDE_POS) {
+    warn("Crocodile " + index.toString() + " non trouvé");
+    croco.posX = INVALIDE;
+    croco.posY = INVALIDE;
+    croco.dir = Direction.IMMOBILE as u8;
+    return;
+  }
+  croco.posX = (pos & 0xff) as u8;
+  croco.posY = ((pos >> 8) & 0xff) as u8;
+  croco.dir = dir;
+}
+
+function assigneGamelle(index: u8): void {
+  const pos = trouveNiemePoint(Couleurs.Gamelle, index as i32);
+  if (pos == INVALIDE_POS) {
+    warn("Gamelle " + index.toString() + " non trouvée");
+    return;
+  }
+  const gx = (pos & 0xff) as u8;
+  const gy = ((pos >> 8) & 0xff) as u8;
+  const idx = trouveCrocoPourGamelle(gx, gy);
+  if ((idx as i32) < NB_CROCOS) {
+    const croco = lesCrocos[idx as i32];
+    croco.gamelleX = gx;
+    croco.gamelleY = gy;
+  } else {
+    warn("Gamelle " + index.toString() + " sans croco associé");
+  }
+}
+
+function deplaceCroco(croco: Croco, couleur: u32): void {
+  const posXYDir = deplaceCroc(croco.posX, croco.posY, croco.dir, couleur);
+  croco.posX = (posXYDir & 0xff) as u8;
+  croco.posY = ((posXYDir >> 8) & 0xff) as u8;
+  croco.dir = ((posXYDir >> 16) & 0xff) as u8;
+}
+
+function doneViandePos(index: u8): u16 {
+  if (index == 0) return ((jeu.viande0PosY as u16) << 8) | (jeu.viande0PosX as u16);
+  if (index == 1) return ((jeu.viande1PosY as u16) << 8) | (jeu.viande1PosX as u16);
+  return ((jeu.viande2PosY as u16) << 8) | (jeu.viande2PosX as u16);
+}
+
+function metViandePos(index: u8, x: u8, y: u8): void {
+  if (index == 0) {
+    jeu.viande0PosX = x;
+    jeu.viande0PosY = y;
+  } else if (index == 1) {
+    jeu.viande1PosX = x;
+    jeu.viande1PosY = y;
+  } else {
+    jeu.viande2PosX = x;
+    jeu.viande2PosY = y;
+  }
+}
+
+function initViande(index: u8): void {
+  const pos = trouveNiemePoint(Couleurs.Viande, index as i32);
+  if (pos == INVALIDE_POS) {
+    if (index == 0) warn("Viande 0 non trouvée dans le niveau");
+    else if (index == 1) warn("Viande 1 non trouvée dans le niveau");
+    else warn("Viande 2 non trouvée dans le niveau");
+    metViandePos(index, INVALIDE, INVALIDE);
+    return;
+  }
+  metViandePos(index, (pos & 0xff) as u8, ((pos >> 8) & 0xff) as u8);
+}
+
+function ramasseViande(jx: u8, jy: u8): void {
+  if (joueur.viandePortee != INVALIDE) return;
+  for (let i: u8 = 0; i < 3; i++) {
+    const pos = doneViandePos(i);
+    const vx = (pos & 0xff) as u8;
+    const vy = ((pos >> 8) & 0xff) as u8;
+    if (vx == jx && vy == jy && vx != INVALIDE) {
+      joueur.viandePortee = i;
+      metViandePos(i, INVALIDE, INVALIDE);
+      return;
+    }
+  }
+}
+
+function deposeViande(jx: u8, jy: u8): void {
+  if (joueur.viandePortee == INVALIDE) return;
+  for (let i: i32 = 0; i < NB_CROCOS; i++) {
+    const croco = lesCrocos[i];
+    if (croco.gamelleX == jx && croco.gamelleY == jy && croco.gamelleRemplie == 0) {
+      croco.gamelleRemplie = 1;
+      joueur.viandePortee = INVALIDE;
+      return;
+    }
+  }
+}
+
+function deplaceJoueur(): void {
+  if (jeu.minuteurDeplJoueur != 0) return;
+  let deplX: i32 = 0;
+  let deplY: i32 = 0;
+
+  if (buttonDown(Button.LEFT)) deplX = -1;
+  else if (buttonDown(Button.RIGHT)) deplX = 1;
+  else if (buttonDown(Button.UP)) deplY = -1;
+  else if (buttonDown(Button.DOWN)) deplY = 1;
+
+  if (deplX == 0 && deplY == 0) return;
+
+  let posX = (joueur.x as i32) + deplX;
+  let posY = (joueur.y as i32) + deplY;
+
+  if (posX == -1) posX = LARGEUR_GRILLE - 1;
+  if (posX == LARGEUR_GRILLE) posX = 0;
+  if (posY == -1) posY = HAUTEUR_GRILLE - 1;
+  if (posY == HAUTEUR_GRILLE) posY = 0;
+
+  if (peutBouger(posX, posY)) {
+    joueur.x = posX as u8;
+    joueur.y = posY as u8;
+  }
+
+  jeu.minuteurDeplJoueur = JOUEUR_DEPL_DELAI;
 }
 
 // === Cycle de vie ===
 
 // Initialisation du jeu
 export function init(): void {
-  vars.joueurX = (LARGEUR_GRILLE / 2) as u8;
-  vars.joueurY = (HAUTEUR_GRILLE / 2) as u8;
-  vars.etat = EtatJeu.EN_COURS as u8;
-  vars.minuteurDeplJoueur = 0;
-  vars.minuteurDeplCroc = 0;
-  vars.viandePortee = 0xff; // Aucune viande portée au départ
-  vars.gamelle0Remplie = 0; // Gamelles vides au départ
-  vars.gamelle1Remplie = 0;
-  vars.gamelle2Remplie = 0;
-
-  // Trouve le point de départ du crocodile rouge
-  const posCrocoRouge = trouvePointDepart(Couleurs.CrocoRouge);
-  if (posCrocoRouge == INVALIDE) {
-    warn("Crocodile rouge non trouve dans le niveau");
-    vars.croco0X = 0xff;
-    vars.croco0Y = 0xff;
-    vars.croco0Dir = Direction.IMMOBILE as u8;
-  } else {
-    vars.croco0X = (posCrocoRouge & 0xff) as u8;
-    vars.croco0Y = ((posCrocoRouge >> 8) & 0xff) as u8;
-    vars.croco0Dir = Direction.DROITE as u8;
-  }
-
-  // Trouve le point de départ du crocodile violet
-  const posCrocoViolet = trouvePointDepart(Couleurs.CrocoViolet);
-  if (posCrocoViolet == INVALIDE) {
-    warn("Crocodile violet non trouve dans le niveau");
-    vars.croco1X = 0xff;
-    vars.croco1Y = 0xff;
-    vars.croco1Dir = Direction.IMMOBILE as u8;
-  } else {
-    vars.croco1X = (posCrocoViolet & 0xff) as u8;
-    vars.croco1Y = ((posCrocoViolet >> 8) & 0xff) as u8;
-    vars.croco1Dir = Direction.BAS as u8;
-  }
-
-  // Trouve le point de départ du crocodile vert
-  const posCrocoVert = trouvePointDepart(Couleurs.CrocoVert);
-  if (posCrocoVert == INVALIDE) {
-    warn("Crocodile vert non trouve dans le niveau");
-    vars.croco2X = 0xff;
-    vars.croco2Y = 0xff;
-    vars.croco2Dir = Direction.IMMOBILE as u8;
-  } else {
-    vars.croco2X = (posCrocoVert & 0xff) as u8;
-    vars.croco2Y = ((posCrocoVert >> 8) & 0xff) as u8;
-    vars.croco2Dir = Direction.HAUT as u8;
+  joueur.x = (LARGEUR_GRILLE / 2) as u8;
+  joueur.y = (HAUTEUR_GRILLE / 2) as u8;
+  joueur.viandePortee = INVALIDE; // Aucune viande portée au départ
+  jeu.etat = EtatJeu.EN_COURS as u8;
+  jeu.minuteurDeplJoueur = 0;
+  jeu.minuteurDeplCroc = 0;
+  for (let i: i32 = 0; i < NB_CROCOS; i++) {
+    const croco = lesCrocos[i];
+    croco.gamelleX = INVALIDE;
+    croco.gamelleY = INVALIDE;
+    croco.gamelleRemplie = 0; // Gamelles vides au départ
+    const dirAleatoire = (randomRange(4) + 1) as u8;
+    initCroco(i as u8, croco, couleursCrocos[i], dirAleatoire);
   }
 
   // Trouve les positions des 3 viandes
-  const posViande0 = trouveNiemePoint(Couleurs.Viande, 0);
-  if (posViande0 == INVALIDE) {
-    warn("Viande 0 non trouvee dans le niveau");
-    vars.viande0X = 0xff;
-    vars.viande0Y = 0xff;
-  } else {
-    vars.viande0X = (posViande0 & 0xff) as u8;
-    vars.viande0Y = ((posViande0 >> 8) & 0xff) as u8;
-  }
-
-  const posViande1 = trouveNiemePoint(Couleurs.Viande, 1);
-  if (posViande1 == INVALIDE) {
-    warn("Viande 1 non trouvee dans le niveau");
-    vars.viande1X = 0xff;
-    vars.viande1Y = 0xff;
-  } else {
-    vars.viande1X = (posViande1 & 0xff) as u8;
-    vars.viande1Y = ((posViande1 >> 8) & 0xff) as u8;
-  }
-
-  const posViande2 = trouveNiemePoint(Couleurs.Viande, 2);
-  if (posViande2 == INVALIDE) {
-    warn("Viande 2 non trouvee dans le niveau");
-    vars.viande2X = 0xff;
-    vars.viande2Y = 0xff;
-  } else {
-    vars.viande2X = (posViande2 & 0xff) as u8;
-    vars.viande2Y = ((posViande2 >> 8) & 0xff) as u8;
+  for (let i: i32 = 0; i < NB_CROCOS; i++) {
+    initViande(i as u8);
   }
 
   // Trouve les positions des 3 gamelles
-  const posGamelle0 = trouveNiemePoint(Couleurs.Gamelle, 0);
-  if (posGamelle0 == INVALIDE) {
-    warn("Gamelle 0 non trouvee dans le niveau");
-    vars.gamelle0X = 0xff;
-    vars.gamelle0Y = 0xff;
-  } else {
-    vars.gamelle0X = (posGamelle0 & 0xff) as u8;
-    vars.gamelle0Y = ((posGamelle0 >> 8) & 0xff) as u8;
-  }
-
-  const posGamelle1 = trouveNiemePoint(Couleurs.Gamelle, 1);
-  if (posGamelle1 == INVALIDE) {
-    warn("Gamelle 1 non trouvee dans le niveau");
-    vars.gamelle1X = 0xff;
-    vars.gamelle1Y = 0xff;
-  } else {
-    vars.gamelle1X = (posGamelle1 & 0xff) as u8;
-    vars.gamelle1Y = ((posGamelle1 >> 8) & 0xff) as u8;
-  }
-
-  const posGamelle2 = trouveNiemePoint(Couleurs.Gamelle, 2);
-  if (posGamelle2 == INVALIDE) {
-    warn("Gamelle 2 non trouvee dans le niveau");
-    vars.gamelle2X = 0xff;
-    vars.gamelle2Y = 0xff;
-  } else {
-    vars.gamelle2X = (posGamelle2 & 0xff) as u8;
-    vars.gamelle2Y = ((posGamelle2 >> 8) & 0xff) as u8;
+  for (let i: i32 = 0; i < NB_CROCOS; i++) {
+    assigneGamelle(i as u8);
   }
 }
 
 // Mise à jour du jeu
 export function update(): void {
-  const etat = vars.etat;
+  const etat = jeu.etat;
   
   // Gestion du redémarrage : appuyer sur START après la fin de partie
   if (etat != EtatJeu.EN_COURS && buttonPressed(Button.START)) {
@@ -412,134 +498,38 @@ export function update(): void {
   if (etat != EtatJeu.EN_COURS) return;
 
   // Décrémenter les minuteurs de mouvement
-  if (vars.minuteurDeplJoueur > 0) vars.minuteurDeplJoueur--;
-  if (vars.minuteurDeplCroc > 0) vars.minuteurDeplCroc--;
+  if (jeu.minuteurDeplJoueur > 0) jeu.minuteurDeplJoueur--;
+  if (jeu.minuteurDeplCroc > 0) jeu.minuteurDeplCroc--;
 
   // Gestion du mouvement du joueur
-  if (vars.minuteurDeplJoueur == 0) {
-    let deplX: i32 = 0;
-    let deplY: i32 = 0;
-    
-    // Détection des touches directionnelles
-    if (buttonDown(Button.LEFT)) deplX = -1;
-    else if (buttonDown(Button.RIGHT)) deplX = 1;
-    else if (buttonDown(Button.UP)) deplY = -1;
-    else if (buttonDown(Button.DOWN)) deplY = 1;
+  deplaceJoueur();
 
-    // Si une direction est pressée, déplace le joueur
-    if (deplX != 0 || deplY != 0) {
-      // Calcule la nouvelle position
-      let posX = vars.joueurX + deplX;
-      let posY = vars.joueurY + deplY;
+  // Déposer/ramasser la viande si besoin
+  deposeViande(joueur.x, joueur.y);
+  ramasseViande(joueur.x, joueur.y);
 
-      if (posX == -1) posX = LARGEUR_GRILLE - 1;
-      if (posX == LARGEUR_GRILLE) posX = 0;
-      if (posY == -1) posY = HAUTEUR_GRILLE - 1;
-      if (posY == HAUTEUR_GRILLE) posY = 0;
-      
-      // Déplacer uniquement si la position est valide
-      if (peutBouger(posX, posY)) {
-        vars.joueurX = posX as u8;
-        vars.joueurY = posY as u8;
-      }
-      
-      // Réinitialiser le minuteur de mouvement
-      vars.minuteurDeplJoueur = JOUEUR_DEPL_DELAI;
+  if (jeu.minuteurDeplCroc == 0) {
+    for (let i: i32 = 0; i < NB_CROCOS; i++) {
+      deplaceCroco(lesCrocos[i], couleursCrocos[i]);
     }
-  }
-
-  // Déposer la viande dans une gamelle si le joueur passe dessus en portant une viande
-  if (vars.viandePortee != 0xff) {
-    const jX = vars.joueurX;
-    const jY = vars.joueurY;
-    
-    // Vérifier gamelle 0
-    if (vars.gamelle0X == jX && vars.gamelle0Y == jY && vars.gamelle0Remplie == 0) {
-      vars.gamelle0Remplie = 1;
-      vars.viandePortee = 0xff; // Ne porte plus la viande
-    }
-    // Vérifier gamelle 1
-    else if (vars.gamelle1X == jX && vars.gamelle1Y == jY && vars.gamelle1Remplie == 0) {
-      vars.gamelle1Remplie = 1;
-      vars.viandePortee = 0xff;
-    }
-    // Vérifier gamelle 2
-    else if (vars.gamelle2X == jX && vars.gamelle2Y == jY && vars.gamelle2Remplie == 0) {
-      vars.gamelle2Remplie = 1;
-      vars.viandePortee = 0xff;
-    }
-  }
-
-  // Ramasser une viande si le joueur est dessus et n'en porte pas déjà une
-  if (vars.viandePortee == 0xff) {
-    const jX = vars.joueurX;
-    const jY = vars.joueurY;
-    
-    // Vérifier viande 0
-    if (vars.viande0X == jX && vars.viande0Y == jY && vars.viande0X != 0xff) {
-      vars.viandePortee = 0;
-      vars.viande0X = 0xff; // Masquer la viande
-      vars.viande0Y = 0xff;
-    }
-    // Vérifier viande 1
-    else if (vars.viande1X == jX && vars.viande1Y == jY && vars.viande1X != 0xff) {
-      vars.viandePortee = 1;
-      vars.viande1X = 0xff;
-      vars.viande1Y = 0xff;
-    }
-    // Vérifier viande 2
-    else if (vars.viande2X == jX && vars.viande2Y == jY && vars.viande2X != 0xff) {
-      vars.viandePortee = 2;
-      vars.viande2X = 0xff;
-      vars.viande2Y = 0xff;
-    }
-  }
-
-  if (vars.minuteurDeplCroc == 0) {
-    // Déplace le crocodile rouge
-    let posXYDir = deplaceCroc(
-      vars.croco0X,
-      vars.croco0Y,
-      vars.croco0Dir,
-      Couleurs.CrocoRouge
-    );
-    vars.croco0X = (posXYDir & 0xff) as u8;
-    vars.croco0Y = ((posXYDir >> 8) & 0xff) as u8;
-    vars.croco0Dir = ((posXYDir >> 16) & 0xff) as u8;
-
-    // Déplace le crocodile violet
-    posXYDir = deplaceCroc(
-      vars.croco1X,
-      vars.croco1Y,
-      vars.croco1Dir,
-      Couleurs.CrocoViolet
-    );
-    vars.croco1X = (posXYDir & 0xff) as u8;
-    vars.croco1Y = ((posXYDir >> 8) & 0xff) as u8;
-    vars.croco1Dir = ((posXYDir >> 16) & 0xff) as u8;
-
-    // Déplace le crocodile vert
-    posXYDir = deplaceCroc(
-      vars.croco2X,
-      vars.croco2Y,
-      vars.croco2Dir,
-      Couleurs.CrocoVert
-    );
-    vars.croco2X = (posXYDir & 0xff) as u8;
-    vars.croco2Y = ((posXYDir >> 8) & 0xff) as u8;
-    vars.croco2Dir = ((posXYDir >> 16) & 0xff) as u8;
-
-    vars.minuteurDeplCroc = CROCO_DEPL_DELAI;
+    jeu.minuteurDeplCroc = CROCO_DEPL_DELAI;
   }
 
   // Vérifier si toutes les gamelles sont remplies (victoire)
-  if (vars.gamelle0Remplie == 1 && vars.gamelle1Remplie == 1 && vars.gamelle2Remplie == 1) {
-    vars.etat = EtatJeu.VICTOIRE as u8;
+  let toutesGamellesRemplies = true;
+  for (let i: i32 = 0; i < NB_CROCOS; i++) {
+    if (lesCrocos[i].gamelleRemplie == 0) {
+      toutesGamellesRemplies = false;
+      break;
+    }
+  }
+  if (toutesGamellesRemplies) {
+    jeu.etat = EtatJeu.VICTOIRE as u8;
   }
 
   // Vérifier si le joueur touche un crocodile (défaite)
-  if (verifiePositionJoueur(vars.joueurX, vars.joueurY)) {
-    vars.etat = EtatJeu.FIN as u8;
+  if (verifiePositionJoueur(joueur.x, joueur.y)) {
+    jeu.etat = EtatJeu.FIN as u8;
   }
 }
 
@@ -563,26 +553,28 @@ export function draw(): void {
   }
 
   // Dessine les gamelles
-  dessineGamelle(vars.gamelle0X, vars.gamelle0Y, vars.gamelle0Remplie);
-  dessineGamelle(vars.gamelle1X, vars.gamelle1Y, vars.gamelle1Remplie);
-  dessineGamelle(vars.gamelle2X, vars.gamelle2Y, vars.gamelle2Remplie);
+  for (let i: i32 = 0; i < NB_CROCOS; i++) {
+    const croco = lesCrocos[i];
+    dessineGamelle(croco.gamelleX, croco.gamelleY, croco.gamelleRemplie);
+  }
 
   // Dessine les viandes
-  dessineViande(vars.viande0X, vars.viande0Y);
-  dessineViande(vars.viande1X, vars.viande1Y);
-  dessineViande(vars.viande2X, vars.viande2Y);
+  dessineViande(jeu.viande0PosX, jeu.viande0PosY);
+  dessineViande(jeu.viande1PosX, jeu.viande1PosY);
+  dessineViande(jeu.viande2PosX, jeu.viande2PosY);
 
   // Dessine les crocodiles
-  dessineCroco(vars.croco0X, vars.croco0Y);
-  dessineCroco(vars.croco1X, vars.croco1Y);
-  dessineCroco(vars.croco2X, vars.croco2Y);
+  for (let i: i32 = 0; i < NB_CROCOS; i++) {
+    const croco = lesCrocos[i];
+    dessineCroco(croco.posX, croco.posY);
+  }
 
   // Dessine le joueur
-  dessineTeteJoueur(vars.joueurX, vars.joueurY);
+  dessineTeteJoueur(joueur.x, joueur.y);
 
-  if (vars.etat == EtatJeu.FIN) {
+  if (jeu.etat == EtatJeu.FIN) {
     drawStartMessageBox("IL VA TE MANGER...", Couleurs.MessageBoxFond, Couleurs.MessageBoxTexte);
-  } else if (vars.etat == EtatJeu.VICTOIRE) {
-    drawStartMessageBox("VICTOIRE!", c(0x1a2a1a), c(0x00ff00));
+  } else if (jeu.etat == EtatJeu.VICTOIRE) {
+    drawStartMessageBox("VICTOIRE!", Couleurs.MessageBoxFondVictoire, Couleurs.MessageBoxTexteVictoire);
   }
 }
