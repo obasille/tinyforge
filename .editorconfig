@@ -1,0 +1,11 @@
+# See https://editorconfig.org/
+
+# top-most EditorConfig file
+root = true
+
+# Scripts and JSON files
+[*.{js,ts,json}]
+charset = utf-8
+indent_style = space
+indent_size = 2
+insert_final_newline = true
