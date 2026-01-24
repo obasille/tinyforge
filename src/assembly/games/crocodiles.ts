@@ -73,8 +73,6 @@ enum EtatJeu {
 @unmanaged
 class Jeu {
   etat: u8;
-  minuteurDeplJoueur: u8;
-  minuteurDeplCroc: u8;
   viande0PosX: u8;
   viande0PosY: u8;
   viande1PosX: u8;
@@ -88,6 +86,7 @@ class Jeu {
 class Joueur {
   x: u8;
   y: u8;
+  minuteurDepl: u8;
   viandePortee: u8;
 }
 
@@ -96,15 +95,17 @@ class Croco {
   posX: u8;
   posY: u8;
   dir: u8;
+  minuteurDepl: u8;
   gamelleX: u8;
   gamelleY: u8;
   gamelleRemplie: u8; // 0 = vide, 1 = remplie
+  attaque: u8; // 0 = normal, 1 = attaque
 }
 
 const jeu = changetype<Jeu>(RAM_START);
 const szVars = offsetof<Jeu>("_fin");
 const szJoueur: usize = (offsetof<Joueur>("viandePortee") + 4) & ~3;
-const szCroco: usize = (offsetof<Croco>("gamelleRemplie") + 4) & ~3;
+const szCroco: usize = (offsetof<Croco>("attaque") + 4) & ~3;
 let offset: usize = RAM_START + szVars;
 const joueur = changetype<Joueur>(offset);
 offset += szJoueur;
@@ -232,10 +233,11 @@ function dessineTeteJoueur(x: u8, y: u8): void {
   }
 }
 
-function dessineCroco(x: u8, y: u8): void {
-  const baseX = (x as i32) * TAILLE_CASE;
-  const baseY = (y as i32) * TAILLE_CASE;
-  drawSprite(s("crocodile"), baseX, baseY);
+function dessineCroco(croco: Croco): void {
+  const baseX = (croco.posX as i32) * TAILLE_CASE;
+  const baseY = (croco.posY as i32) * TAILLE_CASE;
+  const sprite = croco.attaque == 1 ? s("crocodile_bloody") : s("crocodile");
+  drawSprite(sprite, baseX, baseY);
 }
 
 function dessineViande(x: u8, y: u8): void {
@@ -407,7 +409,7 @@ function deposeViande(jx: u8, jy: u8): void {
 }
 
 function deplaceJoueur(): void {
-  if (jeu.minuteurDeplJoueur != 0) return;
+  if (joueur.minuteurDepl != 0) return;
   let deplX: i32 = 0;
   let deplY: i32 = 0;
 
@@ -431,7 +433,7 @@ function deplaceJoueur(): void {
     joueur.y = posY as u8;
   }
 
-  jeu.minuteurDeplJoueur = JOUEUR_DEPL_DELAI;
+  joueur.minuteurDepl = JOUEUR_DEPL_DELAI;
 }
 
 // === Cycle de vie ===
@@ -452,11 +454,10 @@ export function init(): void {
   joueur.x = (LARGEUR_GRILLE / 2) as u8;
   joueur.y = (HAUTEUR_GRILLE / 2) as u8;
   joueur.viandePortee = INVALIDE; // Aucune viande portée au départ
+  joueur.minuteurDepl = 0;
 
   // Initialise le jeu
   jeu.etat = EtatJeu.EN_COURS as u8;
-  jeu.minuteurDeplJoueur = 0;
-  jeu.minuteurDeplCroc = 0;
 
   // Initialise les crocodiles
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
@@ -464,6 +465,8 @@ export function init(): void {
     croco.gamelleX = INVALIDE;
     croco.gamelleY = INVALIDE;
     croco.gamelleRemplie = 0; // Gamelles vides au départ
+    croco.attaque = 0;
+    croco.minuteurDepl = 0;
     const dirAleatoire = (randomRange(4) + 1) as u8;
     initCroco(i as u8, croco, couleursCrocos[i], dirAleatoire);
   }
@@ -493,8 +496,10 @@ export function update(): void {
   if (etat != EtatJeu.EN_COURS) return;
 
   // Décrémenter les minuteurs de mouvement
-  if (jeu.minuteurDeplJoueur > 0) jeu.minuteurDeplJoueur--;
-  if (jeu.minuteurDeplCroc > 0) jeu.minuteurDeplCroc--;
+  if (joueur.minuteurDepl > 0) joueur.minuteurDepl--;
+  for (let i: i32 = 0; i < NB_CROCOS; i++) {
+    if (lesCrocos[i].minuteurDepl > 0) lesCrocos[i].minuteurDepl--;
+  }
 
   // Gestion du mouvement du joueur
   deplaceJoueur();
@@ -503,11 +508,20 @@ export function update(): void {
   deposeViande(joueur.x, joueur.y);
   ramasseViande(joueur.x, joueur.y);
 
-  if (jeu.minuteurDeplCroc == 0) {
-    for (let i: i32 = 0; i < NB_CROCOS; i++) {
-      deplaceCroco(lesCrocos[i], couleursCrocos[i]);
+  for (let i: i32 = 0; i < NB_CROCOS; i++) {
+    const croco = lesCrocos[i];
+    croco.attaque = caseCouleur(joueur.x, joueur.y, couleursCrocos[i]) ? 1 : 0;
+  }
+
+  for (let i: i32 = 0; i < NB_CROCOS; i++) {
+    const croco = lesCrocos[i];
+    if (croco.minuteurDepl == 0) {
+      const couleur = couleursCrocos[i];
+      deplaceCroco(croco, couleur);
+      const delai =
+        croco.attaque == 1 ? ((CROCO_DEPL_DELAI / 2) as u8) : CROCO_DEPL_DELAI;
+      croco.minuteurDepl = delai == 0 ? 1 : delai;
     }
-    jeu.minuteurDeplCroc = CROCO_DEPL_DELAI;
   }
 
   // Vérifier si toutes les gamelles sont remplies (victoire)
@@ -561,7 +575,7 @@ export function draw(): void {
   // Dessine les crocodiles
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
     const croco = lesCrocos[i];
-    dessineCroco(croco.posX, croco.posY);
+    dessineCroco(croco);
   }
 
   // Dessine le joueur
