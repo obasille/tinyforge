@@ -749,6 +749,9 @@ const accEl = document.getElementById('acc');
 const inputEl = document.getElementById('input');
 const mouseEl = document.getElementById('mouse');
 const mouseButtonsEl = document.getElementById('mouse-buttons');
+const colorArgbEl = document.getElementById('color-argb');
+const colorRgbEl = document.getElementById('color-rgb');
+const colorSwatchEl = document.getElementById('color-swatch') as HTMLSpanElement | null;
 const rngSeedInput = document.getElementById('rng-seed-input') as HTMLInputElement | null;
 const rngSeedApply = document.getElementById('rng-seed-apply') as HTMLButtonElement | null;
 
@@ -897,6 +900,28 @@ function frame(now) {
   inputEl.textContent = '0x' + inputMask.toString(16).padStart(2, '0').toUpperCase();
   mouseEl.textContent = `${mouseX}, ${mouseY}`;
   mouseButtonsEl.textContent = '0x' + mouseButtons.toString(16).padStart(2, '0').toUpperCase();
+  if (colorArgbEl && colorRgbEl) {
+    if (mouseX >= 0 && mouseX < WIDTH && mouseY >= 0 && mouseY < HEIGHT) {
+      const pixel = fb32[mouseY * WIDTH + mouseX] >>> 0;
+      const r = pixel & 0xff;
+      const g = (pixel >> 8) & 0xff;
+      const b = (pixel >> 16) & 0xff;
+      const a = (pixel >>> 24) & 0xff;
+      const argb = '0x' + pixel.toString(16).toUpperCase().padStart(8, '0');
+      const rgb = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`.toUpperCase();
+      colorArgbEl.textContent = argb;
+      colorRgbEl.textContent = rgb;
+      if (colorSwatchEl) {
+        colorSwatchEl.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${a / 255})`;
+      }
+    } else {
+      colorArgbEl.textContent = '--';
+      colorRgbEl.textContent = '--';
+      if (colorSwatchEl) {
+        colorSwatchEl.style.backgroundColor = 'transparent';
+      }
+    }
+  }
   if (rngSeedInput && document.activeElement !== rngSeedInput) {
     rngSeedInput.value = formatSeedHex(getRngSeed());
   }

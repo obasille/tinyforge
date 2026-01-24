@@ -237,6 +237,14 @@ canvas {
   font-size: 11px;
 }
 
+.color-swatch {
+  display: inline-block;
+  width: 36px;
+  height: 18px;
+  border: 1px solid #444;
+  background: #000;
+}
+
 .help {
   color: #666;
   font-size: 11px;
