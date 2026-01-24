@@ -20,15 +20,14 @@ import {
   getLastSpriteAddress,
   getLastSpriteHeight,
   drawSprite,
-  pset,
   fillRect,
   warn,
 } from "../sdk";
 
 // === Constantes ===
-const CASE_DIM_PIXELS: i32 = 16;
-const LARGEUR_GRILLE: i32 = WIDTH / CASE_DIM_PIXELS;
-const HAUTEUR_GRILLE: i32 = HEIGHT / CASE_DIM_PIXELS;
+const TAILLE_CASE: i32 = 16;
+const LARGEUR_GRILLE: i32 = WIDTH / TAILLE_CASE;
+const HAUTEUR_GRILLE: i32 = HEIGHT / TAILLE_CASE;
 
 const JOUEUR_DEPL_DELAI: u8 = 6;
 const CROCO_DEPL_DELAI: u8 = 30;
@@ -60,6 +59,7 @@ enum Direction {
 enum EtatJeu {
   EN_COURS = 0,
   FIN = 1,
+  VICTOIRE = 2,
 }
 
 // === Système de variables en RAM ===
@@ -91,6 +91,10 @@ class Variables {
   gamelle1Y: u8; // 23
   gamelle2X: u8; // 24
   gamelle2Y: u8; // 25
+  viandePortee: u8; // 26 (0xff = aucune, 0 = viande0, 1 = viande1, 2 = viande2)
+  gamelle0Remplie: u8; // 27 (0 = vide, 1 = remplie)
+  gamelle1Remplie: u8; // 28 (0 = vide, 1 = remplie)
+  gamelle2Remplie: u8; // 29 (0 = vide, 1 = remplie)
 }
 
 const vars = changetype<Variables>(RAM_START);
@@ -202,31 +206,41 @@ function dessineGrille(): void {
 }
 
 function dessineTeteJoueur(x: u8, y: u8): void {
-  const baseX = (x as i32) * CASE_DIM_PIXELS;
-  const baseY = (y as i32) * CASE_DIM_PIXELS;
+  const baseX = (x as i32) * TAILLE_CASE;
+  const baseY = (y as i32) * TAILLE_CASE;
   drawSprite(s("player"), baseX, baseY);
+  
+  // Dessine la viande portée au-dessus du joueur
+  if (vars.viandePortee != 0xff) {
+    drawSprite(s("meat"), baseX + TAILLE_CASE / 3, baseY + TAILLE_CASE / 3);
+  }
 }
 
 function dessineCroco(x: u8, y: u8): void {
-  const baseX = (x as i32) * CASE_DIM_PIXELS;
-  const baseY = (y as i32) * CASE_DIM_PIXELS;
+  const baseX = (x as i32) * TAILLE_CASE;
+  const baseY = (y as i32) * TAILLE_CASE;
   drawSprite(s("crocodile"), baseX, baseY);
 }
 
 function dessineViande(x: u8, y: u8): void {
   // Ne dessine pas si la position est invalide (0xff)
   if (x == 0xff || y == 0xff) return;
-  const baseX = (x as i32) * CASE_DIM_PIXELS;
-  const baseY = (y as i32) * CASE_DIM_PIXELS;
+  const baseX = (x as i32) * TAILLE_CASE;
+  const baseY = (y as i32) * TAILLE_CASE;
   drawSprite(s("meat"), baseX, baseY);
 }
 
-function dessineGamelle(x: u8, y: u8): void {
+function dessineGamelle(x: u8, y: u8, remplie: u8): void {
   // Ne dessine pas si la position est invalide (0xff)
   if (x == 0xff || y == 0xff) return;
-  const baseX = (x as i32) * CASE_DIM_PIXELS;
-  const baseY = (y as i32) * CASE_DIM_PIXELS;
+  const baseX = (x as i32) * TAILLE_CASE;
+  const baseY = (y as i32) * TAILLE_CASE;
   drawSprite(s("plate"), baseX, baseY);
+  
+  // Dessiner la viande sur la gamelle si elle est remplie
+  if (remplie == 1) {
+    drawSprite(s("meat"), baseX, baseY);
+  }
 }
 
 function trouvePointDepart(couleur: u32): u16 {
@@ -276,6 +290,10 @@ export function init(): void {
   vars.etat = EtatJeu.EN_COURS as u8;
   vars.minuteurDeplJoueur = 0;
   vars.minuteurDeplCroc = 0;
+  vars.viandePortee = 0xff; // Aucune viande portée au départ
+  vars.gamelle0Remplie = 0; // Gamelles vides au départ
+  vars.gamelle1Remplie = 0;
+  vars.gamelle2Remplie = 0;
 
   // Trouve le point de départ du crocodile rouge
   const posCrocoRouge = trouvePointDepart(Couleurs.CrocoRouge);
@@ -429,6 +447,53 @@ export function update(): void {
     }
   }
 
+  // Déposer la viande dans une gamelle si le joueur passe dessus en portant une viande
+  if (vars.viandePortee != 0xff) {
+    const jX = vars.joueurX;
+    const jY = vars.joueurY;
+    
+    // Vérifier gamelle 0
+    if (vars.gamelle0X == jX && vars.gamelle0Y == jY && vars.gamelle0Remplie == 0) {
+      vars.gamelle0Remplie = 1;
+      vars.viandePortee = 0xff; // Ne porte plus la viande
+    }
+    // Vérifier gamelle 1
+    else if (vars.gamelle1X == jX && vars.gamelle1Y == jY && vars.gamelle1Remplie == 0) {
+      vars.gamelle1Remplie = 1;
+      vars.viandePortee = 0xff;
+    }
+    // Vérifier gamelle 2
+    else if (vars.gamelle2X == jX && vars.gamelle2Y == jY && vars.gamelle2Remplie == 0) {
+      vars.gamelle2Remplie = 1;
+      vars.viandePortee = 0xff;
+    }
+  }
+
+  // Ramasser une viande si le joueur est dessus et n'en porte pas déjà une
+  if (vars.viandePortee == 0xff) {
+    const jX = vars.joueurX;
+    const jY = vars.joueurY;
+    
+    // Vérifier viande 0
+    if (vars.viande0X == jX && vars.viande0Y == jY && vars.viande0X != 0xff) {
+      vars.viandePortee = 0;
+      vars.viande0X = 0xff; // Masquer la viande
+      vars.viande0Y = 0xff;
+    }
+    // Vérifier viande 1
+    else if (vars.viande1X == jX && vars.viande1Y == jY && vars.viande1X != 0xff) {
+      vars.viandePortee = 1;
+      vars.viande1X = 0xff;
+      vars.viande1Y = 0xff;
+    }
+    // Vérifier viande 2
+    else if (vars.viande2X == jX && vars.viande2Y == jY && vars.viande2X != 0xff) {
+      vars.viandePortee = 2;
+      vars.viande2X = 0xff;
+      vars.viande2Y = 0xff;
+    }
+  }
+
   if (vars.minuteurDeplCroc == 0) {
     // Déplace le crocodile rouge
     let posXYDir = deplaceCroc(
@@ -466,6 +531,12 @@ export function update(): void {
     vars.minuteurDeplCroc = CROCO_DEPL_DELAI;
   }
 
+  // Vérifier si toutes les gamelles sont remplies (victoire)
+  if (vars.gamelle0Remplie == 1 && vars.gamelle1Remplie == 1 && vars.gamelle2Remplie == 1) {
+    vars.etat = EtatJeu.VICTOIRE as u8;
+  }
+
+  // Vérifier si le joueur touche un crocodile (défaite)
   if (verifiePositionJoueur(vars.joueurX, vars.joueurY)) {
     vars.etat = EtatJeu.FIN as u8;
   }
@@ -474,16 +545,16 @@ export function update(): void {
 // Dessine la grille et les crocodiles
 export function draw(): void {
   dessineGrille();
-  // Colorie tous les pixels qui ne sont pas du mur
+  // Colorie tous les cases qui ne sont pas des murs
   for (let y: i32 = 0; y < HAUTEUR_GRILLE; y++) {
     for (let x: i32 = 0; x < LARGEUR_GRILLE; x++) {
       if (!caseCouleur(x, y, Couleurs.Mur)) {
         // Colorie la case
         fillRect(
-          x * CASE_DIM_PIXELS,
-          y * CASE_DIM_PIXELS,
-          CASE_DIM_PIXELS,
-          CASE_DIM_PIXELS,
+          x * TAILLE_CASE,
+          y * TAILLE_CASE,
+          TAILLE_CASE,
+          TAILLE_CASE,
           Couleurs.Sol
         );
       }
@@ -491,9 +562,9 @@ export function draw(): void {
   }
 
   // Dessine les gamelles
-  dessineGamelle(vars.gamelle0X, vars.gamelle0Y);
-  dessineGamelle(vars.gamelle1X, vars.gamelle1Y);
-  dessineGamelle(vars.gamelle2X, vars.gamelle2Y);
+  dessineGamelle(vars.gamelle0X, vars.gamelle0Y, vars.gamelle0Remplie);
+  dessineGamelle(vars.gamelle1X, vars.gamelle1Y, vars.gamelle1Remplie);
+  dessineGamelle(vars.gamelle2X, vars.gamelle2Y, vars.gamelle2Remplie);
 
   // Dessine les viandes
   dessineViande(vars.viande0X, vars.viande0Y);
@@ -510,5 +581,7 @@ export function draw(): void {
 
   if (vars.etat == EtatJeu.FIN) {
     drawStartMessageBox("IL VA TE MANGER...", Couleurs.MessageBoxFond, Couleurs.MessageBoxTexte);
+  } else if (vars.etat == EtatJeu.VICTOIRE) {
+    drawStartMessageBox("VICTOIRE!", c(0x1a2a1a), c(0x00ff00));
   }
 }
