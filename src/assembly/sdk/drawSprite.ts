@@ -88,8 +88,12 @@ let readFrameOffset: u32 = 0;
 let readWidth: i32 = 0;
 let readHeight: i32 = 0;
 
-// Read the sprite info for the given ID
-function readAndCheckSpriteInfo(id: i32): bool {
+/**
+ * Read the sprite info for the given ID
+ * @param id Packed sprite ID from s()
+ * @returns True if the sprite info was read successfully, false otherwise
+ */
+export function readSpriteInfo(id: i32): bool {
   if (id < 0) return false;
 
   const infoIndex = (id >>> 16) & 0xffff;
@@ -118,6 +122,38 @@ function readAndCheckSpriteInfo(id: i32): bool {
 }
 
 /**
+ * Get the width of the last sprite read by readAndCheckSpriteInfo.
+ * @returns Width in pixels
+ */
+// @ts-expect-error AssemblyScript decorator
+@inline
+export function getLastSpriteWidth(): i32 {
+    return readWidth;
+  }
+  
+/**
+ * Get the height of the last sprite read by readAndCheckSpriteInfo.
+ * @returns Height in pixels
+ */
+// @ts-expect-error AssemblyScript decorator
+@inline
+export function getLastSpriteHeight(): i32 {
+  return readHeight;
+}
+
+/**
+ * Get the memory address of the sprite pixel data for a packed sprite ID.
+ * Returns 0 if the ID is invalid.
+ * @param id Packed sprite ID from s()
+ * @returns Sprite pixel data address in memory
+ */
+// @ts-expect-error AssemblyScript decorator
+@inline
+export function getLastSpriteAddress(): usize {
+  return readFrameOffset as usize;
+}
+
+/**
  * Draw a sprite at the specified position
  * Supports alpha blending for semi-transparent sprites
  * @param id Packed sprite ID from s()
@@ -132,7 +168,7 @@ function readAndCheckSpriteInfo(id: i32): bool {
  * ```
  */
 export function drawSprite(id: i32, x: i32, y: i32, flipX: bool = false, flipY: bool = false): void {
-  if (!readAndCheckSpriteInfo(id)) return;
+  if (!readSpriteInfo(id)) return;
   const frameOffset = readFrameOffset;
   const width = readWidth;
   const height = readHeight;
@@ -225,7 +261,7 @@ export function drawSpriteScaled(
   flipY: bool = false,
 ): void {
   if (scaleX <= 0 || scaleY <= 0) return;
-  if (!readAndCheckSpriteInfo(id)) return;
+  if (!readSpriteInfo(id)) return;
   const frameOffset = readFrameOffset;
   const width = readWidth;
   const height = readHeight;
@@ -304,7 +340,7 @@ export function drawSpriteFrame(
   flipY: bool = false,
 ): void {
   if (frameWidth <= 0 || frameHeight <= 0) return;
-  if (!readAndCheckSpriteInfo(id)) return;
+  if (!readSpriteInfo(id)) return;
   const frameOffset = readFrameOffset;
   const spriteWidth = readWidth;
   const spriteHeight = readHeight;
