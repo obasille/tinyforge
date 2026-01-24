@@ -22,6 +22,7 @@ import {
   drawSprite,
   pset,
   fillRect,
+  warn,
 } from "../sdk";
 
 // === Constantes ===
@@ -32,12 +33,19 @@ const HAUTEUR_GRILLE: i32 = HEIGHT / CASE_DIM_PIXELS;
 const JOUEUR_DEPL_DELAI: u8 = 6;
 const CROCO_DEPL_DELAI: u8 = 30;
 
-const COULEUR_CROCO_ROUGE: u32 = c(0xff0000);
-const COULEUR_CROCO_VIOLET: u32 = c(0xff00ff);
-const COULEUR_CROCO_VERT: u32 = c(0x00ff00);
+const INVALIDE: u16 = 0xffff;
 
-const COULEUR_SOL: u32 = c(0xe09729);
-const COULEUR_MUR: u32 = c(0x04e5ff);
+enum Couleurs {
+  MessageBoxFond = c(0x2a1a1a),
+  MessageBoxTexte = c(0xffaa00),
+  CrocoRouge = c(0xff0000),
+  CrocoViolet = c(0xff00ff),
+  CrocoVert = c(0x00ff00),
+  Sol = c(0xe09729),
+  Mur = c(0x04e5ff),
+  Viande = c(0xba0b0b),
+  Gamelle = c(0x583de8),
+}
 
 const NIVEAU_1: i32 = s("level1");
 
@@ -71,6 +79,18 @@ class Variables {
   croco2X: u8; // 11
   croco2Y: u8; // 12
   croco2Dir: u8; // 13
+  viande0X: u8; // 14
+  viande0Y: u8; // 15
+  viande1X: u8; // 16
+  viande1Y: u8; // 17
+  viande2X: u8; // 18
+  viande2Y: u8; // 19
+  gamelle0X: u8; // 20
+  gamelle0Y: u8; // 21
+  gamelle1X: u8; // 22
+  gamelle1Y: u8; // 23
+  gamelle2X: u8; // 24
+  gamelle2Y: u8; // 25
 }
 
 const vars = changetype<Variables>(RAM_START);
@@ -84,7 +104,7 @@ function peutBouger(x: i32, y: i32): bool {
       const height = getLastSpriteHeight();
       const addr = getLastSpriteAddress();
       const pixel = litPixel(addr, width, x, y);
-      if (pixel != COULEUR_MUR) {
+      if (pixel != Couleurs.Mur) {
         return true;
       }
     }
@@ -131,24 +151,23 @@ function donneDir(dx: i32, dy: i32): u8 {
 }
 
 function choisisDirValide(x: u8, y: u8, dir: u8, couleur: u32): u8 {
-  const startDir = dir == Direction.IMMOBILE ? Direction.HAUT as u8 : dir;
-  const startDX = deltaDirX(startDir);
-  const startDY = deltaDirY(startDir);
+  const dirInitiale = dir == Direction.IMMOBILE ? Direction.HAUT as u8 : dir;
+  const dxInitial = deltaDirX(dirInitiale);
+  const dyInitial = deltaDirY(dirInitiale);
   for (let essais = 0; essais < 4; essais++) {
-    let dx = startDX;
-    let dy = startDY;
+    let dx = dxInitial;
+    let dy = dyInitial;
     if (essais == 1) {
       const tmp = dx;
-      dx = -dy;
-      dy = tmp;
+      dx = Math.abs(dy) as i32;
+      dy = Math.abs(tmp) as i32;
     } else if (essais == 2) {
       const tmp = dx;
-      dx = dy;
-      dy = -tmp;
+      dx = -Math.abs(dy) as i32;
+      dy = -Math.abs(tmp) as i32;
     } else if (essais == 3) {
-      const tmp = dx;
-      dx = -dy;
-      dy = tmp;
+      dx = -dx;
+      dy = -dy;
     }
     const nx = x + dx;
     const ny = y + dy;
@@ -194,6 +213,22 @@ function dessineCroco(x: u8, y: u8): void {
   drawSprite(s("crocodile"), baseX, baseY);
 }
 
+function dessineViande(x: u8, y: u8): void {
+  // Ne dessine pas si la position est invalide (0xff)
+  if (x == 0xff || y == 0xff) return;
+  const baseX = (x as i32) * CASE_DIM_PIXELS;
+  const baseY = (y as i32) * CASE_DIM_PIXELS;
+  drawSprite(s("meat"), baseX, baseY);
+}
+
+function dessineGamelle(x: u8, y: u8): void {
+  // Ne dessine pas si la position est invalide (0xff)
+  if (x == 0xff || y == 0xff) return;
+  const baseX = (x as i32) * CASE_DIM_PIXELS;
+  const baseY = (y as i32) * CASE_DIM_PIXELS;
+  drawSprite(s("plate"), baseX, baseY);
+}
+
 function trouvePointDepart(couleur: u32): u16 {
   if (readSpriteInfo(NIVEAU_1)) {
     const width = getLastSpriteWidth();
@@ -208,7 +243,28 @@ function trouvePointDepart(couleur: u32): u16 {
       }
     }
   }
-  return 0xffff;
+  return INVALIDE;
+}
+
+function trouveNiemePoint(couleur: u32, index: i32): u16 {
+  if (readSpriteInfo(NIVEAU_1)) {
+    const width = getLastSpriteWidth();
+    const height = getLastSpriteHeight();
+    const addr = getLastSpriteAddress();
+    let compteur: i32 = 0;
+    for (let y: i32 = 0; y < height; y++) {
+      for (let x: i32 = 0; x < width; x++) {
+        const pixel = litPixel(addr, width, x, y);
+        if (pixel == couleur) {
+          if (compteur == index) {
+            return ((y as u16) << 8) | (x as u16);
+          }
+          compteur++;
+        }
+      }
+    }
+  }
+  return INVALIDE;
 }
 
 // === Cycle de vie ===
@@ -222,8 +278,9 @@ export function init(): void {
   vars.minuteurDeplCroc = 0;
 
   // Trouve le point de départ du crocodile rouge
-  const posCrocoRouge = trouvePointDepart(COULEUR_CROCO_ROUGE);
-  if (posCrocoRouge == 0xffff) {
+  const posCrocoRouge = trouvePointDepart(Couleurs.CrocoRouge);
+  if (posCrocoRouge == INVALIDE) {
+    warn("Crocodile rouge non trouve dans le niveau");
     vars.croco0X = 0xff;
     vars.croco0Y = 0xff;
     vars.croco0Dir = Direction.IMMOBILE as u8;
@@ -234,8 +291,9 @@ export function init(): void {
   }
 
   // Trouve le point de départ du crocodile violet
-  const posCrocoViolet = trouvePointDepart(COULEUR_CROCO_VIOLET);
-  if (posCrocoViolet == 0xffff) {
+  const posCrocoViolet = trouvePointDepart(Couleurs.CrocoViolet);
+  if (posCrocoViolet == INVALIDE) {
+    warn("Crocodile violet non trouve dans le niveau");
     vars.croco1X = 0xff;
     vars.croco1Y = 0xff;
     vars.croco1Dir = Direction.IMMOBILE as u8;
@@ -246,8 +304,9 @@ export function init(): void {
   }
 
   // Trouve le point de départ du crocodile vert
-  const posCrocoVert = trouvePointDepart(COULEUR_CROCO_VERT);
-  if (posCrocoVert == 0xffff) {
+  const posCrocoVert = trouvePointDepart(Couleurs.CrocoVert);
+  if (posCrocoVert == INVALIDE) {
+    warn("Crocodile vert non trouve dans le niveau");
     vars.croco2X = 0xff;
     vars.croco2Y = 0xff;
     vars.croco2Dir = Direction.IMMOBILE as u8;
@@ -255,6 +314,68 @@ export function init(): void {
     vars.croco2X = (posCrocoVert & 0xff) as u8;
     vars.croco2Y = ((posCrocoVert >> 8) & 0xff) as u8;
     vars.croco2Dir = Direction.HAUT as u8;
+  }
+
+  // Trouve les positions des 3 viandes
+  const posViande0 = trouveNiemePoint(Couleurs.Viande, 0);
+  if (posViande0 == INVALIDE) {
+    warn("Viande 0 non trouvee dans le niveau");
+    vars.viande0X = 0xff;
+    vars.viande0Y = 0xff;
+  } else {
+    vars.viande0X = (posViande0 & 0xff) as u8;
+    vars.viande0Y = ((posViande0 >> 8) & 0xff) as u8;
+  }
+
+  const posViande1 = trouveNiemePoint(Couleurs.Viande, 1);
+  if (posViande1 == INVALIDE) {
+    warn("Viande 1 non trouvee dans le niveau");
+    vars.viande1X = 0xff;
+    vars.viande1Y = 0xff;
+  } else {
+    vars.viande1X = (posViande1 & 0xff) as u8;
+    vars.viande1Y = ((posViande1 >> 8) & 0xff) as u8;
+  }
+
+  const posViande2 = trouveNiemePoint(Couleurs.Viande, 2);
+  if (posViande2 == INVALIDE) {
+    warn("Viande 2 non trouvee dans le niveau");
+    vars.viande2X = 0xff;
+    vars.viande2Y = 0xff;
+  } else {
+    vars.viande2X = (posViande2 & 0xff) as u8;
+    vars.viande2Y = ((posViande2 >> 8) & 0xff) as u8;
+  }
+
+  // Trouve les positions des 3 gamelles
+  const posGamelle0 = trouveNiemePoint(Couleurs.Gamelle, 0);
+  if (posGamelle0 == INVALIDE) {
+    warn("Gamelle 0 non trouvee dans le niveau");
+    vars.gamelle0X = 0xff;
+    vars.gamelle0Y = 0xff;
+  } else {
+    vars.gamelle0X = (posGamelle0 & 0xff) as u8;
+    vars.gamelle0Y = ((posGamelle0 >> 8) & 0xff) as u8;
+  }
+
+  const posGamelle1 = trouveNiemePoint(Couleurs.Gamelle, 1);
+  if (posGamelle1 == INVALIDE) {
+    warn("Gamelle 1 non trouvee dans le niveau");
+    vars.gamelle1X = 0xff;
+    vars.gamelle1Y = 0xff;
+  } else {
+    vars.gamelle1X = (posGamelle1 & 0xff) as u8;
+    vars.gamelle1Y = ((posGamelle1 >> 8) & 0xff) as u8;
+  }
+
+  const posGamelle2 = trouveNiemePoint(Couleurs.Gamelle, 2);
+  if (posGamelle2 == INVALIDE) {
+    warn("Gamelle 2 non trouvee dans le niveau");
+    vars.gamelle2X = 0xff;
+    vars.gamelle2Y = 0xff;
+  } else {
+    vars.gamelle2X = (posGamelle2 & 0xff) as u8;
+    vars.gamelle2Y = ((posGamelle2 >> 8) & 0xff) as u8;
   }
 }
 
@@ -314,7 +435,7 @@ export function update(): void {
       vars.croco0X,
       vars.croco0Y,
       vars.croco0Dir,
-      COULEUR_CROCO_ROUGE
+      Couleurs.CrocoRouge
     );
     vars.croco0X = (posXYDir & 0xff) as u8;
     vars.croco0Y = ((posXYDir >> 8) & 0xff) as u8;
@@ -325,7 +446,7 @@ export function update(): void {
       vars.croco1X,
       vars.croco1Y,
       vars.croco1Dir,
-      COULEUR_CROCO_VIOLET
+      Couleurs.CrocoViolet
     );
     vars.croco1X = (posXYDir & 0xff) as u8;
     vars.croco1Y = ((posXYDir >> 8) & 0xff) as u8;
@@ -336,7 +457,7 @@ export function update(): void {
       vars.croco2X,
       vars.croco2Y,
       vars.croco2Dir,
-      COULEUR_CROCO_VERT
+      Couleurs.CrocoVert
     );
     vars.croco2X = (posXYDir & 0xff) as u8;
     vars.croco2Y = ((posXYDir >> 8) & 0xff) as u8;
@@ -356,26 +477,38 @@ export function draw(): void {
   // Colorie tous les pixels qui ne sont pas du mur
   for (let y: i32 = 0; y < HAUTEUR_GRILLE; y++) {
     for (let x: i32 = 0; x < LARGEUR_GRILLE; x++) {
-      if (!caseCouleur(x, y, COULEUR_MUR)) {
+      if (!caseCouleur(x, y, Couleurs.Mur)) {
         // Colorie la case
         fillRect(
           x * CASE_DIM_PIXELS,
           y * CASE_DIM_PIXELS,
           CASE_DIM_PIXELS,
           CASE_DIM_PIXELS,
-          COULEUR_SOL
+          Couleurs.Sol
         );
       }
     }
   }
 
+  // Dessine les gamelles
+  dessineGamelle(vars.gamelle0X, vars.gamelle0Y);
+  dessineGamelle(vars.gamelle1X, vars.gamelle1Y);
+  dessineGamelle(vars.gamelle2X, vars.gamelle2Y);
+
+  // Dessine les viandes
+  dessineViande(vars.viande0X, vars.viande0Y);
+  dessineViande(vars.viande1X, vars.viande1Y);
+  dessineViande(vars.viande2X, vars.viande2Y);
+
+  // Dessine les crocodiles
   dessineCroco(vars.croco0X, vars.croco0Y);
   dessineCroco(vars.croco1X, vars.croco1Y);
   dessineCroco(vars.croco2X, vars.croco2Y);
 
+  // Dessine le joueur
   dessineTeteJoueur(vars.joueurX, vars.joueurY);
 
   if (vars.etat == EtatJeu.FIN) {
-    drawStartMessageBox("IL VA TE MANGER...", c(0x2a1a1a), c(0xffaa00));
+    drawStartMessageBox("IL VA TE MANGER...", Couleurs.MessageBoxFond, Couleurs.MessageBoxTexte);
   }
 }
