@@ -54,8 +54,6 @@ enum Couleurs {
   Gamelle = c(0x583de8),
 }
 
-const NIVEAU_1: i32 = s("level1");
-
 enum Direction {
   IMMOBILE = 0,
   HAUT = 1,
@@ -123,37 +121,33 @@ const couleursCrocos: u32[] = [
   Couleurs.CrocoVert,
 ];
 
+// === Niveau ===
+
+const NIVEAU_1: i32 = s("level1");
+let adresseNiveau: usize = 0;
+
 // === Fonctions auxiliaires ===
+
+function litCouleurCase(x: i32, y: i32): u32 {
+  return load<u32>(adresseNiveau + (y * LARGEUR_GRILLE + x) * 4);
+}
+
+function caseCouleur(x: i32, y: i32, couleur: u32): bool {
+  if (x >= 0 && x < LARGEUR_GRILLE && y >= 0 && y < HAUTEUR_GRILLE) {
+    const pixel = litCouleurCase(x, y);
+    return pixel == couleur;
+  }
+  return false;
+}
 
 function peutBouger(x: i32, y: i32): bool {
   if (x >= 0 && x < LARGEUR_GRILLE && y >= 0 && y < HAUTEUR_GRILLE) {
-    if (readSpriteInfo(NIVEAU_1)) {
-      const width = getLastSpriteWidth();
-      const addr = getLastSpriteAddress();
-      const pixel = litPixel(addr, width, x, y);
-      if (pixel != Couleurs.Mur) {
-        return true;
-      }
+    const pixel = litCouleurCase(x, y);
+    if (pixel != Couleurs.Mur) {
+      return true;
     }
   }
   return false;
-}
-
-function caseCouleur(x: i32, y: i32, cc: u32): bool {
-  const couleur = cc;
-  if (x >= 0 && x < LARGEUR_GRILLE && y >= 0 && y < HAUTEUR_GRILLE) {
-    if (readSpriteInfo(NIVEAU_1)) {
-      const width = getLastSpriteWidth();
-      const addr = getLastSpriteAddress();
-      const pixel = litPixel(addr, width, x, y);
-      return pixel == couleur;
-    }
-  }
-  return false;
-}
-
-function litPixel(addr: usize, width: i32, x: i32, y: i32): u32 {
-  return load<u32>(addr + (y * width + x) * 4);
 }
 
 function deltaDirX(dir: u8): i32 {
@@ -266,16 +260,11 @@ function dessineGamelle(x: u8, y: u8, remplie: u8): void {
 }
 
 function trouvePointDepart(couleur: u32): u16 {
-  if (readSpriteInfo(NIVEAU_1)) {
-    const width = getLastSpriteWidth();
-    const height = getLastSpriteHeight();
-    const addr = getLastSpriteAddress();
-    for (let y: i32 = 0; y < height; y++) {
-      for (let x: i32 = 0; x < width; x++) {
-        const pixel = litPixel(addr, width, x, y);
-        if (pixel == couleur) {
-          return ((y as u16) << 8) | (x as u16);
-        }
+  for (let y: i32 = 0; y < HAUTEUR_GRILLE; y++) {
+    for (let x: i32 = 0; x < LARGEUR_GRILLE; x++) {
+      const pixel = litCouleurCase(x, y);
+      if (pixel == couleur) {
+        return ((y as u16) << 8) | (x as u16);
       }
     }
   }
@@ -283,20 +272,15 @@ function trouvePointDepart(couleur: u32): u16 {
 }
 
 function trouveNiemePoint(couleur: u32, index: i32): u16 {
-  if (readSpriteInfo(NIVEAU_1)) {
-    const width = getLastSpriteWidth();
-    const height = getLastSpriteHeight();
-    const addr = getLastSpriteAddress();
-    let compteur: i32 = 0;
-    for (let y: i32 = 0; y < height; y++) {
-      for (let x: i32 = 0; x < width; x++) {
-        const pixel = litPixel(addr, width, x, y);
-        if (pixel == couleur) {
-          if (compteur == index) {
-            return ((y as u16) << 8) | (x as u16);
-          }
-          compteur++;
+  let compteur: i32 = 0;
+  for (let y: i32 = 0; y < HAUTEUR_GRILLE; y++) {
+    for (let x: i32 = 0; x < LARGEUR_GRILLE; x++) {
+      const pixel = litCouleurCase(x, y);
+      if (pixel == couleur) {
+        if (compteur == index) {
+          return ((y as u16) << 8) | (x as u16);
         }
+        compteur++;
       }
     }
   }
@@ -304,10 +288,6 @@ function trouveNiemePoint(couleur: u32, index: i32): u16 {
 }
 
 function trouveCrocoPourGamelle(x: u8, y: u8): u8 {
-  if (!readSpriteInfo(NIVEAU_1)) return INVALIDE;
-  const width = getLastSpriteWidth();
-  const height = getLastSpriteHeight();
-  const addr = getLastSpriteAddress();
   const gx = x as i32;
   const gy = y as i32;
 
@@ -323,8 +303,8 @@ function trouveCrocoPourGamelle(x: u8, y: u8): u8 {
   for (let i: i32 = 0; i < 4; i++) {
     const nx = gx + dx[i];
     const ny = gy + dy[i];
-    if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
-    const idx = indexCouleur(litPixel(addr, width, nx, ny));
+    if (nx < 0 || ny < 0 || nx >= LARGEUR_GRILLE || ny >= HAUTEUR_GRILLE) continue;
+    const idx = indexCouleur(litCouleurCase(nx, ny));
     if (idx != INVALIDE) return idx;
   }
   return INVALIDE;
@@ -458,12 +438,27 @@ function deplaceJoueur(): void {
 
 // Initialisation du jeu
 export function init(): void {
+  // Charge le niveau
+  if (!readSpriteInfo(NIVEAU_1)) return;
+  const largeur = getLastSpriteWidth();
+  const hauteur = getLastSpriteHeight();
+  adresseNiveau = getLastSpriteAddress();
+  if (largeur != LARGEUR_GRILLE || hauteur != HAUTEUR_GRILLE) {
+    warn("Taille niveau != grille");
+    return;
+  }
+
+  // Initialise le joueur
   joueur.x = (LARGEUR_GRILLE / 2) as u8;
   joueur.y = (HAUTEUR_GRILLE / 2) as u8;
   joueur.viandePortee = INVALIDE; // Aucune viande portée au départ
+
+  // Initialise le jeu
   jeu.etat = EtatJeu.EN_COURS as u8;
   jeu.minuteurDeplJoueur = 0;
   jeu.minuteurDeplCroc = 0;
+
+  // Initialise les crocodiles
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
     const croco = lesCrocos[i];
     croco.gamelleX = INVALIDE;
