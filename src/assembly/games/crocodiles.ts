@@ -13,9 +13,6 @@ import {
   buttonPressed,
   c,
   drawStartMessageBox,
-  drawRect,
-  fillRect,
-  randomRange,
   drawSpriteScaled,
   s,
   readSpriteInfo,
@@ -23,7 +20,6 @@ import {
   getLastSpriteAddress,
   getLastSpriteHeight,
   drawSprite,
-  log,
 } from "../sdk";
 
 // === Constantes ===
@@ -34,11 +30,9 @@ const HAUTEUR_GRILLE: i32 = HEIGHT / CASE_DIM_PIXELS;
 const JOUEUR_DEPL_DELAI: u8 = 6;
 const CROCO_DEPL_DELAI: u8 = 30;
 
-const COULEUR_PLAYER: u32 = c(0xf2c9a0);
-const COULEUR_PLAYER_EYE: u32 = c(0x1b1b1b);
 const COULEUR_CROCO_ROUGE: u32 = c(0xff0000);
 const COULEUR_CROCO_VIOLET: u32 = c(0xff00ff);
-const COULEUR_CROCO_VERT: u32 = c(0x00ff01);
+const COULEUR_CROCO_VERT: u32 = c(0x00ff00);
 
 const COULEUR_SOL: u32 = c(0xe09729);
 const COULEUR_MUR: u32 = c(0x04e5ff);
@@ -46,15 +40,16 @@ const COULEUR_MUR: u32 = c(0x04e5ff);
 const NIVEAU_1: i32 = s("level1");
 
 enum Direction {
-  HAUT = 0,
-  DROITE = 1,
-  BAS = 2,
-  GAUCHE = 3,
+  IMMOBILE = 0,
+  HAUT = 1,
+  DROITE = 2,
+  BAS = 3,
+  GAUCHE = 4,
 }
 
 enum EtatJeu {
   EN_COURS = 0,
-  PARTIE_TERMINEE = 1,
+  FIN = 1,
 }
 
 // === Système de variables en RAM ===
@@ -121,14 +116,39 @@ function deltaDirY(dir: u8): i32 {
   return 0;
 }
 
+function donneDir(dx: i32, dy: i32): u8 {
+  if (dx == 0 && dy == -1) return Direction.HAUT as u8;
+  if (dx == 1 && dy == 0) return Direction.DROITE as u8;
+  if (dx == 0 && dy == 1) return Direction.BAS as u8;
+  if (dx == -1 && dy == 0) return Direction.GAUCHE as u8;
+  return Direction.IMMOBILE as u8;
+}
+
 function choisisDirValide(x: u8, y: u8, dir: u8, couleur: u32): u8 {
+  const startDir = dir == Direction.IMMOBILE ? Direction.HAUT as u8 : dir;
+  const startDX = deltaDirX(startDir);
+  const startDY = deltaDirY(startDir);
   for (let essais = 0; essais < 4; essais++) {
-    const prochDir = ((dir + essais) % 4) as u8;
-    const nx = (x as i32) + deltaDirX(prochDir);
-    const ny = (y as i32) + deltaDirY(prochDir);
-    if (caseCouleur(nx, ny, couleur)) return prochDir;
+    let dx = startDX;
+    let dy = startDY;
+    if (essais == 1) {
+      const tmp = dx;
+      dx = -dy;
+      dy = tmp;
+    } else if (essais == 2) {
+      const tmp = dx;
+      dx = dy;
+      dy = -tmp;
+    } else if (essais == 3) {
+      const tmp = dx;
+      dx = -dy;
+      dy = tmp;
+    }
+    const nx = x + dx;
+    const ny = y + dy;
+    if (caseCouleur(nx, ny, couleur)) return donneDir(dx, dy);
   }
-  return dir;
+  return Direction.IMMOBILE as u8;
 }
 
 function deplaceCroc(x: u8, y: u8, dir: u8, couleur: u32): u32 {
@@ -168,8 +188,7 @@ function dessineCroco(x: u8, y: u8): void {
   drawSprite(s("crocodile"), baseX, baseY);
 }
 
-function trouvePointDepart(col: u32, defX: u8, defY: u8): u16 {
-  const couleur = c(col);
+function trouvePointDepart(couleur: u32): u16 {
   if (readSpriteInfo(NIVEAU_1)) {
     const width = getLastSpriteWidth();
     const height = getLastSpriteHeight();
@@ -183,7 +202,7 @@ function trouvePointDepart(col: u32, defX: u8, defY: u8): u16 {
       }
     }
   }
-  return ((defY as u16) << 8) | (defX as u16);
+  return 0xffff;
 }
 
 // === Cycle de vie ===
@@ -197,30 +216,40 @@ export function init(): void {
   vars.minuteurDeplCroc = 0;
 
   // Trouve le point de départ du crocodile rouge
-  const posCrocoRouge = trouvePointDepart(COULEUR_CROCO_ROUGE, 1, 1);
-  vars.croco0X = (posCrocoRouge & 0xff) as u8;
-  vars.croco0Y = ((posCrocoRouge >> 8) & 0xff) as u8;
-  vars.croco0Dir = Direction.DROITE as u8;
+  const posCrocoRouge = trouvePointDepart(COULEUR_CROCO_ROUGE);
+  if (posCrocoRouge == 0xffff) {
+    vars.croco0X = 0xff;
+    vars.croco0Y = 0xff;
+    vars.croco0Dir = Direction.IMMOBILE as u8;
+  } else {
+    vars.croco0X = (posCrocoRouge & 0xff) as u8;
+    vars.croco0Y = ((posCrocoRouge >> 8) & 0xff) as u8;
+    vars.croco0Dir = Direction.DROITE as u8;
+  }
 
   // Trouve le point de départ du crocodile violet
-  const posCrocoViolet = trouvePointDepart(
-    COULEUR_CROCO_VIOLET,
-    (LARGEUR_GRILLE - 2) as u8,
-    1
-  );
-  vars.croco1X = (posCrocoViolet & 0xff) as u8;
-  vars.croco1Y = ((posCrocoViolet >> 8) & 0xff) as u8;
-  vars.croco1Dir = Direction.BAS as u8;
+  const posCrocoViolet = trouvePointDepart(COULEUR_CROCO_VIOLET);
+  if (posCrocoViolet == 0xffff) {
+    vars.croco1X = 0xff;
+    vars.croco1Y = 0xff;
+    vars.croco1Dir = Direction.IMMOBILE as u8;
+  } else {
+    vars.croco1X = (posCrocoViolet & 0xff) as u8;
+    vars.croco1Y = ((posCrocoViolet >> 8) & 0xff) as u8;
+    vars.croco1Dir = Direction.BAS as u8;
+  }
 
   // Trouve le point de départ du crocodile vert
-  const posCrocoVert = trouvePointDepart(
-    COULEUR_CROCO_VERT,
-    1,
-    (HAUTEUR_GRILLE - 2) as u8
-  );
-  vars.croco2X = (posCrocoVert & 0xff) as u8;
-  vars.croco2Y = ((posCrocoVert >> 8) & 0xff) as u8;
-  vars.croco2Dir = Direction.HAUT as u8;
+  const posCrocoVert = trouvePointDepart(COULEUR_CROCO_VERT);
+  if (posCrocoVert == 0xffff) {
+    vars.croco2X = 0xff;
+    vars.croco2Y = 0xff;
+    vars.croco2Dir = Direction.IMMOBILE as u8;
+  } else {
+    vars.croco2X = (posCrocoVert & 0xff) as u8;
+    vars.croco2Y = ((posCrocoVert >> 8) & 0xff) as u8;
+    vars.croco2Dir = Direction.HAUT as u8;
+  }
 }
 
 // Mise à jour du jeu
@@ -301,7 +330,7 @@ export function update(): void {
       vars.croco2X,
       vars.croco2Y,
       vars.croco2Dir,
-      c(COULEUR_CROCO_VERT)
+      COULEUR_CROCO_VERT
     );
     vars.croco2X = (posXYDir & 0xff) as u8;
     vars.croco2Y = ((posXYDir >> 8) & 0xff) as u8;
@@ -311,7 +340,7 @@ export function update(): void {
   }
 
   if (verifiePositionJoueur(vars.joueurX, vars.joueurY)) {
-    vars.etat = EtatJeu.PARTIE_TERMINEE as u8;
+    vars.etat = EtatJeu.FIN as u8;
   }
 }
 
@@ -325,7 +354,7 @@ export function draw(): void {
 
   dessineTeteJoueur(vars.joueurX, vars.joueurY);
 
-  if (vars.etat == EtatJeu.PARTIE_TERMINEE) {
+  if (vars.etat == EtatJeu.FIN) {
     drawStartMessageBox("IL VA TE MANGER...", c(0x2a1a1a), c(0xffaa00));
   }
 }
