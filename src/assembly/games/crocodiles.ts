@@ -159,12 +159,7 @@ function dessineGrille(): void {
 function dessineTeteJoueur(x: u8, y: u8): void {
   const baseX = (x as i32) * CASE_DIM_PIXELS;
   const baseY = (y as i32) * CASE_DIM_PIXELS;
-  const tailleTete: i32 = 12;
-  const decalage: i32 = (CASE_DIM_PIXELS - tailleTete) / 2;
-  fillRect(baseX + decalage, baseY + decalage, tailleTete, tailleTete, COULEUR_PLAYER);
-  drawRect(baseX + decalage, baseY + decalage, tailleTete, tailleTete, COULEUR_PLAYER_EYE);
-  fillRect(baseX + decalage + 3, baseY + decalage + 4, 2, 2, COULEUR_PLAYER_EYE);
-  fillRect(baseX + decalage + 7, baseY + decalage + 4, 2, 2, COULEUR_PLAYER_EYE);
+  drawSprite(s("player"), baseX, baseY);
 }
 
 function dessineCroco(x: u8, y: u8): void {
