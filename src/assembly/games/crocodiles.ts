@@ -1,8 +1,9 @@
 // cspell:language en,fr
 // CROCODILES - Jeu TinyForge
-// Poursuite façon Pacman sur un écran unique avec une grille 16x16 pixels.
-// Vous contrôlez une tête cubique tandis que les crocodiles patrouillent le labyrinthe.
-// Évitez les crocodiles; appuyez sur START pour redémarrer après game over.
+// Ramassez les viandes et déposez-les dans les gamelles pour nourrir les crocodiles.
+// Objectif : Remplir les 3 gamelles pour gagner !
+// Attention : Évitez de vous faire attraper par les crocodiles qui patrouillent le niveau.
+// Contrôles : Flèches pour se déplacer, START pour redémarrer.
 
 import {
   Button,
