@@ -172,28 +172,32 @@ function donneDir(dx: i32, dy: i32): u8 {
   return Direction.IMMOBILE as u8;
 }
 
+const tableauDir = new StaticArray<u8>(4);
+
 function choisisDirValide(x: u8, y: u8, dir: u8, couleur: u32): u8 {
-  const dirInitiale = dir == Direction.IMMOBILE ? Direction.HAUT as u8 : dir;
-  const dxInitial = deltaDirX(dirInitiale);
-  const dyInitial = deltaDirY(dirInitiale);
-  for (let essais = 0; essais < 4; essais++) {
-    let dx = dxInitial;
-    let dy = dyInitial;
-    if (essais == 1) {
-      const tmp = dx;
-      dx = Math.abs(dy) as i32;
-      dy = Math.abs(tmp) as i32;
-    } else if (essais == 2) {
-      const tmp = dx;
-      dx = -Math.abs(dy) as i32;
-      dy = -Math.abs(tmp) as i32;
-    } else if (essais == 3) {
-      dx = -dx;
-      dy = -dy;
-    }
-    const nx = x + dx;
-    const ny = y + dy;
-    if (caseCouleur(nx, ny, couleur)) return donneDir(dx, dy);
+  let dirRetour = Direction.IMMOBILE as u8;
+  if (dir == Direction.HAUT) dirRetour = Direction.BAS as u8;
+  else if (dir == Direction.BAS) dirRetour = Direction.HAUT as u8;
+  else if (dir == Direction.GAUCHE) dirRetour = Direction.DROITE as u8;
+  else if (dir == Direction.DROITE) dirRetour = Direction.GAUCHE as u8;
+
+  let count: i32 = 0;
+
+  for (let d: u8 = 1; d <= 4; d++) {
+    if (d == dirRetour) continue;
+    if (!dirValidePourCouleur(x, y, d, couleur)) continue;
+    tableauDir[count] = d;
+    count++;
+  }
+
+  if (count == 1) return tableauDir[0];
+  if (count >= 2) {
+    const r = randomRange(count);
+    return tableauDir[r];
+  }
+
+  if (dirRetour != Direction.IMMOBILE && dirValidePourCouleur(x, y, dirRetour, couleur)) {
+    return dirRetour;
   }
   return Direction.IMMOBILE as u8;
 }
@@ -332,7 +336,7 @@ function trouveCrocoPourGamelle(x: u8, y: u8): u8 {
   return INVALIDE;
 }
 
-function initCroco(index: u8, croco: Croco, couleur: u32, dir: u8): void {
+function initCroco(index: u8, croco: Croco, couleur: u32): void {
   const pos = trouvePointDepart(couleur);
   if (pos == INVALIDE_POS) {
     warn("Crocodile " + index.toString() + " non trouvé");
@@ -343,7 +347,13 @@ function initCroco(index: u8, croco: Croco, couleur: u32, dir: u8): void {
   }
   croco.x = (pos & 0xff) as u8;
   croco.y = ((pos >> 8) & 0xff) as u8;
-  croco.dir = dir;
+  croco.dir = Direction.IMMOBILE as u8;
+  croco.gamelleX = INVALIDE;
+  croco.gamelleY = INVALIDE;
+  croco.gamelleRemplie = 0; // Gamelles vides au départ
+  croco.attaque = 0;
+  croco.minuteurDepl = 0;
+  croco.casesDepuisChgmDir = 0;
 }
 
 function assigneGamelle(index: u8): void {
@@ -513,14 +523,7 @@ export function init(): void {
   // Initialise les crocodiles
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
     const croco = lesCrocos[i];
-    croco.gamelleX = INVALIDE;
-    croco.gamelleY = INVALIDE;
-    croco.gamelleRemplie = 0; // Gamelles vides au départ
-    croco.attaque = 0;
-    croco.minuteurDepl = 0;
-    croco.casesDepuisChgmDir = 0;
-    const dirAleatoire = (randomRange(4) + 1) as u8;
-    initCroco(i as u8, croco, couleursCrocos[i], dirAleatoire);
+    initCroco(i as u8, croco, couleursCrocos[i]);
   }
 
   // Trouve les positions des 3 viandes
