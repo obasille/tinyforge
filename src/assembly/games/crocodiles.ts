@@ -92,20 +92,21 @@ class Joueur {
 
 @unmanaged
 class Croco {
-  posX: u8;
-  posY: u8;
+  x: u8;
+  y: u8;
   dir: u8;
   minuteurDepl: u8;
   gamelleX: u8;
   gamelleY: u8;
   gamelleRemplie: u8; // 0 = vide, 1 = remplie
   attaque: u8; // 0 = normal, 1 = attaque
+  casesDepuisChgmDir: u8;
 }
 
 const jeu = changetype<Jeu>(RAM_START);
 const szVars = offsetof<Jeu>("_fin");
 const szJoueur: usize = (offsetof<Joueur>("viandePortee") + 4) & ~3;
-const szCroco: usize = (offsetof<Croco>("attaque") + 4) & ~3;
+const szCroco: usize = (offsetof<Croco>("casesDepuisChgmDir") + 4) & ~3;
 let offset: usize = RAM_START + szVars;
 const joueur = changetype<Joueur>(offset);
 offset += szJoueur;
@@ -197,17 +198,36 @@ function choisisDirValide(x: u8, y: u8, dir: u8, couleur: u32): u8 {
   return Direction.IMMOBILE as u8;
 }
 
-function deplaceCroc(x: u8, y: u8, dir: u8, couleur: u32): u32 {
-  const prochDir = choisisDirValide(x, y, dir, couleur);
-  const nx = ((x as i32) + deltaDirX(prochDir)) as u8;
-  const ny = ((y as i32) + deltaDirY(prochDir)) as u8;
-  return ((prochDir as u32) << 16) | ((ny as u32) << 8) | (nx as u32);
+function dirValidePourCouleur(x: u8, y: u8, dir: u8, couleur: u32): bool {
+  const nx = (x as i32) + deltaDirX(dir);
+  const ny = (y as i32) + deltaDirY(dir);
+  return caseCouleur(nx, ny, couleur);
+}
+
+function dirAttaqueCroco(croco: Croco, couleur: u32, jx: u8, jy: u8): u8 {
+  let meilleurDir = croco.dir;
+  let meilleurDist: i32 = 0x7fffffff;
+  for (let dir: u8 = 1; dir <= 4; dir++) {
+    if (!dirValidePourCouleur(croco.x, croco.y, dir, couleur)) continue;
+    const nx = (croco.x as i32) + deltaDirX(dir);
+    const ny = (croco.y as i32) + deltaDirY(dir);
+    let dx = (jx as i32) - nx;
+    if (dx < 0) dx = -dx;
+    let dy = (jy as i32) - ny;
+    if (dy < 0) dy = -dy;
+    const dist = dx + dy;
+    if (dist < meilleurDist || (dist == meilleurDist && dir == croco.dir)) {
+      meilleurDist = dist;
+      meilleurDir = dir;
+    }
+  }
+  return meilleurDir;
 }
 
 function verifiePositionJoueur(px: u8, py: u8): bool {
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
     const croco = lesCrocos[i];
-    if (croco.posX == px && croco.posY == py) return true;
+    if (croco.x == px && croco.y == py) return true;
   }
   return false;
 }
@@ -234,8 +254,8 @@ function dessineTeteJoueur(x: u8, y: u8): void {
 }
 
 function dessineCroco(croco: Croco): void {
-  const baseX = (croco.posX as i32) * TAILLE_CASE;
-  const baseY = (croco.posY as i32) * TAILLE_CASE;
+  const baseX = (croco.x as i32) * TAILLE_CASE;
+  const baseY = (croco.y as i32) * TAILLE_CASE;
   const sprite = croco.attaque == 1 ? s("crocodile_bloody") : s("crocodile");
   drawSprite(sprite, baseX, baseY);
 }
@@ -316,13 +336,13 @@ function initCroco(index: u8, croco: Croco, couleur: u32, dir: u8): void {
   const pos = trouvePointDepart(couleur);
   if (pos == INVALIDE_POS) {
     warn("Crocodile " + index.toString() + " non trouvé");
-    croco.posX = INVALIDE;
-    croco.posY = INVALIDE;
+    croco.x = INVALIDE;
+    croco.y = INVALIDE;
     croco.dir = Direction.IMMOBILE as u8;
     return;
   }
-  croco.posX = (pos & 0xff) as u8;
-  croco.posY = ((pos >> 8) & 0xff) as u8;
+  croco.x = (pos & 0xff) as u8;
+  croco.y = ((pos >> 8) & 0xff) as u8;
   croco.dir = dir;
 }
 
@@ -345,10 +365,41 @@ function assigneGamelle(index: u8): void {
 }
 
 function deplaceCroco(croco: Croco, couleur: u32): void {
-  const posXYDir = deplaceCroc(croco.posX, croco.posY, croco.dir, couleur);
-  croco.posX = (posXYDir & 0xff) as u8;
-  croco.posY = ((posXYDir >> 8) & 0xff) as u8;
-  croco.dir = ((posXYDir >> 16) & 0xff) as u8;
+  const oldX = croco.x;
+  const oldY = croco.y;
+  const oldDir = croco.dir;
+
+  // Choisi la direction du crocodile
+  let dir = croco.attaque == 1
+    ? dirAttaqueCroco(croco, couleur, joueur.x, joueur.y)
+    : choisisDirValide(croco.x, croco.y, croco.dir, couleur);
+
+  // Si le crocodile attaque, on ne change pas de direction si on a changé de direction il y a moins de 2 cases
+  if (croco.attaque == 1 && dir != oldDir && croco.casesDepuisChgmDir < 2) {
+    dir = oldDir;
+    // Si la direction choisie n'est pas valide, on choisit une nouvelle direction valide
+    if (!dirValidePourCouleur(croco.x, croco.y, dir, couleur)) {
+      dir = choisisDirValide(croco.x, croco.y, croco.dir, couleur);
+    }
+  }
+
+  // Si la direction choisie n'est pas valide, on ne fait rien
+  if (!dirValidePourCouleur(croco.x, croco.y, dir, couleur)) {
+    croco.dir = Direction.IMMOBILE as u8;
+    return;
+  }
+
+  // Déplace le crocodile
+  croco.x = (croco.x + deltaDirX(dir)) as u8;
+  croco.y = (croco.y + deltaDirY(dir)) as u8;
+  croco.dir = dir;
+
+  // Met à jour le compteur de cases depuis le dernier changement de direction
+  if (croco.dir != oldDir) {
+    croco.casesDepuisChgmDir = 0;
+  } else if (croco.x != oldX || croco.y != oldY) {
+    croco.casesDepuisChgmDir = (croco.casesDepuisChgmDir + 1) as u8;
+  }
 }
 
 function doneViandePos(index: u8): u16 {
@@ -467,6 +518,7 @@ export function init(): void {
     croco.gamelleRemplie = 0; // Gamelles vides au départ
     croco.attaque = 0;
     croco.minuteurDepl = 0;
+    croco.casesDepuisChgmDir = 0;
     const dirAleatoire = (randomRange(4) + 1) as u8;
     initCroco(i as u8, croco, couleursCrocos[i], dirAleatoire);
   }
