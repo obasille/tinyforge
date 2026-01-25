@@ -765,6 +765,7 @@ const colorRgbEl = document.getElementById('color-rgb');
 const colorSwatchEl = document.getElementById('color-swatch') as HTMLSpanElement | null;
 const rngSeedInput = document.getElementById('rng-seed-input') as HTMLInputElement | null;
 const rngSeedApply = document.getElementById('rng-seed-apply') as HTMLButtonElement | null;
+const rngSeedRandom = document.getElementById('rng-seed-random') as HTMLButtonElement | null;
 
 const applyRngSeedInput = () => {
   if (!rngSeedInput) return;
@@ -777,8 +778,20 @@ const applyRngSeedInput = () => {
   }
 };
 
+const randomizeRngSeed = () => {
+  const nextSeed = (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) & 0x7fffffff;
+  setRngSeed(nextSeed);
+  if (rngSeedInput) {
+    rngSeedInput.value = formatSeedHex(nextSeed);
+  }
+};
+
 if (rngSeedApply) {
   rngSeedApply.addEventListener('click', applyRngSeedInput);
+}
+
+if (rngSeedRandom) {
+  rngSeedRandom.addEventListener('click', randomizeRngSeed);
 }
 
 if (rngSeedInput) {
