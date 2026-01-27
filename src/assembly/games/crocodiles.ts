@@ -36,6 +36,8 @@ const HAUTEUR_GRILLE: i32 = HEIGHT / TAILLE_CASE;
 const JOUEUR_DEPL_DELAI: u8 = 6;
 const CROCO_DEPL_DELAI: u8 = 30;
 const NB_CROCOS: i32 = 3;
+const VIES_DEPART: u8 = 3;
+const INVINCIBLE_TICKS: u8 = 180; // ~3s @ 60fps
 
 const INVALIDE: u8 = 0xff;
 const INVALIDE_POS: u16 = 0xffff;
@@ -73,6 +75,7 @@ enum EtatJeu {
 @unmanaged
 class Jeu {
   etat: u8;
+  vies: u8;
   viande0PosX: u8;
   viande0PosY: u8;
   viande1PosX: u8;
@@ -88,6 +91,7 @@ class Joueur {
   y: u8;
   minuteurDepl: u8;
   viandePortee: u8;
+  invincible: u8;
 }
 
 @unmanaged
@@ -105,7 +109,7 @@ class Croco {
 
 const jeu = changetype<Jeu>(RAM_START);
 const szVars = offsetof<Jeu>("_fin");
-const szJoueur: usize = (offsetof<Joueur>("viandePortee") + 4) & ~3;
+const szJoueur: usize = (offsetof<Joueur>("invincible") + 4) & ~3;
 const szCroco: usize = (offsetof<Croco>("casesDepuisChgmDir") + 4) & ~3;
 let offset: usize = RAM_START + szVars;
 const joueur = changetype<Joueur>(offset);
@@ -323,7 +327,14 @@ function dessineGrille(): void {
 function dessineTeteJoueur(x: u8, y: u8): void {
   const baseX = (x as i32) * TAILLE_CASE;
   const baseY = (y as i32) * TAILLE_CASE;
-  drawSprite(s("player"), baseX, baseY);
+  let visible = true;
+  if (joueur.invincible > 0) {
+    const phase = ((joueur.invincible as i32) >> 4) % 3;
+    visible = phase != 0; // visible 2/3 du cycle
+  }
+  if (visible) {
+    drawSprite(s("player"), baseX, baseY);
+  }
   
   // Dessine la viande portée au-dessus du joueur
   if (joueur.viandePortee != INVALIDE) {
@@ -590,9 +601,11 @@ export function init(): void {
   joueur.y = (HAUTEUR_GRILLE / 2) as u8;
   joueur.viandePortee = INVALIDE; // Aucune viande portée au départ
   joueur.minuteurDepl = 0;
+  joueur.invincible = 0;
 
   // Initialise le jeu
   jeu.etat = EtatJeu.EN_COURS as u8;
+  jeu.vies = VIES_DEPART;
 
   // Initialise les crocodiles
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
@@ -626,6 +639,7 @@ export function update(): void {
 
   // Décrémenter les minuteurs de mouvement
   if (joueur.minuteurDepl > 0) joueur.minuteurDepl--;
+  if (joueur.invincible > 0) joueur.invincible--;
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
     if (lesCrocos[i].minuteurDepl > 0) lesCrocos[i].minuteurDepl--;
   }
@@ -665,9 +679,13 @@ export function update(): void {
     jeu.etat = EtatJeu.VICTOIRE as u8;
   }
 
-  // Vérifier si le joueur touche un crocodile (défaite)
-  if (verifiePositionJoueur(joueur.x, joueur.y)) {
-    jeu.etat = EtatJeu.FIN as u8;
+  // Vérifier si le joueur touche un crocodile (perte de vie)
+  if (joueur.invincible == 0 && verifiePositionJoueur(joueur.x, joueur.y)) {
+    if (jeu.vies > 0) jeu.vies--;
+    joueur.invincible = INVINCIBLE_TICKS;
+    if (jeu.vies == 0) {
+      jeu.etat = EtatJeu.FIN as u8;
+    }
   }
 }
 
@@ -709,6 +727,15 @@ export function draw(): void {
 
   // Dessine le joueur
   dessineTeteJoueur(joueur.x, joueur.y);
+
+  // Affiche les vies en haut à droite avec un petit bounce
+  const coeurX = WIDTH - TAILLE_CASE;
+  const bounce = ((joueur.invincible >> 4) & 1) == 0 ? 0 : -2;
+  const pasCoeur = TAILLE_CASE + 2;
+  for (let i: i32 = 0; i < (jeu.vies as i32); i++) {
+    const offsetY = (i & 1) == 0 ? bounce : -bounce;
+    drawSprite(s("heart"), coeurX - (i * pasCoeur), offsetY);
+  }
 
   if (jeu.etat == EtatJeu.FIN) {
     drawStartMessageBox("IL VA TE MANGER...", Couleurs.MessageBoxFond, Couleurs.MessageBoxTexte);
