@@ -152,6 +152,80 @@ function peutBouger(x: i32, y: i32): bool {
   return false;
 }
 
+function caseAutorisee(x: i32, y: i32, couleur: u32, utiliseCouleur: bool): bool {
+  if (x < 0 || x >= LARGEUR_GRILLE || y < 0 || y >= HAUTEUR_GRILLE) return false;
+  const estCouleur = litCouleurCase(x, y) == couleur;
+  return utiliseCouleur ? estCouleur : !estCouleur;
+}
+
+const cheminPrev = new StaticArray<i32>(LARGEUR_GRILLE * HAUTEUR_GRILLE);
+const cheminQueue = new StaticArray<i32>(LARGEUR_GRILLE * HAUTEUR_GRILLE);
+const cheminDx: i32[] = [0, 0, -1, 1];
+const cheminDy: i32[] = [-1, 1, 0, 0];
+
+function prochaineCaseChemin(
+  departX: u8,
+  departY: u8,
+  cibleX: u8,
+  cibleY: u8,
+  couleur: u32,
+  utiliseCouleur: bool
+): u16 {
+  if (departX == cibleX && departY == cibleY) {
+    return ((departY as u16) << 8) | (departX as u16);
+  }
+
+  if (
+    !caseAutorisee(departX, departY, couleur, utiliseCouleur) ||
+    !caseAutorisee(cibleX, cibleY, couleur, utiliseCouleur)
+  ) {
+    return ((departY as u16) << 8) | (departX as u16);
+  }
+
+  const total = LARGEUR_GRILLE * HAUTEUR_GRILLE;
+  for (let i: i32 = 0; i < total; i++) cheminPrev[i] = -1;
+
+  const idxDepart = departY * LARGEUR_GRILLE + departX;
+  const idxCible = cibleY * LARGEUR_GRILLE + cibleX;
+  let head: i32 = 0;
+  let tail: i32 = 0;
+  cheminQueue[tail++] = idxDepart;
+  cheminPrev[idxDepart] = idxDepart;
+
+  while (head < tail) {
+    const idx = cheminQueue[head++];
+    if (idx == idxCible) break;
+    const cx = idx % LARGEUR_GRILLE;
+    const cy = idx / LARGEUR_GRILLE;
+    for (let d: i32 = 0; d < 4; d++) {
+      let nx = cx + cheminDx[d];
+      let ny = cy + cheminDy[d];
+      if (nx < 0) nx = LARGEUR_GRILLE - 1;
+      else if (nx >= LARGEUR_GRILLE) nx = 0;
+      if (ny < 0) ny = HAUTEUR_GRILLE - 1;
+      else if (ny >= HAUTEUR_GRILLE) ny = 0;
+      if (!caseAutorisee(nx, ny, couleur, utiliseCouleur)) continue;
+      const nidx = ny * LARGEUR_GRILLE + nx;
+      if (cheminPrev[nidx] != -1) continue;
+      cheminPrev[nidx] = idx;
+      cheminQueue[tail++] = nidx;
+    }
+  }
+
+  if (cheminPrev[idxCible] == -1) {
+    return ((departY as u16) << 8) | (departX as u16);
+  }
+
+  let cur = idxCible;
+  while (cheminPrev[cur] != idxDepart) {
+    cur = cheminPrev[cur];
+    if (cur == idxDepart) break;
+  }
+  const nx = (cur % LARGEUR_GRILLE) as u8;
+  const ny = (cur / LARGEUR_GRILLE) as u8;
+  return ((ny as u16) << 8) | (nx as u16);
+}
+
 function deltaDirX(dir: u8): i32 {
   if (dir == Direction.GAUCHE) return -1;
   if (dir == Direction.DROITE) return 1;
