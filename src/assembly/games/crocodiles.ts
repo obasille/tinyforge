@@ -341,14 +341,13 @@ function dessineTeteJoueur(x: u8, y: u8): void {
   }
   const baseX = (renderX * (TAILLE_CASE as f32)) as i32;
   const baseY = (renderY * (TAILLE_CASE as f32)) as i32;
-  let visible = true;
+  let alpha: u8 = 255;
   if (joueur.invincible > 0) {
-    const phase = ((joueur.invincible as i32) >> 4) % 3;
-    visible = phase != 0; // visible 2/3 du cycle
+    const t = (joueur.invincible as i32) & 15;
+    const tri = t < 8 ? t : (15 - t);
+    alpha = (128 + (tri * 16)) as u8;
   }
-  if (visible) {
-    drawSprite(s("player"), baseX, baseY);
-  }
+  drawSprite(s("player"), baseX, baseY, false, false, alpha);
   
   // Dessine la viande portée au-dessus du joueur
   if (joueur.viandePortee != INVALIDE) {
