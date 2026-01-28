@@ -161,17 +161,28 @@ export function getLastSpriteAddress(): usize {
  * @param y Y coordinate (top-left)
  * @param flipX Whether to flip the sprite horizontally (default: false)
  * @param flipY Whether to flip the sprite vertically (default: false)
+ * @param alpha Alpha multiplier (0-255) applied to sprite pixels (default: 255)
  * @example
  * ```typescript
  * drawSprite(s("mySprite"), 100, 100); // Draw sprite at (100, 100)
  * drawSprite(s("mySprite"), 100, 100, true); // Draw flipped horizontally
+ * drawSprite(s("mySprite"), 100, 100, false, false, 128); // 50% opacity
  * ```
  */
-export function drawSprite(id: i32, x: i32, y: i32, flipX: bool = false, flipY: bool = false): void {
+export function drawSprite(
+  id: i32,
+  x: i32,
+  y: i32,
+  flipX: bool = false,
+  flipY: bool = false,
+  alpha: u8 = 255,
+): void {
   if (!readSpriteInfo(id)) return;
   const frameOffset = readFrameOffset;
   const width = readWidth;
   const height = readHeight;
+  const alphaMul = alpha as u32;
+  const alphaMax: u32 = 255;
 
   // Calculate visible region (clip to screen bounds)
   const startX = max(0, -x);
@@ -198,7 +209,11 @@ export function drawSprite(id: i32, x: i32, y: i32, flipX: bool = false, flipY: 
       const pixelAddr = spriteDataAddr + ((srcRowOffset + srcX) << 2) as usize;
       const srcPixel = load<u32>(pixelAddr);
       
-      const srcA = (srcPixel >> 24) & 0xff;
+      let srcA = ((srcPixel >> 24) & 0xff) as u32;
+
+      if (alphaMul != alphaMax) {
+        srcA = (srcA * alphaMul + 127) / alphaMax;
+      }
 
       // Skip fully transparent pixels
       if (srcA == 0) continue;
@@ -207,7 +222,7 @@ export function drawSprite(id: i32, x: i32, y: i32, flipX: bool = false, flipY: 
       const fbAddr = (fbRowBase + screenX as usize) << 2;
 
       // If fully opaque, write directly
-      if (srcA == 255) {
+      if (srcA == alphaMax) {
         store<u32>(fbAddr, srcPixel | 0xff000000);
       } else {
         // Alpha blending required
@@ -224,7 +239,7 @@ export function drawSprite(id: i32, x: i32, y: i32, flipX: bool = false, flipY: 
         const dstB = (dstPixel >> 16) & 0xff;
 
         // Blend using bit shift approximation: (x * a + 128) >> 8 ≈ x * a / 255
-        const invAlpha = 255 - srcA;
+        const invAlpha = alphaMax - srcA;
 
         const blendR = ((srcR * srcA + dstR * invAlpha + 128) >> 8) as u8;
         const blendG = ((srcG * srcA + dstG * invAlpha + 128) >> 8) as u8;
