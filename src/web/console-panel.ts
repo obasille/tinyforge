@@ -1,15 +1,23 @@
 // Console Panel Logger
 // Manages the HTML console panel for displaying logs, warnings, and errors
 
-const consoleEntries = document.getElementById('console-entries');
-const clearBtn = document.getElementById('clear-console');
+const requireElement = <T extends HTMLElement>(id: string): T => {
+  const el = document.getElementById(id);
+  if (!el) {
+    throw new Error(`Missing required element: ${id}`);
+  }
+  return el as T;
+};
+
+const consoleEntries = requireElement<HTMLDivElement>('console-entries');
+const clearBtn = requireElement<HTMLButtonElement>('clear-console');
 
 /**
  * Adds an entry to the console panel
  * @param {string} type - Entry type: 'LOG', 'WARN', 'ERROR', 'RUNTIME', 'LOAD', 'TRACE'
  * @param {string} message - Message to display
  */
-export function addConsoleEntry(type, message) {
+export function addConsoleEntry(type: string, message: string): void {
   const entry = document.createElement('div');
   entry.className = `console-entry ${type.toLowerCase()}`;
   

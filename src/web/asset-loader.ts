@@ -3,18 +3,35 @@
 
 import { addConsoleEntry } from "./console-panel.js";
 
+export type AssetDescriptor = {
+  id: string;
+  format: string;
+  info: string;
+  filename: string;
+  url: string;
+};
+
+type ParsedAsset = {
+  id: string;
+  format: string;
+  info: string;
+};
+
+type IdCollection = { has(id: string): boolean };
+
 /**
  * Utility class for loading assets with ID-based naming
  */
 export class AssetLoader {
-  static MAX_ID_LENGTH = 16;
+  public static readonly MAX_ID_LENGTH = 16;
   /**
    * Parse asset filename into id/format/info parts.
    * Filename format: {id}~{format}-{info}.ext
    * Only id is required.
    */
-  static parseAssetFilename(filename) {
+  public static parseAssetFilename(filename: string): ParsedAsset | null {
     const basename = filename.split(/[\/\\]/).pop();
+    if (!basename) return null;
     let decoded = basename;
     try {
       decoded = decodeURIComponent(basename);
@@ -55,14 +72,15 @@ export class AssetLoader {
    * @param pattern - Regex pattern to filter files (e.g., /\.(png|jpg)$/i)
    * @returns Array of matching filenames
    */
-  static parseDirectoryListing(html, pattern) {
+  public static parseDirectoryListing(html: string, pattern: RegExp): string[] {
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
     const links = Array.from(doc.querySelectorAll('a'));
     return links
-      .map(a => a.getAttribute('href'))
-      .filter(href => href && pattern.test(href))
-      .map(href => href.split(/[\/\\]/).pop()); // Remove path, keep only filename
+      .map((a) => a.getAttribute('href'))
+      .filter((href): href is string => Boolean(href && pattern.test(href)))
+      .map((href) => href.split(/[\/\\]/).pop())
+      .filter((href): href is string => Boolean(href)); // Remove path, keep only filename
   }
 
   /**
@@ -73,7 +91,7 @@ export class AssetLoader {
    * @param type - Type of asset (for logging, e.g., 'Sprite', 'SFX')
    * @returns true if duplicate detected
    */
-  static checkDuplicate(collection, id, url, type) {
+  public static checkDuplicate(collection: IdCollection, id: string, url: string, type: string): boolean {
     if (collection.has(id)) {
       addConsoleEntry('WARN', `${type} ID ${id} already loaded, overwriting with ${url}`);
       return true;
@@ -89,7 +107,12 @@ export class AssetLoader {
    * @param maxId - Maximum allowed numeric ID (optional)
    * @returns Array of {id, format, info, filename, url} objects
    */
-  static async scanDirectory(dirUrl, filePattern, minId = null, maxId = null) {
+  public static async scanDirectory(
+    dirUrl: string,
+    filePattern: RegExp,
+    minId: number | null = null,
+    maxId: number | null = null
+  ): Promise<AssetDescriptor[]> {
     try {
       const response = await fetch(dirUrl);
       if (!response.ok) {
@@ -99,7 +122,7 @@ export class AssetLoader {
       const html = await response.text();
       const files = this.parseDirectoryListing(html, filePattern);
       
-      const assets = [];
+      const assets: AssetDescriptor[] = [];
       for (const file of files) {
         const parsed = this.parseAssetFilename(file);
         if (!parsed) continue;
@@ -126,7 +149,8 @@ export class AssetLoader {
       
       return assets;
     } catch (e) {
-      addConsoleEntry('WARN', `Failed to scan directory ${dirUrl}: ${e.message}`);
+      const message = e instanceof Error ? e.message : String(e);
+      addConsoleEntry('WARN', `Failed to scan directory ${dirUrl}: ${message}`);
       return [];
     }
   }
@@ -136,7 +160,7 @@ export class AssetLoader {
    * @param url - Image URL
    * @returns Promise that resolves to HTMLImageElement
    */
-  static loadImage(url) {
+  public static loadImage(url: string): Promise<HTMLImageElement> {
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.onload = () => resolve(img);
@@ -150,7 +174,7 @@ export class AssetLoader {
    * @param url - Resource URL
    * @returns Promise that resolves to ArrayBuffer
    */
-  static async fetchBinary(url) {
+  public static async fetchBinary(url: string): Promise<ArrayBuffer> {
     const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);

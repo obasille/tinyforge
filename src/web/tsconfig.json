@@ -6,16 +6,16 @@
     "moduleResolution": "bundler",
     "rootDir": "..",
     "outDir": "../../dist",
-    "strict": false,
-    "noImplicitAny": false,
-    "strictNullChecks": false,
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "allowJs": true
+    "allowJs": false
   },
-  "include": ["*.js", "*.ts", "../memory-map.ts"],
+  "include": ["*.ts", "../memory-map.ts"],
   "exclude": ["node_modules", "../../dist"]
 }

@@ -1,6 +1,6 @@
 // Sprite Manager - Handles sprite loading and memory management
 
-import { AssetLoader } from './asset-loader.js';
+import { AssetLoader, AssetDescriptor } from './asset-loader.js';
 import {
   SPRITE_ID_ENTRY_SIZE,
   SPRITE_ID_MAX_CHARS,
@@ -11,61 +11,70 @@ import {
 } from '../memory-map.js';
 import { addConsoleEntry } from './console-panel.js';
 
+type SpriteEntry = {
+  width: number;
+  height: number;
+  cols: number;
+  rows: number;
+  frames: Uint8ClampedArray[];
+};
+
 class SpriteManager {
-  #memory = null;
-  #entries = new Map(); // id -> {width, height, cols, rows, frames: Uint8ClampedArray[]}
-  #indexById = new Map(); // id -> info index
-  #idByIndex = new Map(); // info index -> id
-  #nextIndex = 0;
-  #nextDataOffset = 0;
+  private memory: WebAssembly.Memory | null = null;
+  private entries = new Map<string, SpriteEntry>(); // id -> {width, height, cols, rows, frames: Uint8ClampedArray[]}
+  private indexById = new Map<string, number>(); // id -> info index
+  private idByIndex = new Map<number, string>(); // info index -> id
+  private nextIndex = 0;
+  private nextDataOffset = 0;
 
   /**
    * Initialize with WebAssembly memory reference
    */
-  init(memory) {
-    this.#memory = memory;
+  public init(memory: WebAssembly.Memory): void {
+    this.memory = memory;
   }
 
   /**
    * Get sprite count
    * @returns {number}
    */
-  getSpriteCount() {
-    return this.#entries.size;
+  public getSpriteCount(): number {
+    return this.entries.size;
   }
 
   /**
    * Get total sprite data size in bytes
    * @returns {number}
    */
-  getDataSize() {
-    return this.#nextDataOffset;
+  public getDataSize(): number {
+    return this.nextDataOffset;
   }
 
   /**
    * Load all sprite files from assets/sprites/ folder
    */
-  async loadSprites() {
-    if (!this.#memory) {
+  public async loadSprites(): Promise<void> {
+    if (!this.memory) {
       addConsoleEntry('ERROR', 'SpriteManager not initialized with memory');
       return;
     }
 
     try {
-      const spriteAssets = await AssetLoader.scanDirectory(
+      const spriteAssets: AssetDescriptor[] = await AssetLoader.scanDirectory(
         './assets/sprites/',
         /\.(png|jpg|jpeg)$/i
       );
 
       for (const asset of spriteAssets) {
-        await this.#loadSprite(asset);
+        await this.loadSprite(asset);
       }
 
 
       // Write all loaded sprites to WASM memory
-      this.#writeSpritesToMemory();
+      this.writeSpritesToMemory();
     } catch (e) {
-      addConsoleEntry('WARN', `Sprite loading failed: ${e.message}`);
+      const message = e instanceof Error ? e.message : String(e);
+      addConsoleEntry('WARN', `Sprite loading failed: ${message}`);
     }
   }
 
@@ -75,36 +84,36 @@ class SpriteManager {
    * where COLS = sprites across, ROWS = sprites down
    * Everything after dimensions is ignored (just like single sprite names)
    */
-  async #loadSprite(asset) {
+  private async loadSprite(asset: AssetDescriptor): Promise<void> {
     try {
       const { id, format, url } = asset;
-      AssetLoader.checkDuplicate(this.#indexById, id, url, 'Sprite');
+      AssetLoader.checkDuplicate(this.indexById, id, url, 'Sprite');
 
       // Check if this is a sprite sheet (format: ID~COLSxROWS-*.ext)
       const sheetMatch = format.match(/^(\d+)x(\d+)$/);
       
       // Load image
-      const img = await AssetLoader.loadImage(url);
-      const image = img as HTMLImageElement;
+      const image = await AssetLoader.loadImage(url);
       
       if (sheetMatch) {
         // Sprite sheet detected
         const cols = parseInt(sheetMatch[1], 10);
         const rows = parseInt(sheetMatch[2], 10);
-        await this.#loadSpriteSheet(image, id, cols, rows, url);
+        await this.loadSpriteSheet(image, id, cols, rows, url);
       } else {
         // Single sprite
-        await this.#loadSingleSprite(image, id, url);
+        await this.loadSingleSprite(image, id, url);
       }
     } catch (e) {
-      addConsoleEntry('WARN', `Failed to load sprite ${asset.id} from ${asset.url}: ${e.message}`);
+      const message = e instanceof Error ? e.message : String(e);
+      addConsoleEntry('WARN', `Failed to load sprite ${asset.id} from ${asset.url}: ${message}`);
     }
   }
 
   /**
    * Load a single sprite image
    */
-  async #loadSingleSprite(image, id, url) {
+  private async loadSingleSprite(image: HTMLImageElement, id: string, url: string): Promise<void> {
     const canvas = document.createElement('canvas');
     canvas.width = image.width;
     canvas.height = image.height;
@@ -124,7 +133,7 @@ class SpriteManager {
       rows: 1,
       frames: [imageData.data]
     };
-    this.#setEntry(id, entry, url);
+    this.setEntry(id, entry, url);
   }
 
   /**
@@ -135,19 +144,27 @@ class SpriteManager {
    * @param rows - Number of sprites down (height)
    * @param url - Source URL (for logging)
    */
-  async #loadSpriteSheet(image, id, cols, rows, url) {
+  private async loadSpriteSheet(
+    image: HTMLImageElement,
+    id: string,
+    cols: number,
+    rows: number,
+    url: string
+  ): Promise<void> {
     const spriteWidth = Math.floor(image.width / cols);
     const spriteHeight = Math.floor(image.height / rows);
-    const totalSprites = cols * rows;
     
     // Create a temporary canvas for extraction
     const canvas = document.createElement('canvas');
     canvas.width = spriteWidth;
     canvas.height = spriteHeight;
     const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Failed to create 2D canvas context for sprite sheet extraction.');
+    }
     
     // Extract each sprite from the sheet
-    const frames = [];
+    const frames: Uint8ClampedArray[] = [];
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
         // Clear canvas
@@ -176,16 +193,19 @@ class SpriteManager {
       rows,
       frames
     };
-    this.#setEntry(id, entry, url);
+    this.setEntry(id, entry, url);
   }
 
   /**
    * Write all sprite info and pixel data to WASM memory
    */
-  #writeSpritesToMemory() {
+  private writeSpritesToMemory(): void {
+    if (!this.memory) {
+      throw new Error('SpriteManager not initialized with memory');
+    }
     let dataOffset = 0;
-    const view = new DataView(this.#memory.buffer);
-    const count = this.#idByIndex.size;
+    const view = new DataView(this.memory.buffer);
+    const count = this.idByIndex.size;
     const lookupOffset = SPRITE_TABLE_HEADER_SIZE;
     const infoOffset = lookupOffset + count * SPRITE_ID_ENTRY_SIZE;
     const dataStartOffset = infoOffset + count * SPRITE_INFO_ENTRY_SIZE;
@@ -199,21 +219,21 @@ class SpriteManager {
 
     // Reset lookup table
     const lookup = new Uint16Array(
-      this.#memory.buffer,
+      this.memory.buffer,
       SPRITE_TABLE_ADDR + lookupOffset,
       (SPRITE_ID_ENTRY_SIZE / 2) * count
     );
     lookup.fill(0);
 
     const infoTable = new Uint8Array(
-      this.#memory.buffer,
+      this.memory.buffer,
       SPRITE_TABLE_ADDR + infoOffset,
       SPRITE_INFO_ENTRY_SIZE * count
     );
     infoTable.fill(0);
 
     // Write lookup table (UTF-16 code units)
-    for (const [index, id] of this.#idByIndex) {
+    for (const [index, id] of this.idByIndex) {
       const name = id;
       if (name.length > SPRITE_ID_MAX_CHARS) {
         addConsoleEntry('WARN', `Sprite ID "${name}" exceeds ${SPRITE_ID_MAX_CHARS} chars, skipping lookup entry`);
@@ -227,14 +247,14 @@ class SpriteManager {
     
     // Write pixel data
     const spriteDataView = new Uint8Array(
-      this.#memory.buffer,
+      this.memory.buffer,
       SPRITE_TABLE_ADDR + dataStartOffset,
       SPRITE_DATA_SIZE
     );
     let writeOffset = 0;
     
-    for (const [index, id] of this.#idByIndex) {
-      const entry = this.#entries.get(id);
+    for (const [index, id] of this.idByIndex) {
+      const entry = this.entries.get(id);
       if (!entry) continue;
 
       const infoAddr = SPRITE_TABLE_ADDR + infoOffset + (index * SPRITE_INFO_ENTRY_SIZE);
@@ -257,32 +277,32 @@ class SpriteManager {
       }
     }
     
-    this.#nextDataOffset = dataOffset;
+    this.nextDataOffset = dataOffset;
     
     // Check if we exceeded available memory
-    if (this.#nextDataOffset > SPRITE_DATA_SIZE) {
-      addConsoleEntry('WARN', `Sprite data exceeds allocated memory: ${this.#nextDataOffset} bytes (max: ${SPRITE_DATA_SIZE})`);
+    if (this.nextDataOffset > SPRITE_DATA_SIZE) {
+      addConsoleEntry('WARN', `Sprite data exceeds allocated memory: ${this.nextDataOffset} bytes (max: ${SPRITE_DATA_SIZE})`);
     }
   }
 
-  #setEntry(id, entry, url) {
-    const index = this.#getOrAssignIndex(id, url);
+  private setEntry(id: string, entry: SpriteEntry, url: string): void {
+    const index = this.getOrAssignIndex(id, url);
     if (index < 0) return;
-    this.#entries.set(id, entry);
+    this.entries.set(id, entry);
   }
 
-  #getOrAssignIndex(id, url) {
-    if (this.#indexById.has(id)) {
-      return this.#indexById.get(id);
+  private getOrAssignIndex(id: string, url: string): number {
+    if (this.indexById.has(id)) {
+      return this.indexById.get(id) ?? -1;
     }
-    if (this.#nextIndex > 255) {
+    if (this.nextIndex > 255) {
       addConsoleEntry('WARN', `Sprite limit reached (256). Cannot load ${id} from ${url}`);
       return -1;
     }
-    const index = this.#nextIndex;
-    this.#nextIndex++;
-    this.#indexById.set(id, index);
-    this.#idByIndex.set(index, id);
+    const index = this.nextIndex;
+    this.nextIndex++;
+    this.indexById.set(id, index);
+    this.idByIndex.set(index, id);
     return index;
   }
 }
