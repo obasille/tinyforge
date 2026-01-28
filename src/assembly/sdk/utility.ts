@@ -55,7 +55,52 @@ export class Vec2i {
 }
 
 /**
- * Generate a pseudo-random integer using Linear Congruential Generator (LCG)
+ * Generate a pseudo-random integer using Xorshift32
+ * The seed is stored in SDK memory at RNG_SEED and updated on each call
+ * @returns Random i32 value in range [0, 0x7fffffff]
+ *
+ * @example
+ * ```ts
+ * // Generate random number between 0-9:
+ * const roll = random() % 10;
+ * ```
+ */
+export function randomXorshift32(seed: i32): i32 {
+  let x = seed as u32;
+  x ^= x << 13;
+  x ^= x >>> 17;
+  x ^= x << 5;
+  return x;
+}
+
+/**
+ * Generate a higher-quality pseudo-random integer using SplitMix32
+ * Useful when you need better diffusion than xorshift
+ * @returns Random i32 value in range [0, 0x7fffffff]
+ */
+export function randomSplitMix32(seed: i32): i32 {
+  let x = (seed as u32) + 0x9e3779b9;
+  x = (x ^ (x >>> 16)) * 0x85ebca6b;
+  x = (x ^ (x >>> 13)) * 0xc2b2ae35;
+  x ^= x >>> 16;
+  return x;
+}
+
+/**
+ * Generate a pseudo-random integer using PCG (RXS-M-XS, 32-bit state)
+ * This variant keeps a 32-bit state so it works with the current RNG_SEED layout.
+ * @returns Random i32 value in range [0, 0x7fffffff]
+ */
+export function randomPcg(seed: i32): i32 {
+  let state = seed as u32;
+  state = (state * 747796405 + 2891336453) as u32;
+  let word = ((state >> ((state >> 28) + 4)) ^ state) * 277803737;
+  word = (word >> 22) ^ word;
+  return word as i32;
+}
+
+/**
+ * Generate a pseudo-random integer
  * The seed is stored in SDK memory at RNG_SEED and updated on each call
  * @returns Random i32 value in range [0, 0x7fffffff]
  *
@@ -68,20 +113,33 @@ export class Vec2i {
 // @ts-expect-error AssemblyScript decorator
 @inline
 export function random(): i32 {
-  let seed = load<i32>(RNG_SEED);
-  seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-  store<i32>(RNG_SEED, seed);
-  return seed;
+  const seed = load<i32>(RNG_SEED);
+  const r = randomPcg(seed);
+  store<i32>(RNG_SEED, r);
+  return r & 0x7fffffff;
 }
 
 /**
  * Generate a pseudo-random integer in range [0, max)
  * @param max Exclusive upper bound (must be > 0)
  */
-// @ts-expect-error AssemblyScript decorator
-@inline
 export function randomRange(max: i32): i32 {
-  return random() % max;
+  if (max <= 0) return 0;
+  // Choose how many bits to use
+  let bits: u32;
+  if (max <= 0x100) bits = 8;
+  else if (max <= 0x10000) bits = 16;
+  else if (max <= 0x1000000) bits = 24;
+  else bits = 32;
+
+  const limit: u32 = ((1 << bits) / max) * max;
+
+  let r: u32;
+  do {
+    r = random() >>> (32 - bits);
+  } while (r >= limit);
+
+  return r % max;
 }
 
 /**
