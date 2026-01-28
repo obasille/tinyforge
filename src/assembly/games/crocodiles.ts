@@ -92,6 +92,7 @@ class Joueur {
   minuteurDepl: u8;
   viandePortee: u8;
   invincible: u8;
+  dirDepl: u8;
 }
 
 @unmanaged
@@ -109,7 +110,7 @@ class Croco {
 
 const jeu = changetype<Jeu>(RAM_START);
 const szVars = offsetof<Jeu>("_fin");
-const szJoueur: usize = (offsetof<Joueur>("invincible") + 4) & ~3;
+const szJoueur: usize = (offsetof<Joueur>("dirDepl") + 4) & ~3;
 const szCroco: usize = (offsetof<Croco>("casesDepuisChgmDir") + 4) & ~3;
 let offset: usize = RAM_START + szVars;
 const joueur = changetype<Joueur>(offset);
@@ -325,8 +326,21 @@ function dessineGrille(): void {
 }
 
 function dessineTeteJoueur(x: u8, y: u8): void {
-  const baseX = (x as i32) * TAILLE_CASE;
-  const baseY = (y as i32) * TAILLE_CASE;
+  let renderX = x as f32;
+  let renderY = y as f32;
+  if (joueur.minuteurDepl > 0 && joueur.dirDepl != Direction.IMMOBILE) {
+    const frac = (joueur.minuteurDepl as f32) / (JOUEUR_DEPL_DELAI as f32);
+    const dx = deltaDirX(joueur.dirDepl) as f32;
+    const dy = deltaDirY(joueur.dirDepl) as f32;
+    renderX -= dx * frac;
+    renderY -= dy * frac;
+    if (renderX < 0.0) renderX += LARGEUR_GRILLE as f32;
+    else if (renderX >= (LARGEUR_GRILLE as f32)) renderX -= LARGEUR_GRILLE as f32;
+    if (renderY < 0.0) renderY += HAUTEUR_GRILLE as f32;
+    else if (renderY >= (HAUTEUR_GRILLE as f32)) renderY -= HAUTEUR_GRILLE as f32;
+  }
+  const baseX = (renderX * (TAILLE_CASE as f32)) as i32;
+  const baseY = (renderY * (TAILLE_CASE as f32)) as i32;
   let visible = true;
   if (joueur.invincible > 0) {
     const phase = ((joueur.invincible as i32) >> 4) % 3;
@@ -343,8 +357,26 @@ function dessineTeteJoueur(x: u8, y: u8): void {
 }
 
 function dessineCroco(croco: Croco): void {
-  const baseX = (croco.x as i32) * TAILLE_CASE;
-  const baseY = (croco.y as i32) * TAILLE_CASE;
+  let renderX = croco.x as f32;
+  let renderY = croco.y as f32;
+  if (croco.dir != Direction.IMMOBILE && croco.minuteurDepl > 0) {
+    const delai = croco.attaque == 1
+      ? ((CROCO_DEPL_DELAI / 2) as i32)
+      : (CROCO_DEPL_DELAI as i32);
+    if (delai > 0) {
+      const frac = (croco.minuteurDepl as f32) / (delai as f32);
+      const dx = deltaDirX(croco.dir) as f32;
+      const dy = deltaDirY(croco.dir) as f32;
+      renderX -= dx * frac;
+      renderY -= dy * frac;
+      if (renderX < 0.0) renderX += LARGEUR_GRILLE as f32;
+      else if (renderX >= (LARGEUR_GRILLE as f32)) renderX -= LARGEUR_GRILLE as f32;
+      if (renderY < 0.0) renderY += HAUTEUR_GRILLE as f32;
+      else if (renderY >= (HAUTEUR_GRILLE as f32)) renderY -= HAUTEUR_GRILLE as f32;
+    }
+  }
+  const baseX = (renderX * (TAILLE_CASE as f32)) as i32;
+  const baseY = (renderY * (TAILLE_CASE as f32)) as i32;
   const sprite = croco.attaque == 1 ? s("crocodile_bloody") : s("crocodile");
   drawSprite(sprite, baseX, baseY);
 }
@@ -564,7 +596,10 @@ function deplaceJoueur(): void {
   else if (buttonDown(Button.UP)) deplY = -1;
   else if (buttonDown(Button.DOWN)) deplY = 1;
 
-  if (deplX == 0 && deplY == 0) return;
+  if (deplX == 0 && deplY == 0) {
+    joueur.dirDepl = Direction.IMMOBILE as u8;
+    return;
+  }
 
   let posX = (joueur.x as i32) + deplX;
   let posY = (joueur.y as i32) + deplY;
@@ -577,6 +612,9 @@ function deplaceJoueur(): void {
   if (peutBouger(posX, posY)) {
     joueur.x = posX as u8;
     joueur.y = posY as u8;
+    joueur.dirDepl = donneDir(deplX, deplY);
+  } else {
+    joueur.dirDepl = Direction.IMMOBILE as u8;
   }
 
   joueur.minuteurDepl = JOUEUR_DEPL_DELAI;
@@ -602,6 +640,7 @@ export function init(): void {
   joueur.viandePortee = INVALIDE; // Aucune viande portée au départ
   joueur.minuteurDepl = 0;
   joueur.invincible = 0;
+  joueur.dirDepl = Direction.IMMOBILE as u8;
 
   // Initialise le jeu
   jeu.etat = EtatJeu.EN_COURS as u8;
