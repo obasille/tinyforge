@@ -17,11 +17,13 @@ import {
   c,
   drawSprite,
   drawSpriteScaled,
+  drawSpriteScaledDown,
   drawStartMessageBox,
   fillRect,
   getLastSpriteAddress,
   getLastSpriteHeight,
   getLastSpriteWidth,
+  pset,
   randomRange,
   readSpriteInfo,
   s,
@@ -36,8 +38,12 @@ const HAUTEUR_GRILLE: i32 = HEIGHT / TAILLE_CASE;
 const JOUEUR_DEPL_DELAI: u8 = 6;
 const CROCO_DEPL_DELAI: u8 = 30;
 const NB_CROCOS: i32 = 3;
+const NB_TUNNELS: i32 = 2;
 const VIES_DEPART: u8 = 3;
 const INVINCIBLE_TICKS: u8 = 180; // ~3s @ 60fps
+const TUNNEL_CYCLE_TICKS: u16 = 600; // 10s @ 60fps
+const TUNNEL_MIN_DISTANCE: i32 = 5;
+const TUNNEL_ANIM_TICKS: u8 = 12;
 
 const INVALIDE: u8 = 0xff;
 const INVALIDE_POS: u16 = 0xffff;
@@ -82,6 +88,18 @@ class Jeu {
   viande1PosY: u8;
   viande2PosX: u8;
   viande2PosY: u8;
+  tunnel0AX: u8;
+  tunnel0AY: u8;
+  tunnel0BX: u8;
+  tunnel0BY: u8;
+  tunnel0Ouvert: u8;
+  tunnel1AX: u8;
+  tunnel1AY: u8;
+  tunnel1BX: u8;
+  tunnel1BY: u8;
+  tunnel1Ouvert: u8;
+  tunnelPhase: u8;
+  tunnelTimer: u16;
   _fin: u8;
 }
 
@@ -93,6 +111,10 @@ class Joueur {
   viandePortee: u8;
   invincible: u8;
   dirDepl: u8;
+  tunnelEtat: u8;
+  tunnelTimer: u8;
+  tunnelDestX: u8;
+  tunnelDestY: u8;
 }
 
 @unmanaged
@@ -110,7 +132,7 @@ class Croco {
 
 const jeu = changetype<Jeu>(RAM_START);
 const szVars = offsetof<Jeu>("_fin");
-const szJoueur: usize = (offsetof<Joueur>("dirDepl") + 4) & ~3;
+const szJoueur: usize = (offsetof<Joueur>("tunnelDestY") + 4) & ~3;
 const szCroco: usize = (offsetof<Croco>("casesDepuisChgmDir") + 4) & ~3;
 let offset: usize = RAM_START + szVars;
 const joueur = changetype<Joueur>(offset);
@@ -139,6 +161,10 @@ function litCouleurCase(x: i32, y: i32): u32 {
   return load<u32>(adresseNiveau + (y * LARGEUR_GRILLE + x) * 4);
 }
 
+function ecritCouleurCase(x: i32, y: i32, couleur: u32): void {
+  store<u32>(adresseNiveau + (y * LARGEUR_GRILLE + x) * 4, couleur);
+}
+
 function caseCouleur(x: i32, y: i32, couleur: u32): bool {
   if (x >= 0 && x < LARGEUR_GRILLE && y >= 0 && y < HAUTEUR_GRILLE) {
     const pixel = litCouleurCase(x, y);
@@ -163,72 +189,201 @@ function caseAutorisee(x: i32, y: i32, couleur: u32, utiliseCouleur: bool): bool
   return utiliseCouleur ? estCouleur : !estCouleur;
 }
 
-const cheminPrev = new StaticArray<i32>(LARGEUR_GRILLE * HAUTEUR_GRILLE);
-const cheminQueue = new StaticArray<i32>(LARGEUR_GRILLE * HAUTEUR_GRILLE);
-const cheminDx: i32[] = [0, 0, -1, 1];
-const cheminDy: i32[] = [-1, 1, 0, 0];
-
-function prochaineCaseChemin(
-  departX: u8,
-  departY: u8,
-  cibleX: u8,
-  cibleY: u8,
-  couleur: u32,
-  utiliseCouleur: bool
-): u16 {
-  if (departX == cibleX && departY == cibleY) {
-    return ((departY as u16) << 8) | (departX as u16);
+function estCaseGamelle(x: u8, y: u8): bool {
+  for (let i: i32 = 0; i < NB_CROCOS; i++) {
+    const croco = lesCrocos[i];
+    if (croco.gamelleX == x && croco.gamelleY == y) return true;
   }
+  return false;
+}
 
-  if (
-    !caseAutorisee(departX, departY, couleur, utiliseCouleur) ||
-    !caseAutorisee(cibleX, cibleY, couleur, utiliseCouleur)
-  ) {
-    return ((departY as u16) << 8) | (departX as u16);
+function estCaseViande(x: u8, y: u8): bool {
+  for (let i: u8 = 0; i < 3; i++) {
+    const pos = doneViandePos(i);
+    const vx = (pos & 0xff) as u8;
+    const vy = ((pos >> 8) & 0xff) as u8;
+    if (vx == x && vy == y) return true;
   }
+  return false;
+}
 
-  const total = LARGEUR_GRILLE * HAUTEUR_GRILLE;
-  for (let i: i32 = 0; i < total; i++) cheminPrev[i] = -1;
+function estCaseTunnel(x: u8, y: u8): bool {
+  if (jeu.tunnel0AX == x && jeu.tunnel0AY == y) return true;
+  if (jeu.tunnel0BX == x && jeu.tunnel0BY == y) return true;
+  if (jeu.tunnel1AX == x && jeu.tunnel1AY == y) return true;
+  if (jeu.tunnel1BX == x && jeu.tunnel1BY == y) return true;
+  return false;
+}
 
-  const idxDepart = departY * LARGEUR_GRILLE + departX;
-  const idxCible = cibleY * LARGEUR_GRILLE + cibleX;
-  let head: i32 = 0;
-  let tail: i32 = 0;
-  cheminQueue[tail++] = idxDepart;
-  cheminPrev[idxDepart] = idxDepart;
+function caseLibrePourTunnel(x: u8, y: u8): bool {
+  if (!peutBouger(x, y)) return false;
+  if (estCaseGamelle(x, y)) return false;
+  if (estCaseViande(x, y)) return false;
+  if (estCaseTunnel(x, y)) return false;
+  return true;
+}
 
-  while (head < tail) {
-    const idx = cheminQueue[head++];
-    if (idx == idxCible) break;
-    const cx = idx % LARGEUR_GRILLE;
-    const cy = idx / LARGEUR_GRILLE;
-    for (let d: i32 = 0; d < 4; d++) {
-      let nx = cx + cheminDx[d];
-      let ny = cy + cheminDy[d];
-      if (nx < 0) nx = LARGEUR_GRILLE - 1;
-      else if (nx >= LARGEUR_GRILLE) nx = 0;
-      if (ny < 0) ny = HAUTEUR_GRILLE - 1;
-      else if (ny >= HAUTEUR_GRILLE) ny = 0;
-      if (!caseAutorisee(nx, ny, couleur, utiliseCouleur)) continue;
-      const nidx = ny * LARGEUR_GRILLE + nx;
-      if (cheminPrev[nidx] != -1) continue;
-      cheminPrev[nidx] = idx;
-      cheminQueue[tail++] = nidx;
+function distManhattan(x1: u8, y1: u8, x2: u8, y2: u8): i32 {
+  let dx = (x1 as i32) - (x2 as i32);
+  if (dx < 0) dx = -dx;
+  let dy = (y1 as i32) - (y2 as i32);
+  if (dy < 0) dy = -dy;
+  return dx + dy;
+}
+
+function trouveCaseLibreTunnel(): u16 {
+  let essais: i32 = 0;
+  while (essais < 200) {
+    const x = randomRange(LARGEUR_GRILLE) as u8;
+    const y = randomRange(HAUTEUR_GRILLE) as u8;
+    if (caseLibrePourTunnel(x, y)) return ((y as u16) << 8) | (x as u16);
+    essais++;
+  }
+  for (let y: i32 = 0; y < HAUTEUR_GRILLE; y++) {
+    for (let x: i32 = 0; x < LARGEUR_GRILLE; x++) {
+      const ux = x as u8;
+      const uy = y as u8;
+      if (caseLibrePourTunnel(ux, uy)) return ((uy as u16) << 8) | (ux as u16);
     }
   }
+  return INVALIDE_POS;
+}
 
-  if (cheminPrev[idxCible] == -1) {
-    return ((departY as u16) << 8) | (departX as u16);
+function initTunnel(index: u8): void {
+  const inPos = trouveCaseLibreTunnel();
+  let outPos = INVALIDE_POS;
+  if (inPos != INVALIDE_POS) {
+    const inX0 = (inPos & 0xff) as u8;
+    const inY0 = ((inPos >> 8) & 0xff) as u8;
+    let essais: i32 = 0;
+    while (essais < 200) {
+      const cand = trouveCaseLibreTunnel();
+      if (cand == INVALIDE_POS) {
+        essais++;
+        continue;
+      }
+      const outX0 = (cand & 0xff) as u8;
+      const outY0 = ((cand >> 8) & 0xff) as u8;
+      if (distManhattan(inX0, inY0, outX0, outY0) >= TUNNEL_MIN_DISTANCE) {
+        outPos = cand;
+        break;
+      }
+      essais++;
+    }
+    if (outPos == INVALIDE_POS) {
+      for (let y: i32 = 0; y < HAUTEUR_GRILLE; y++) {
+        for (let x: i32 = 0; x < LARGEUR_GRILLE; x++) {
+          const ux = x as u8;
+          const uy = y as u8;
+          if (!caseLibrePourTunnel(ux, uy)) continue;
+          if (distManhattan(inX0, inY0, ux, uy) >= TUNNEL_MIN_DISTANCE) {
+            outPos = ((uy as u16) << 8) | (ux as u16);
+            break;
+          }
+        }
+        if (outPos != INVALIDE_POS) break;
+      }
+    }
   }
+  const inX = inPos == INVALIDE_POS ? INVALIDE : ((inPos & 0xff) as u8);
+  const inY = inPos == INVALIDE_POS ? INVALIDE : (((inPos >> 8) & 0xff) as u8);
+  const outX = outPos == INVALIDE_POS ? INVALIDE : ((outPos & 0xff) as u8);
+  const outY = outPos == INVALIDE_POS ? INVALIDE : (((outPos >> 8) & 0xff) as u8);
+  if (index == 0) {
+    jeu.tunnel0AX = inX;
+    jeu.tunnel0AY = inY;
+    jeu.tunnel0BX = outX;
+    jeu.tunnel0BY = outY;
+  } else {
+    jeu.tunnel1AX = inX;
+    jeu.tunnel1AY = inY;
+    jeu.tunnel1BX = outX;
+    jeu.tunnel1BY = outY;
+  }
+}
 
-  let cur = idxCible;
-  while (cheminPrev[cur] != idxDepart) {
-    cur = cheminPrev[cur];
-    if (cur == idxDepart) break;
+function majOuvertureTunnels(): void {
+  if (jeu.tunnelTimer > 0) {
+    jeu.tunnelTimer--;
+  } else {
+    if (jeu.tunnelPhase == 0) {
+      jeu.tunnel0Ouvert = 1;
+      jeu.tunnel1Ouvert = 0;
+      jeu.tunnelPhase = 1;
+    } else if (jeu.tunnelPhase == 1) {
+      jeu.tunnel0Ouvert = 0;
+      jeu.tunnelPhase = 2;
+    } else if (jeu.tunnelPhase == 2) {
+      jeu.tunnel1Ouvert = 1;
+      jeu.tunnelPhase = 3;
+    } else {
+      jeu.tunnel1Ouvert = 0;
+      jeu.tunnelPhase = 0;
+    }
+    jeu.tunnelTimer = TUNNEL_CYCLE_TICKS;
   }
-  const nx = (cur % LARGEUR_GRILLE) as u8;
-  const ny = (cur / LARGEUR_GRILLE) as u8;
-  return ((ny as u16) << 8) | (nx as u16);
+}
+
+function essaieTeleportTunnel(): void {
+  const px = joueur.x;
+  const py = joueur.y;
+  if (joueur.tunnelEtat != 0) return;
+  if (jeu.tunnel0Ouvert == 1 && px == jeu.tunnel0AX && py == jeu.tunnel0AY) {
+    joueur.tunnelEtat = 1;
+    joueur.tunnelTimer = TUNNEL_ANIM_TICKS;
+    joueur.tunnelDestX = jeu.tunnel0BX;
+    joueur.tunnelDestY = jeu.tunnel0BY;
+    joueur.dirDepl = Direction.IMMOBILE as u8;
+    return;
+  }
+  if (jeu.tunnel0Ouvert == 1 && px == jeu.tunnel0BX && py == jeu.tunnel0BY) {
+    joueur.tunnelEtat = 1;
+    joueur.tunnelTimer = TUNNEL_ANIM_TICKS;
+    joueur.tunnelDestX = jeu.tunnel0AX;
+    joueur.tunnelDestY = jeu.tunnel0AY;
+    joueur.dirDepl = Direction.IMMOBILE as u8;
+    return;
+  }
+  if (jeu.tunnel1Ouvert == 1 && px == jeu.tunnel1AX && py == jeu.tunnel1AY) {
+    joueur.tunnelEtat = 1;
+    joueur.tunnelTimer = TUNNEL_ANIM_TICKS;
+    joueur.tunnelDestX = jeu.tunnel1BX;
+    joueur.tunnelDestY = jeu.tunnel1BY;
+    joueur.dirDepl = Direction.IMMOBILE as u8;
+    return;
+  }
+  if (jeu.tunnel1Ouvert == 1 && px == jeu.tunnel1BX && py == jeu.tunnel1BY) {
+    joueur.tunnelEtat = 1;
+    joueur.tunnelTimer = TUNNEL_ANIM_TICKS;
+    joueur.tunnelDestX = jeu.tunnel1AX;
+    joueur.tunnelDestY = jeu.tunnel1AY;
+    joueur.dirDepl = Direction.IMMOBILE as u8;
+  }
+}
+
+function majTunnelAnimJoueur(): void {
+  if (joueur.tunnelEtat == 0) return;
+  if (joueur.tunnelTimer > 0) {
+    joueur.tunnelTimer--;
+    if (joueur.tunnelTimer > 0) return;
+  }
+  if (joueur.tunnelEtat == 1) {
+    joueur.x = joueur.tunnelDestX;
+    joueur.y = joueur.tunnelDestY;
+    joueur.tunnelEtat = 2;
+    joueur.tunnelTimer = TUNNEL_ANIM_TICKS;
+  } else {
+    joueur.tunnelEtat = 0;
+    joueur.tunnelTimer = 0;
+  }
+}
+
+function dessineTunnel(x: u8, y: u8, ouvert: u8): void {
+  if (x == INVALIDE || y == INVALIDE) return;
+  const baseX = (x as i32) * TAILLE_CASE;
+  const baseY = (y as i32) * TAILLE_CASE;
+  const sprite = ouvert == 1 ? s("tunnel") : s("tunnel_closed");
+  drawSprite(sprite, baseX, baseY);
 }
 
 function deltaDirX(dir: u8): i32 {
@@ -316,12 +471,6 @@ function verifiePositionJoueur(px: u8, py: u8): bool {
 }
 
 function dessineGrille(): void {
-  // for (let y: i32 = 0; y < HAUTEUR_GRILLE; y++) {
-  //   for (let x: i32 = 0; x < LARGEUR_GRILLE; x++) {
-  //     const couleur = ((x + y) & 1) == 0 ? COULEUR_GRILLE_SOMBRE : COULEUR_GRILLE_CLAIR;
-  //     fillRect(x * CASE_DIM_PIXELS, y * CASE_DIM_PIXELS, CASE_DIM_PIXELS, CASE_DIM_PIXELS, couleur);
-  //   }
-  // }
   drawSpriteScaled(NIVEAU_1, 0, 0, 16, 16);
 }
 
@@ -347,10 +496,21 @@ function dessineTeteJoueur(x: u8, y: u8): void {
     const tri = t < 8 ? t : (15 - t);
     alpha = (128 + (tri * 16)) as u8;
   }
-  drawSprite(s("player"), baseX, baseY, false, false, alpha);
+  let scaleNum: i32 = 8;
+  if (joueur.tunnelEtat == 1) {
+    scaleNum = ((joueur.tunnelTimer as i32) * 8) / (TUNNEL_ANIM_TICKS as i32);
+  } else if (joueur.tunnelEtat == 2) {
+    scaleNum = 8 - (((joueur.tunnelTimer as i32) * 8) / (TUNNEL_ANIM_TICKS as i32));
+  }
+  if (scaleNum <= 0) return;
+  if (scaleNum >= 8) {
+    drawSprite(s("player"), baseX, baseY, false, false, alpha);
+  } else {
+    drawSpriteScaledDown(s("player"), baseX, baseY, scaleNum, 8);
+  }
   
   // Dessine la viande portée au-dessus du joueur
-  if (joueur.viandePortee != INVALIDE) {
+  if (joueur.viandePortee != INVALIDE && scaleNum >= 8) {
     drawSprite(s("meat"), baseX + TAILLE_CASE / 3, baseY + TAILLE_CASE / 3);
   }
 }
@@ -586,6 +746,7 @@ function deposeViande(jx: u8, jy: u8): void {
 }
 
 function deplaceJoueur(): void {
+  if (joueur.tunnelEtat != 0) return;
   if (joueur.minuteurDepl != 0) return;
   let deplX: i32 = 0;
   let deplY: i32 = 0;
@@ -632,14 +793,25 @@ export function init(): void {
     warn("Taille niveau != grille");
     return;
   }
+    // genereNiveauProcedural();
 
   // Initialise le joueur
-  joueur.x = (LARGEUR_GRILLE / 2) as u8;
-  joueur.y = (HAUTEUR_GRILLE / 2) as u8;
+  const spawn = trouveNiemePoint(Couleurs.Sol, 0);
+  if (spawn != INVALIDE_POS) {
+    joueur.x = (spawn & 0xff) as u8;
+    joueur.y = ((spawn >> 8) & 0xff) as u8;
+  } else {
+    joueur.x = (LARGEUR_GRILLE / 2) as u8;
+    joueur.y = (HAUTEUR_GRILLE / 2) as u8;
+  }
   joueur.viandePortee = INVALIDE; // Aucune viande portée au départ
   joueur.minuteurDepl = 0;
   joueur.invincible = 0;
   joueur.dirDepl = Direction.IMMOBILE as u8;
+  joueur.tunnelEtat = 0;
+  joueur.tunnelTimer = 0;
+  joueur.tunnelDestX = INVALIDE;
+  joueur.tunnelDestY = INVALIDE;
 
   // Initialise le jeu
   jeu.etat = EtatJeu.EN_COURS as u8;
@@ -659,6 +831,23 @@ export function init(): void {
   // Trouve les positions des 3 gamelles
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
     assigneGamelle(i as u8);
+  }
+
+  // Initialise les tunnels
+  jeu.tunnel0AX = INVALIDE;
+  jeu.tunnel0AY = INVALIDE;
+  jeu.tunnel0BX = INVALIDE;
+  jeu.tunnel0BY = INVALIDE;
+  jeu.tunnel0Ouvert = 0;
+  jeu.tunnel1AX = INVALIDE;
+  jeu.tunnel1AY = INVALIDE;
+  jeu.tunnel1BX = INVALIDE;
+  jeu.tunnel1BY = INVALIDE;
+  jeu.tunnel1Ouvert = 0;
+  jeu.tunnelPhase = 0;
+  jeu.tunnelTimer = TUNNEL_CYCLE_TICKS;
+  for (let i: i32 = 0; i < NB_TUNNELS; i++) {
+    initTunnel(i as u8);
   }
 }
 
@@ -681,13 +870,21 @@ export function update(): void {
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
     if (lesCrocos[i].minuteurDepl > 0) lesCrocos[i].minuteurDepl--;
   }
+  majTunnelAnimJoueur();
+  majOuvertureTunnels();
 
   // Gestion du mouvement du joueur
   deplaceJoueur();
 
+  if (buttonPressed(Button.A)) {
+    essaieTeleportTunnel();
+  }
+
   // Déposer/ramasser la viande si besoin
-  deposeViande(joueur.x, joueur.y);
-  ramasseViande(joueur.x, joueur.y);
+  if (joueur.tunnelEtat == 0) {
+    deposeViande(joueur.x, joueur.y);
+    ramasseViande(joueur.x, joueur.y);
+  }
 
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
     const croco = lesCrocos[i];
@@ -730,21 +927,29 @@ export function update(): void {
 // Dessine la grille et les crocodiles
 export function draw(): void {
   dessineGrille();
-  // Colorie tous les cases qui ne sont pas des murs
+  // Colorie tous les cases
   for (let y: i32 = 0; y < HAUTEUR_GRILLE; y++) {
     for (let x: i32 = 0; x < LARGEUR_GRILLE; x++) {
-      if (!caseCouleur(x, y, Couleurs.Mur)) {
-        // Colorie la case
+      const estMur = caseCouleur(x, y, Couleurs.Mur);
+      if (!estMur) {
         fillRect(
           x * TAILLE_CASE,
           y * TAILLE_CASE,
           TAILLE_CASE,
           TAILLE_CASE,
+          // estMur ? Couleurs.Mur : Couleurs.Sol
+          // litCouleurCase(x, y)
           Couleurs.Sol
         );
       }
     }
   }
+
+  // Dessine les tunnels
+  dessineTunnel(jeu.tunnel0AX, jeu.tunnel0AY, jeu.tunnel0Ouvert);
+  dessineTunnel(jeu.tunnel0BX, jeu.tunnel0BY, jeu.tunnel0Ouvert);
+  dessineTunnel(jeu.tunnel1AX, jeu.tunnel1AY, jeu.tunnel1Ouvert);
+  dessineTunnel(jeu.tunnel1BX, jeu.tunnel1BY, jeu.tunnel1Ouvert);
 
   // Dessine les gamelles
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
