@@ -1,14 +1,15 @@
 // TinyForge SDK - Drawing Primitives
 // Low-level and high-level sprite drawing functions for rendering graphics
 
+import { pset } from "./drawing";
 import {
-    WIDTH,
-    HEIGHT,
-    SPRITE_TABLE_ADDR,
-    SPRITE_ID_ENTRY_SIZE,
-    SPRITE_ID_MAX_CHARS,
-    SPRITE_INFO_ENTRY_SIZE
-  } from "./memory";
+  HEIGHT,
+  SPRITE_ID_ENTRY_SIZE,
+  SPRITE_ID_MAX_CHARS,
+  SPRITE_INFO_ENTRY_SIZE,
+  SPRITE_TABLE_ADDR,
+  WIDTH
+} from "./memory";
   
 @unmanaged
 class SpriteInfo {
@@ -412,5 +413,35 @@ export function drawSpriteFrame(
     }
 
     fbRowBase += WIDTH as usize;
+  }
+}
+
+/**
+ * Draw a sprite scaled down by integer factors
+ * @param id Sprite ID
+ * @param x X coordinate (top-left)
+ * @param y Y coordinate (top-left)
+ * @param scaleNum Numerator of the scale factor
+ * @param scaleDen Denominator of the scale factor
+ */
+export function drawSpriteScaledDown(id: i32, x: i32, y: i32, scaleNum: i32, scaleDen: i32): void {
+  if (scaleNum <= 0) return;
+  if (!readSpriteInfo(id)) return;
+  const width = getLastSpriteWidth();
+  const height = getLastSpriteHeight();
+  const addr = getLastSpriteAddress();
+  const scaledWidth = (width * scaleNum) / scaleDen;
+  const scaledHeight = (height * scaleNum) / scaleDen;
+  if (scaledWidth <= 0 || scaledHeight <= 0) return;
+  const offX = (width - scaledWidth) / 2;
+  const offY = (height - scaledHeight) / 2;
+  for (let dy: i32 = 0; dy < scaledHeight; dy++) {
+    const srcY = (dy * height) / scaledHeight;
+    for (let dx: i32 = 0; dx < scaledWidth; dx++) {
+      const srcX = (dx * width) / scaledWidth;
+      const pixel = load<u32>(addr + ((srcY * width + srcX) << 2) as usize);
+      if (((pixel >> 24) & 0xff) == 0) continue;
+      pset(x + offX + dx, y + offY + dy, pixel);
+    }
   }
 }
