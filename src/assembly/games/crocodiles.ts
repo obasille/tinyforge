@@ -23,6 +23,7 @@ import {
   getLastSpriteAddress,
   getLastSpriteHeight,
   getLastSpriteWidth,
+  log,
   pset,
   randomRange,
   readSpriteInfo,
@@ -111,10 +112,11 @@ class Joueur {
   viandePortee: u8;
   invincible: u8;
   dirDepl: u8;
-  tunnelEtat: u8;
+  tunnelEtat: u8; // 0 = pas dans tunnel, 1 = entrée, 2 = sortie
   tunnelTimer: u8;
   tunnelDestX: u8;
   tunnelDestY: u8;
+  startupDelay: u8;
 }
 
 @unmanaged
@@ -132,7 +134,7 @@ class Croco {
 
 const jeu = changetype<Jeu>(RAM_START);
 const szVars = offsetof<Jeu>("_fin");
-const szJoueur: usize = (offsetof<Joueur>("tunnelDestY") + 4) & ~3;
+const szJoueur: usize = (offsetof<Joueur>("startupDelay") + 4) & ~3;
 const szCroco: usize = (offsetof<Croco>("casesDepuisChgmDir") + 4) & ~3;
 let offset: usize = RAM_START + szVars;
 const joueur = changetype<Joueur>(offset);
@@ -328,37 +330,30 @@ function essaieTeleportTunnel(): void {
   const px = joueur.x;
   const py = joueur.y;
   if (joueur.tunnelEtat != 0) return;
+
+  let destX = INVALIDE;
+  let destY = INVALIDE;
   if (jeu.tunnel0Ouvert == 1 && px == jeu.tunnel0AX && py == jeu.tunnel0AY) {
-    joueur.tunnelEtat = 1;
-    joueur.tunnelTimer = TUNNEL_ANIM_TICKS;
-    joueur.tunnelDestX = jeu.tunnel0BX;
-    joueur.tunnelDestY = jeu.tunnel0BY;
-    joueur.dirDepl = Direction.IMMOBILE as u8;
+    destX = jeu.tunnel0BX;
+    destY = jeu.tunnel0BY;
+  } else if (jeu.tunnel0Ouvert == 1 && px == jeu.tunnel0BX && py == jeu.tunnel0BY) {
+    destX = jeu.tunnel0AX;
+    destY = jeu.tunnel0AY;
+  } else if (jeu.tunnel1Ouvert == 1 && px == jeu.tunnel1AX && py == jeu.tunnel1AY) {
+    destX = jeu.tunnel1BX;
+    destY = jeu.tunnel1BY;
+  } else if (jeu.tunnel1Ouvert == 1 && px == jeu.tunnel1BX && py == jeu.tunnel1BY) {
+    destX = jeu.tunnel1AX;
+    destY = jeu.tunnel1AY;
+  } else {
     return;
   }
-  if (jeu.tunnel0Ouvert == 1 && px == jeu.tunnel0BX && py == jeu.tunnel0BY) {
-    joueur.tunnelEtat = 1;
-    joueur.tunnelTimer = TUNNEL_ANIM_TICKS;
-    joueur.tunnelDestX = jeu.tunnel0AX;
-    joueur.tunnelDestY = jeu.tunnel0AY;
-    joueur.dirDepl = Direction.IMMOBILE as u8;
-    return;
-  }
-  if (jeu.tunnel1Ouvert == 1 && px == jeu.tunnel1AX && py == jeu.tunnel1AY) {
-    joueur.tunnelEtat = 1;
-    joueur.tunnelTimer = TUNNEL_ANIM_TICKS;
-    joueur.tunnelDestX = jeu.tunnel1BX;
-    joueur.tunnelDestY = jeu.tunnel1BY;
-    joueur.dirDepl = Direction.IMMOBILE as u8;
-    return;
-  }
-  if (jeu.tunnel1Ouvert == 1 && px == jeu.tunnel1BX && py == jeu.tunnel1BY) {
-    joueur.tunnelEtat = 1;
-    joueur.tunnelTimer = TUNNEL_ANIM_TICKS;
-    joueur.tunnelDestX = jeu.tunnel1AX;
-    joueur.tunnelDestY = jeu.tunnel1AY;
-    joueur.dirDepl = Direction.IMMOBILE as u8;
-  }
+
+  joueur.tunnelEtat = 1;
+  joueur.tunnelTimer = TUNNEL_ANIM_TICKS;
+  joueur.tunnelDestX = destX;
+  joueur.tunnelDestY = destY;
+  joueur.dirDepl = Direction.IMMOBILE as u8;
 }
 
 function majTunnelAnimJoueur(): void {
@@ -812,6 +807,7 @@ export function init(): void {
   joueur.tunnelTimer = 0;
   joueur.tunnelDestX = INVALIDE;
   joueur.tunnelDestY = INVALIDE;
+  joueur.startupDelay = 60; // 1 seconde à 60fps
 
   // Initialise le jeu
   jeu.etat = EtatJeu.EN_COURS as u8;
@@ -863,6 +859,17 @@ export function update(): void {
   
   // Ne rien faire si le jeu n'est pas en cours
   if (etat != EtatJeu.EN_COURS) return;
+
+  // Gestion de l'animation de démarrage
+  if (joueur.startupDelay > 0) {
+    joueur.startupDelay--;
+    if (joueur.startupDelay == 0) {
+      // Déclenche l'animation d'apparition (même que sortie de tunnel)
+      joueur.tunnelEtat = 2;
+      joueur.tunnelTimer = TUNNEL_ANIM_TICKS;
+    }
+    return; // Ne rien faire pendant le délai de démarrage
+  }
 
   // Décrémenter les minuteurs de mouvement
   if (joueur.minuteurDepl > 0) joueur.minuteurDepl--;
@@ -968,8 +975,10 @@ export function draw(): void {
     dessineCroco(croco);
   }
 
-  // Dessine le joueur
-  dessineTeteJoueur(joueur.x, joueur.y);
+  // Dessine le joueur (sauf pendant le délai de démarrage)
+  if (joueur.startupDelay == 0) {
+    dessineTeteJoueur(joueur.x, joueur.y);
+  }
 
   // Affiche les vies en haut à droite avec un petit bounce
   const coeurX = WIDTH - TAILLE_CASE;
