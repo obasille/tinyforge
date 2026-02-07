@@ -37,12 +37,14 @@ const HAUTEUR_GRILLE: i32 = HEIGHT / TAILLE_CASE;
 const JOUEUR_DEPL_DELAI: u8 = 6;
 const CROCO_DEPL_DELAI: u8 = 30;
 const NB_CROCOS: i32 = 3;
-const NB_TUNNELS: i32 = 2;
 const VIES_DEPART: u8 = 3;
 const INVINCIBLE_TICKS: u8 = 180; // ~3s @ 60fps
+const NB_TUNNELS: i32 = 2;
 const TUNNEL_CYCLE_TICKS: u16 = 600; // 10s @ 60fps
-const TUNNEL_MIN_DISTANCE: i32 = 5;
 const TUNNEL_ANIM_TICKS: u8 = 12;
+const NB_PIEGES: i32 = 4;
+const PIEGE_MIN_TICKS: u16 = 120; // 2s @ 60fps
+const PIEGE_MAX_TICKS: u16 = 300; // 5s @ 60fps
 
 const INVALIDE: u8 = 0xff;
 const INVALIDE_POS: u16 = 0xffff;
@@ -61,7 +63,7 @@ enum Couleurs {
   Gamelle = c(0x583de8),
   Tunnel1 = c(0x707070),
   Tunnel2 = c(0x909090),
-  Piège = c(0x909090),
+  Piège = c(0xffff00),
 }
 
 enum Direction {
@@ -125,12 +127,21 @@ class Viande {
 
 @unmanaged
 class Tunnel {
+  present: u8; // 0 = pas de tunnel trouvé, 1 = tunnel présent
   x0: u8;
   y0: u8;
   x1: u8;
   y1: u8;
   ouvert: u8;
-  actif: u8; // 0 = pas de tunnel trouvé, 1 = tunnel présent
+}
+
+@unmanaged
+class Piège {
+  present: u8; // 0 = pas de piège trouvé, 1 = piège présent
+  x: u8;
+  y: u8;
+  actif: u8; // 0 = piège désactivé, 1 = piège actif
+  timer: u16; // Timer pour le changement d'état
 }
 
 const jeu = changetype<Jeu>(RAM_START);
@@ -138,7 +149,8 @@ const szVars = offsetof<Jeu>("_fin");
 const szJoueur: usize = (offsetof<Joueur>("startupDelay") + 4) & ~3;
 const szCroco: usize = (offsetof<Croco>("casesDepuisChgmDir") + 4) & ~3;
 const szViande: usize = (offsetof<Viande>("y") + 4) & ~3;
-const szTunnel: usize = (offsetof<Tunnel>("actif") + 4) & ~3;
+const szTunnel: usize = (offsetof<Tunnel>("ouvert") + 4) & ~3;
+const szPiège: usize = (offsetof<Piège>("timer") + 4) & ~3;
 let offset: usize = RAM_START + szVars;
 const joueur = changetype<Joueur>(offset);
 offset += szJoueur;
@@ -157,10 +169,19 @@ offset += szViande;
 const tunnel0 = changetype<Tunnel>(offset);
 offset += szTunnel;
 const tunnel1 = changetype<Tunnel>(offset);
+offset += szTunnel;
+const piège0 = changetype<Piège>(offset);
+offset += szPiège;
+const piège1 = changetype<Piège>(offset);
+offset += szPiège;
+const piège2 = changetype<Piège>(offset);
+offset += szPiège;
+const piège3 = changetype<Piège>(offset);
 
 const lesCrocos: Croco[] = [croco0, croco1, croco2];
 const lesViandes: Viande[] = [viande0, viande1, viande2];
 const lesTunnels: Tunnel[] = [tunnel0, tunnel1];
+const lesPièges: Piège[] = [piège0, piège1, piège2, piège3];
 
 const couleursCrocos: u32[] = [
   Couleurs.CrocoRouge,
@@ -226,7 +247,7 @@ function estCaseViande(x: u8, y: u8): bool {
 function estCaseTunnel(x: u8, y: u8): bool {
   for (let i: i32 = 0; i < NB_TUNNELS; i++) {
     const t = lesTunnels[i];
-    if (!t.actif) continue;
+    if (!t.present) continue;
     if (t.x0 == x && t.y0 == y) return true;
     if (t.x1 == x && t.y1 == y) return true;
   }
@@ -303,14 +324,93 @@ function initTunnel(index: u8): void {
     tunnel.x1 = (pos1 & 0xff) as u8;
     tunnel.y1 = ((pos1 >> 8) & 0xff) as u8;
     tunnel.ouvert = 0;
-    tunnel.actif = 1;
+    tunnel.present = 1;
   } else {
     tunnel.x0 = INVALIDE;
     tunnel.y0 = INVALIDE;
     tunnel.x1 = INVALIDE;
     tunnel.y1 = INVALIDE;
     tunnel.ouvert = 0;
-    tunnel.actif = 0;
+    tunnel.present = 0;
+  }
+}
+
+function initPiège(index: u8): void {
+  const piège = lesPièges[index];
+  
+  // Trouve le Nième pixel de couleur Piège
+  let count: i32 = 0;
+  for (let y: i32 = 0; y < HAUTEUR_GRILLE; y++) {
+    for (let x: i32 = 0; x < LARGEUR_GRILLE; x++) {
+      if (litCouleurCase(x, y) == Couleurs.Piège) {
+        if (count == (index as i32)) {
+          piège.x = x as u8;
+          piège.y = y as u8;
+          piège.actif = 0; // Commence désactivé
+          piège.present = 1;
+          // Timer aléatoire initial entre 2 et 5 secondes
+          piège.timer = (PIEGE_MIN_TICKS + randomRange((PIEGE_MAX_TICKS - PIEGE_MIN_TICKS) as i32)) as u16;
+          return;
+        }
+        count++;
+      }
+    }
+  }
+  
+  // Pas de piège trouvé à cet index
+  piège.x = INVALIDE;
+  piège.y = INVALIDE;
+  piège.actif = 0;
+  piège.present = 0;
+  piège.timer = 0;
+}
+
+function majPièges(): void {
+  for (let i: i32 = 0; i < NB_PIEGES; i++) {
+    const piège = lesPièges[i];
+    if (!piège.present) continue;
+    
+    if (piège.timer > 0) {
+      piège.timer--;
+    } else {
+      // Change l'état du piège
+      piège.actif = piège.actif == 1 ? 0 : 1;
+      // Nouveau timer aléatoire entre 2 et 5 secondes
+      piège.timer = (PIEGE_MIN_TICKS + randomRange((PIEGE_MAX_TICKS - PIEGE_MIN_TICKS) as i32)) as u16;
+    }
+  }
+}
+
+function verifieCollisionPieges(): void {
+  if (joueur.invincible > 0) return;
+  
+  for (let i: i32 = 0; i < NB_PIEGES; i++) {
+    const piege = lesPièges[i];
+    if (!piege.present || !piege.actif) continue;
+    
+    if (joueur.x == piege.x && joueur.y == piege.y) {
+      // Perte d'une vie
+      if (jeu.vies > 0) jeu.vies--;
+      joueur.invincible = INVINCIBLE_TICKS;
+      if (jeu.vies == 0) {
+        jeu.etat = EtatJeu.FIN as u8;
+      }
+      return;
+    }
+  }
+}
+
+function dessinePiège(piege: Piège): void {
+  if (!piege.present || piege.x == INVALIDE) return;
+  const baseX = (piege.x as i32) * TAILLE_CASE;
+  const baseY = (piege.y as i32) * TAILLE_CASE;
+  
+  if (piege.actif) {
+    // Piège actif - dessine en rouge
+    fillRect(baseX, baseY, TAILLE_CASE, TAILLE_CASE, c(0xff0000));
+  } else {
+    // Piège inactif - dessine en gris
+    fillRect(baseX, baseY, TAILLE_CASE, TAILLE_CASE, c(0x808080));
   }
 }
 
@@ -319,17 +419,17 @@ function majOuvertureTunnels(): void {
     jeu.tunnelTimer--;
   } else {
     if (jeu.tunnelPhase == 0) {
-      if (tunnel0.actif) tunnel0.ouvert = 1;
-      if (tunnel1.actif) tunnel1.ouvert = 0;
+      if (tunnel0.present) tunnel0.ouvert = 1;
+      if (tunnel1.present) tunnel1.ouvert = 0;
       jeu.tunnelPhase = 1;
     } else if (jeu.tunnelPhase == 1) {
-      if (tunnel0.actif) tunnel0.ouvert = 0;
+      if (tunnel0.present) tunnel0.ouvert = 0;
       jeu.tunnelPhase = 2;
     } else if (jeu.tunnelPhase == 2) {
-      if (tunnel1.actif) tunnel1.ouvert = 1;
+      if (tunnel1.present) tunnel1.ouvert = 1;
       jeu.tunnelPhase = 3;
     } else {
-      if (tunnel1.actif) tunnel1.ouvert = 0;
+      if (tunnel1.present) tunnel1.ouvert = 0;
       jeu.tunnelPhase = 0;
     }
     jeu.tunnelTimer = TUNNEL_CYCLE_TICKS;
@@ -346,7 +446,7 @@ function essaieTeleportTunnel(): void {
   
   for (let i: i32 = 0; i < NB_TUNNELS; i++) {
     const t = lesTunnels[i];
-    if (!t.actif || !t.ouvert) continue;
+    if (!t.present || !t.ouvert) continue;
     
     if (px == t.x0 && py == t.y0) {
       destX = t.x1;
@@ -792,7 +892,6 @@ export function init(): void {
     warn("Taille niveau != grille");
     return;
   }
-    // genereNiveauProcedural();
 
   // Initialise le joueur
   const spawn = trouveNiemePoint(Couleurs.Sol, 0);
@@ -839,6 +938,11 @@ export function init(): void {
   for (let i: i32 = 0; i < NB_TUNNELS; i++) {
     initTunnel(i as u8);
   }
+
+  // Initialise les pièges
+  for (let i = 0; i < NB_PIEGES; i++) {
+    initPiège(i as u8);
+  }
 }
 
 // Mise à jour du jeu
@@ -868,6 +972,7 @@ export function update(): void {
   // Décrémenter les minuteurs de mouvement
   if (joueur.minuteurDepl > 0) joueur.minuteurDepl--;
   if (joueur.invincible > 0) joueur.invincible--;
+  majPièges();
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
     if (lesCrocos[i].minuteurDepl > 0) lesCrocos[i].minuteurDepl--;
   }
@@ -923,6 +1028,9 @@ export function update(): void {
       jeu.etat = EtatJeu.FIN as u8;
     }
   }
+
+  // Vérifier si le joueur touche un piège actif
+  verifieCollisionPieges();
 }
 
 // Dessine la grille et les crocodiles
@@ -946,10 +1054,15 @@ export function draw(): void {
     }
   }
 
+  // Dessine les pièges
+  for (let i: i32 = 0; i < NB_PIEGES; i++) {
+    dessinePiège(lesPièges[i]);
+  }
+
   // Dessine les tunnels
   for (let i: i32 = 0; i < NB_TUNNELS; i++) {
     const t = lesTunnels[i];
-    if (!t.actif) continue;
+    if (!t.present) continue;
     dessineTunnel(t.x0, t.y0, t.ouvert);
     dessineTunnel(t.x1, t.y1, t.ouvert);
   }
