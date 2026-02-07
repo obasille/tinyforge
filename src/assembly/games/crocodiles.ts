@@ -61,6 +61,7 @@ enum Couleurs {
   Gamelle = c(0x583de8),
   Tunnel1 = c(0x707070),
   Tunnel2 = c(0x909090),
+  Piège = c(0x909090),
 }
 
 enum Direction {
@@ -83,12 +84,6 @@ enum EtatJeu {
 class Jeu {
   etat: u8;
   vies: u8;
-  viande0PosX: u8;
-  viande0PosY: u8;
-  viande1PosX: u8;
-  viande1PosY: u8;
-  viande2PosX: u8;
-  viande2PosY: u8;
   tunnelPhase: u8;
   tunnelTimer: u16;
   _fin: u8;
@@ -99,7 +94,7 @@ class Joueur {
   x: u8;
   y: u8;
   minuteurDepl: u8;
-  viandePortee: u8;
+  viandePortee: u8; // index de la viande portée, ou INVALIDE si aucune
   invincible: u8;
   dirDepl: u8;
   tunnelEtat: u8; // 0 = pas dans tunnel, 1 = entrée, 2 = sortie
@@ -122,6 +117,11 @@ class Croco {
   casesDepuisChgmDir: u8;
 }
 
+@unmanaged
+class Viande {
+  x: u8;
+  y: u8;
+}
 
 @unmanaged
 class Tunnel {
@@ -137,6 +137,7 @@ const jeu = changetype<Jeu>(RAM_START);
 const szVars = offsetof<Jeu>("_fin");
 const szJoueur: usize = (offsetof<Joueur>("startupDelay") + 4) & ~3;
 const szCroco: usize = (offsetof<Croco>("casesDepuisChgmDir") + 4) & ~3;
+const szViande: usize = (offsetof<Viande>("y") + 4) & ~3;
 const szTunnel: usize = (offsetof<Tunnel>("actif") + 4) & ~3;
 let offset: usize = RAM_START + szVars;
 const joueur = changetype<Joueur>(offset);
@@ -147,17 +148,25 @@ const croco1 = changetype<Croco>(offset);
 offset += szCroco;
 const croco2 = changetype<Croco>(offset);
 offset += szCroco;
+const viande0 = changetype<Viande>(offset);
+offset += szViande;
+const viande1 = changetype<Viande>(offset);
+offset += szViande;
+const viande2 = changetype<Viande>(offset);
+offset += szViande;
 const tunnel0 = changetype<Tunnel>(offset);
 offset += szTunnel;
 const tunnel1 = changetype<Tunnel>(offset);
 
 const lesCrocos: Croco[] = [croco0, croco1, croco2];
+const lesViandes: Viande[] = [viande0, viande1, viande2];
+const lesTunnels: Tunnel[] = [tunnel0, tunnel1];
+
 const couleursCrocos: u32[] = [
   Couleurs.CrocoRouge,
   Couleurs.CrocoViolet,
   Couleurs.CrocoVert,
 ];
-const lesTunnels: Tunnel[] = [tunnel0, tunnel1];
 
 // === Niveau ===
 
@@ -207,11 +216,9 @@ function estCaseGamelle(x: u8, y: u8): bool {
 }
 
 function estCaseViande(x: u8, y: u8): bool {
-  for (let i: u8 = 0; i < 3; i++) {
-    const pos = doneViandePos(i);
-    const vx = (pos & 0xff) as u8;
-    const vy = ((pos >> 8) & 0xff) as u8;
-    if (vx == x && vy == y) return true;
+  for (let i: i32 = 0; i < 3; i++) {
+    const v = lesViandes[i];
+    if (v.x == x && v.y == y && v.x != INVALIDE) return true;
   }
   return false;
 }
@@ -689,22 +696,14 @@ function deplaceCroco(croco: Croco, couleur: u32): void {
 }
 
 function doneViandePos(index: u8): u16 {
-  if (index == 0) return ((jeu.viande0PosY as u16) << 8) | (jeu.viande0PosX as u16);
-  if (index == 1) return ((jeu.viande1PosY as u16) << 8) | (jeu.viande1PosX as u16);
-  return ((jeu.viande2PosY as u16) << 8) | (jeu.viande2PosX as u16);
+  const v = lesViandes[index];
+  return ((v.y as u16) << 8) | (v.x as u16);
 }
 
 function metViandePos(index: u8, x: u8, y: u8): void {
-  if (index == 0) {
-    jeu.viande0PosX = x;
-    jeu.viande0PosY = y;
-  } else if (index == 1) {
-    jeu.viande1PosX = x;
-    jeu.viande1PosY = y;
-  } else {
-    jeu.viande2PosX = x;
-    jeu.viande2PosY = y;
-  }
+  const v = lesViandes[index];
+  v.x = x;
+  v.y = y;
 }
 
 function initViande(index: u8): void {
@@ -962,9 +961,10 @@ export function draw(): void {
   }
 
   // Dessine les viandes
-  dessineViande(jeu.viande0PosX, jeu.viande0PosY);
-  dessineViande(jeu.viande1PosX, jeu.viande1PosY);
-  dessineViande(jeu.viande2PosX, jeu.viande2PosY);
+  for (let i: i32 = 0; i < 3; i++) {
+    const v = lesViandes[i];
+    dessineViande(v.x, v.y);
+  }
 
   // Dessine les crocodiles
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
