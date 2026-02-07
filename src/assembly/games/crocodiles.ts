@@ -581,9 +581,10 @@ function dessineGrille(): void {
   drawSpriteScaled(NIVEAU_1, 0, 0, 16, 16);
 }
 
-function dessineTeteJoueur(x: u8, y: u8): void {
-  let renderX = x as f32;
-  let renderY = y as f32;
+function dessineTeteJoueur(): void {
+  let renderX = joueur.x as f32;
+  let renderY = joueur.y as f32;
+  // Interpoler le mouvement tant que le timer est actif
   if (joueur.minuteurDepl > 0 && joueur.dirDepl != Direction.IMMOBILE) {
     const frac = (joueur.minuteurDepl as f32) / (JOUEUR_DEPL_DELAI as f32);
     const dx = deltaDirX(joueur.dirDepl) as f32;
@@ -955,8 +956,11 @@ export function update(): void {
     return;
   }
   
-  // Ne rien faire si le jeu n'est pas en cours
-  if (etat != EtatJeu.EN_COURS) return;
+  // Si le jeu est terminé, continuer à animer le mouvement du joueur
+  if (etat != EtatJeu.EN_COURS) {
+    if (joueur.minuteurDepl > 0) joueur.minuteurDepl--;
+    return;
+  }
 
   // Gestion de l'animation de démarrage
   if (joueur.startupDelay > 0) {
@@ -1023,9 +1027,10 @@ export function update(): void {
   // Vérifier si le joueur touche un crocodile (perte de vie)
   if (joueur.invincible == 0 && verifiePositionJoueur(joueur.x, joueur.y)) {
     if (jeu.vies > 0) jeu.vies--;
-    joueur.invincible = INVINCIBLE_TICKS;
     if (jeu.vies == 0) {
       jeu.etat = EtatJeu.FIN as u8;
+    } else {
+      joueur.invincible = INVINCIBLE_TICKS;
     }
   }
 
@@ -1087,7 +1092,7 @@ export function draw(): void {
 
   // Dessine le joueur (sauf pendant le délai de démarrage)
   if (joueur.startupDelay == 0) {
-    dessineTeteJoueur(joueur.x, joueur.y);
+    dessineTeteJoueur();
   }
 
   // Affiche les vies en haut à droite avec un petit bounce
