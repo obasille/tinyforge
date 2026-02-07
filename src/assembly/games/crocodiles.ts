@@ -23,8 +23,6 @@ import {
   getLastSpriteAddress,
   getLastSpriteHeight,
   getLastSpriteWidth,
-  log,
-  pset,
   randomRange,
   readSpriteInfo,
   s,
@@ -61,6 +59,8 @@ enum Couleurs {
   Mur = c(0x04e5ff),
   Viande = c(0xba0b0b),
   Gamelle = c(0x583de8),
+  Tunnel1 = c(0x707070),
+  Tunnel2 = c(0x909090),
 }
 
 enum Direction {
@@ -89,16 +89,6 @@ class Jeu {
   viande1PosY: u8;
   viande2PosX: u8;
   viande2PosY: u8;
-  tunnel0AX: u8;
-  tunnel0AY: u8;
-  tunnel0BX: u8;
-  tunnel0BY: u8;
-  tunnel0Ouvert: u8;
-  tunnel1AX: u8;
-  tunnel1AY: u8;
-  tunnel1BX: u8;
-  tunnel1BY: u8;
-  tunnel1Ouvert: u8;
   tunnelPhase: u8;
   tunnelTimer: u16;
   _fin: u8;
@@ -132,10 +122,22 @@ class Croco {
   casesDepuisChgmDir: u8;
 }
 
+
+@unmanaged
+class Tunnel {
+  x0: u8;
+  y0: u8;
+  x1: u8;
+  y1: u8;
+  ouvert: u8;
+  actif: u8; // 0 = pas de tunnel trouvé, 1 = tunnel présent
+}
+
 const jeu = changetype<Jeu>(RAM_START);
 const szVars = offsetof<Jeu>("_fin");
 const szJoueur: usize = (offsetof<Joueur>("startupDelay") + 4) & ~3;
 const szCroco: usize = (offsetof<Croco>("casesDepuisChgmDir") + 4) & ~3;
+const szTunnel: usize = (offsetof<Tunnel>("actif") + 4) & ~3;
 let offset: usize = RAM_START + szVars;
 const joueur = changetype<Joueur>(offset);
 offset += szJoueur;
@@ -144,6 +146,10 @@ offset += szCroco;
 const croco1 = changetype<Croco>(offset);
 offset += szCroco;
 const croco2 = changetype<Croco>(offset);
+offset += szCroco;
+const tunnel0 = changetype<Tunnel>(offset);
+offset += szTunnel;
+const tunnel1 = changetype<Tunnel>(offset);
 
 const lesCrocos: Croco[] = [croco0, croco1, croco2];
 const couleursCrocos: u32[] = [
@@ -151,6 +157,7 @@ const couleursCrocos: u32[] = [
   Couleurs.CrocoViolet,
   Couleurs.CrocoVert,
 ];
+const lesTunnels: Tunnel[] = [tunnel0, tunnel1];
 
 // === Niveau ===
 
@@ -210,10 +217,12 @@ function estCaseViande(x: u8, y: u8): bool {
 }
 
 function estCaseTunnel(x: u8, y: u8): bool {
-  if (jeu.tunnel0AX == x && jeu.tunnel0AY == y) return true;
-  if (jeu.tunnel0BX == x && jeu.tunnel0BY == y) return true;
-  if (jeu.tunnel1AX == x && jeu.tunnel1AY == y) return true;
-  if (jeu.tunnel1BX == x && jeu.tunnel1BY == y) return true;
+  for (let i: i32 = 0; i < NB_TUNNELS; i++) {
+    const t = lesTunnels[i];
+    if (!t.actif) continue;
+    if (t.x0 == x && t.y0 == y) return true;
+    if (t.x1 == x && t.y1 == y) return true;
+  }
   return false;
 }
 
@@ -252,55 +261,49 @@ function trouveCaseLibreTunnel(): u16 {
 }
 
 function initTunnel(index: u8): void {
-  const inPos = trouveCaseLibreTunnel();
-  let outPos = INVALIDE_POS;
-  if (inPos != INVALIDE_POS) {
-    const inX0 = (inPos & 0xff) as u8;
-    const inY0 = ((inPos >> 8) & 0xff) as u8;
-    let essais: i32 = 0;
-    while (essais < 200) {
-      const cand = trouveCaseLibreTunnel();
-      if (cand == INVALIDE_POS) {
-        essais++;
-        continue;
-      }
-      const outX0 = (cand & 0xff) as u8;
-      const outY0 = ((cand >> 8) & 0xff) as u8;
-      if (distManhattan(inX0, inY0, outX0, outY0) >= TUNNEL_MIN_DISTANCE) {
-        outPos = cand;
-        break;
-      }
-      essais++;
-    }
-    if (outPos == INVALIDE_POS) {
-      for (let y: i32 = 0; y < HAUTEUR_GRILLE; y++) {
-        for (let x: i32 = 0; x < LARGEUR_GRILLE; x++) {
-          const ux = x as u8;
-          const uy = y as u8;
-          if (!caseLibrePourTunnel(ux, uy)) continue;
-          if (distManhattan(inX0, inY0, ux, uy) >= TUNNEL_MIN_DISTANCE) {
-            outPos = ((uy as u16) << 8) | (ux as u16);
-            break;
-          }
+  const tunnel = lesTunnels[index];
+  const couleur = index == 0 ? Couleurs.Tunnel1 : Couleurs.Tunnel2;
+  
+  // Trouve tous les pixels de cette couleur
+  let count: i32 = 0;
+  let pos0: u16 = INVALIDE_POS;
+  let pos1: u16 = INVALIDE_POS;
+  
+  for (let y: i32 = 0; y < HAUTEUR_GRILLE; y++) {
+    for (let x: i32 = 0; x < LARGEUR_GRILLE; x++) {
+      if (litCouleurCase(x, y) == couleur) {
+        if (count == 0) {
+          pos0 = ((y as u16) << 8) | (x as u16);
+        } else if (count == 1) {
+          pos1 = ((y as u16) << 8) | (x as u16);
         }
-        if (outPos != INVALIDE_POS) break;
+        count++;
       }
     }
   }
-  const inX = inPos == INVALIDE_POS ? INVALIDE : ((inPos & 0xff) as u8);
-  const inY = inPos == INVALIDE_POS ? INVALIDE : (((inPos >> 8) & 0xff) as u8);
-  const outX = outPos == INVALIDE_POS ? INVALIDE : ((outPos & 0xff) as u8);
-  const outY = outPos == INVALIDE_POS ? INVALIDE : (((outPos >> 8) & 0xff) as u8);
-  if (index == 0) {
-    jeu.tunnel0AX = inX;
-    jeu.tunnel0AY = inY;
-    jeu.tunnel0BX = outX;
-    jeu.tunnel0BY = outY;
+  
+  // Log des avertissements si nécessaire
+  if (count == 1) {
+    warn("Tunnel " + index.toString() + ": seulement 1 pixel trouvé");
+  } else if (count > 2) {
+    warn("Tunnel " + index.toString() + ": " + count.toString() + " pixels trouvés (2 attendus)");
+  }
+  
+  // Configure le tunnel si exactement 2 pixels trouvés
+  if (count == 2) {
+    tunnel.x0 = (pos0 & 0xff) as u8;
+    tunnel.y0 = ((pos0 >> 8) & 0xff) as u8;
+    tunnel.x1 = (pos1 & 0xff) as u8;
+    tunnel.y1 = ((pos1 >> 8) & 0xff) as u8;
+    tunnel.ouvert = 0;
+    tunnel.actif = 1;
   } else {
-    jeu.tunnel1AX = inX;
-    jeu.tunnel1AY = inY;
-    jeu.tunnel1BX = outX;
-    jeu.tunnel1BY = outY;
+    tunnel.x0 = INVALIDE;
+    tunnel.y0 = INVALIDE;
+    tunnel.x1 = INVALIDE;
+    tunnel.y1 = INVALIDE;
+    tunnel.ouvert = 0;
+    tunnel.actif = 0;
   }
 }
 
@@ -309,17 +312,17 @@ function majOuvertureTunnels(): void {
     jeu.tunnelTimer--;
   } else {
     if (jeu.tunnelPhase == 0) {
-      jeu.tunnel0Ouvert = 1;
-      jeu.tunnel1Ouvert = 0;
+      if (tunnel0.actif) tunnel0.ouvert = 1;
+      if (tunnel1.actif) tunnel1.ouvert = 0;
       jeu.tunnelPhase = 1;
     } else if (jeu.tunnelPhase == 1) {
-      jeu.tunnel0Ouvert = 0;
+      if (tunnel0.actif) tunnel0.ouvert = 0;
       jeu.tunnelPhase = 2;
     } else if (jeu.tunnelPhase == 2) {
-      jeu.tunnel1Ouvert = 1;
+      if (tunnel1.actif) tunnel1.ouvert = 1;
       jeu.tunnelPhase = 3;
     } else {
-      jeu.tunnel1Ouvert = 0;
+      if (tunnel1.actif) tunnel1.ouvert = 0;
       jeu.tunnelPhase = 0;
     }
     jeu.tunnelTimer = TUNNEL_CYCLE_TICKS;
@@ -333,21 +336,23 @@ function essaieTeleportTunnel(): void {
 
   let destX = INVALIDE;
   let destY = INVALIDE;
-  if (jeu.tunnel0Ouvert == 1 && px == jeu.tunnel0AX && py == jeu.tunnel0AY) {
-    destX = jeu.tunnel0BX;
-    destY = jeu.tunnel0BY;
-  } else if (jeu.tunnel0Ouvert == 1 && px == jeu.tunnel0BX && py == jeu.tunnel0BY) {
-    destX = jeu.tunnel0AX;
-    destY = jeu.tunnel0AY;
-  } else if (jeu.tunnel1Ouvert == 1 && px == jeu.tunnel1AX && py == jeu.tunnel1AY) {
-    destX = jeu.tunnel1BX;
-    destY = jeu.tunnel1BY;
-  } else if (jeu.tunnel1Ouvert == 1 && px == jeu.tunnel1BX && py == jeu.tunnel1BY) {
-    destX = jeu.tunnel1AX;
-    destY = jeu.tunnel1AY;
-  } else {
-    return;
+  
+  for (let i: i32 = 0; i < NB_TUNNELS; i++) {
+    const t = lesTunnels[i];
+    if (!t.actif || !t.ouvert) continue;
+    
+    if (px == t.x0 && py == t.y0) {
+      destX = t.x1;
+      destY = t.y1;
+      break;
+    } else if (px == t.x1 && py == t.y1) {
+      destX = t.x0;
+      destY = t.y0;
+      break;
+    }
   }
+
+  if (destX == INVALIDE) return;
 
   joueur.tunnelEtat = 1;
   joueur.tunnelTimer = TUNNEL_ANIM_TICKS;
@@ -830,16 +835,6 @@ export function init(): void {
   }
 
   // Initialise les tunnels
-  jeu.tunnel0AX = INVALIDE;
-  jeu.tunnel0AY = INVALIDE;
-  jeu.tunnel0BX = INVALIDE;
-  jeu.tunnel0BY = INVALIDE;
-  jeu.tunnel0Ouvert = 0;
-  jeu.tunnel1AX = INVALIDE;
-  jeu.tunnel1AY = INVALIDE;
-  jeu.tunnel1BX = INVALIDE;
-  jeu.tunnel1BY = INVALIDE;
-  jeu.tunnel1Ouvert = 0;
   jeu.tunnelPhase = 0;
   jeu.tunnelTimer = TUNNEL_CYCLE_TICKS;
   for (let i: i32 = 0; i < NB_TUNNELS; i++) {
@@ -953,10 +948,12 @@ export function draw(): void {
   }
 
   // Dessine les tunnels
-  dessineTunnel(jeu.tunnel0AX, jeu.tunnel0AY, jeu.tunnel0Ouvert);
-  dessineTunnel(jeu.tunnel0BX, jeu.tunnel0BY, jeu.tunnel0Ouvert);
-  dessineTunnel(jeu.tunnel1AX, jeu.tunnel1AY, jeu.tunnel1Ouvert);
-  dessineTunnel(jeu.tunnel1BX, jeu.tunnel1BY, jeu.tunnel1Ouvert);
+  for (let i: i32 = 0; i < NB_TUNNELS; i++) {
+    const t = lesTunnels[i];
+    if (!t.actif) continue;
+    dessineTunnel(t.x0, t.y0, t.ouvert);
+    dessineTunnel(t.x1, t.y1, t.ouvert);
+  }
 
   // Dessine les gamelles
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
