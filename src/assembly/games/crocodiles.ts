@@ -23,6 +23,7 @@ import {
   getLastSpriteAddress,
   getLastSpriteHeight,
   getLastSpriteWidth,
+  log,
   randomRange,
   readSpriteInfo,
   s,
@@ -117,6 +118,8 @@ class Croco {
   gamelleRemplie: u8; // 0 = vide, 1 = remplie
   attaque: u8; // 0 = normal, 1 = attaque
   casesDepuisChgmDir: u8;
+  targetX: u8; // Position X de la cible
+  targetY: u8; // Position Y de la cible
 }
 
 @unmanaged
@@ -147,7 +150,7 @@ class Piège {
 const jeu = changetype<Jeu>(RAM_START);
 const szVars = offsetof<Jeu>("_fin");
 const szJoueur: usize = (offsetof<Joueur>("startupDelay") + 4) & ~3;
-const szCroco: usize = (offsetof<Croco>("casesDepuisChgmDir") + 4) & ~3;
+const szCroco: usize = (offsetof<Croco>("targetY") + 4) & ~3;
 const szViande: usize = (offsetof<Viande>("y") + 4) & ~3;
 const szTunnel: usize = (offsetof<Tunnel>("ouvert") + 4) & ~3;
 const szPiège: usize = (offsetof<Piège>("timer") + 4) & ~3;
@@ -189,6 +192,18 @@ const couleursCrocos: u32[] = [
   Couleurs.CrocoVert,
 ];
 
+// cases cibles de chaque croco (format: y<<8 | x)
+let casesCiblesCrocoRouge: u16[] = [];
+let casesCiblesCrocoViolet: u16[] = [];
+let casesCiblesCrocoVert: u16[] = [];
+const casesCiblesCrocos: u16[][] = [casesCiblesCrocoRouge, casesCiblesCrocoViolet, casesCiblesCrocoVert];
+
+// cases valides pour les chemins de chaque croco, calculées au lancement du niveau (format: y<<8 | x)
+let casesValidesCrocoRouge: u16[] = [];
+let casesValidesCrocoViolet: u16[] = [];
+let casesValidesCrocoVert: u16[] = [];
+const casesValidesCrocos: u16[][] = [casesValidesCrocoRouge, casesValidesCrocoViolet, casesValidesCrocoVert];
+
 // === Niveau ===
 
 const NIVEAU_1: i32 = s("level1");
@@ -198,10 +213,6 @@ let adresseNiveau: usize = 0;
 
 function litCouleurCase(x: i32, y: i32): u32 {
   return load<u32>(adresseNiveau + (y * LARGEUR_GRILLE + x) * 4);
-}
-
-function ecritCouleurCase(x: i32, y: i32, couleur: u32): void {
-  store<u32>(adresseNiveau + (y * LARGEUR_GRILLE + x) * 4, couleur);
 }
 
 function caseCouleur(x: i32, y: i32, couleur: u32): bool {
@@ -220,72 +231,6 @@ function peutBouger(x: i32, y: i32): bool {
     }
   }
   return false;
-}
-
-function caseAutorisee(x: i32, y: i32, couleur: u32, utiliseCouleur: bool): bool {
-  if (x < 0 || x >= LARGEUR_GRILLE || y < 0 || y >= HAUTEUR_GRILLE) return false;
-  const estCouleur = litCouleurCase(x, y) == couleur;
-  return utiliseCouleur ? estCouleur : !estCouleur;
-}
-
-function estCaseGamelle(x: u8, y: u8): bool {
-  for (let i: i32 = 0; i < NB_CROCOS; i++) {
-    const croco = lesCrocos[i];
-    if (croco.gamelleX == x && croco.gamelleY == y) return true;
-  }
-  return false;
-}
-
-function estCaseViande(x: u8, y: u8): bool {
-  for (let i: i32 = 0; i < 3; i++) {
-    const v = lesViandes[i];
-    if (v.x == x && v.y == y && v.x != INVALIDE) return true;
-  }
-  return false;
-}
-
-function estCaseTunnel(x: u8, y: u8): bool {
-  for (let i: i32 = 0; i < NB_TUNNELS; i++) {
-    const t = lesTunnels[i];
-    if (!t.present) continue;
-    if (t.x0 == x && t.y0 == y) return true;
-    if (t.x1 == x && t.y1 == y) return true;
-  }
-  return false;
-}
-
-function caseLibrePourTunnel(x: u8, y: u8): bool {
-  if (!peutBouger(x, y)) return false;
-  if (estCaseGamelle(x, y)) return false;
-  if (estCaseViande(x, y)) return false;
-  if (estCaseTunnel(x, y)) return false;
-  return true;
-}
-
-function distManhattan(x1: u8, y1: u8, x2: u8, y2: u8): i32 {
-  let dx = (x1 as i32) - (x2 as i32);
-  if (dx < 0) dx = -dx;
-  let dy = (y1 as i32) - (y2 as i32);
-  if (dy < 0) dy = -dy;
-  return dx + dy;
-}
-
-function trouveCaseLibreTunnel(): u16 {
-  let essais: i32 = 0;
-  while (essais < 200) {
-    const x = randomRange(LARGEUR_GRILLE) as u8;
-    const y = randomRange(HAUTEUR_GRILLE) as u8;
-    if (caseLibrePourTunnel(x, y)) return ((y as u16) << 8) | (x as u16);
-    essais++;
-  }
-  for (let y: i32 = 0; y < HAUTEUR_GRILLE; y++) {
-    for (let x: i32 = 0; x < LARGEUR_GRILLE; x++) {
-      const ux = x as u8;
-      const uy = y as u8;
-      if (caseLibrePourTunnel(ux, uy)) return ((uy as u16) << 8) | (ux as u16);
-    }
-  }
-  return INVALIDE_POS;
 }
 
 function initTunnel(index: u8): void {
@@ -381,14 +326,14 @@ function majPièges(): void {
   }
 }
 
-function verifieCollisionPieges(): void {
+function verifieCollisionPièges(): void {
   if (joueur.invincible > 0) return;
   
   for (let i: i32 = 0; i < NB_PIEGES; i++) {
-    const piege = lesPièges[i];
-    if (!piege.present || !piege.actif) continue;
+    const piège = lesPièges[i];
+    if (!piège.present || !piège.actif) continue;
     
-    if (joueur.x == piege.x && joueur.y == piege.y) {
+    if (joueur.x == piège.x && joueur.y == piège.y) {
       // Perte d'une vie
       if (jeu.vies > 0) jeu.vies--;
       joueur.invincible = INVINCIBLE_TICKS;
@@ -400,12 +345,12 @@ function verifieCollisionPieges(): void {
   }
 }
 
-function dessinePiège(piege: Piège): void {
-  if (!piege.present || piege.x == INVALIDE) return;
-  const baseX = (piege.x as i32) * TAILLE_CASE;
-  const baseY = (piege.y as i32) * TAILLE_CASE;
+function dessinePiège(piège: Piège): void {
+  if (!piège.present || piège.x == INVALIDE) return;
+  const baseX = (piège.x as i32) * TAILLE_CASE;
+  const baseY = (piège.y as i32) * TAILLE_CASE;
   
-  if (piege.actif) {
+  if (piège.actif) {
     // Piège actif - dessine en rouge
     fillRect(baseX, baseY, TAILLE_CASE, TAILLE_CASE, c(0xff0000));
   } else {
@@ -549,24 +494,14 @@ function dirValidePourCouleur(x: u8, y: u8, dir: u8, couleur: u32): bool {
   return caseCouleur(nx, ny, couleur);
 }
 
-function dirAttaqueCroco(croco: Croco, couleur: u32, jx: u8, jy: u8): u8 {
-  let meilleurDir = croco.dir;
-  let meilleurDist: i32 = 0x7fffffff;
-  for (let dir: u8 = 1; dir <= 4; dir++) {
-    if (!dirValidePourCouleur(croco.x, croco.y, dir, couleur)) continue;
-    const nx = (croco.x as i32) + deltaDirX(dir);
-    const ny = (croco.y as i32) + deltaDirY(dir);
-    let dx = (jx as i32) - nx;
-    if (dx < 0) dx = -dx;
-    let dy = (jy as i32) - ny;
-    if (dy < 0) dy = -dy;
-    const dist = dx + dy;
-    if (dist < meilleurDist || (dist == meilleurDist && dir == croco.dir)) {
-      meilleurDist = dist;
-      meilleurDir = dir;
-    }
-  }
-  return meilleurDir;
+function dirValidePourCrocoIndex(x: u8, y: u8, dir: u8, indexCroco: i32): bool {
+  const nx = (x as i32) + deltaDirX(dir);
+  const ny = (y as i32) + deltaDirY(dir);
+  
+  if (nx < 0 || nx >= LARGEUR_GRILLE || ny < 0 || ny >= HAUTEUR_GRILLE) return false;
+  
+  const npos = ((ny as u16) << 8) | (nx as u16);
+  return casesValidesCrocos[indexCroco].includes(npos);
 }
 
 function verifiePositionJoueur(px: u8, py: u8): bool {
@@ -627,11 +562,11 @@ function dessineCroco(croco: Croco): void {
   let renderX = croco.x as f32;
   let renderY = croco.y as f32;
   if (croco.dir != Direction.IMMOBILE && croco.minuteurDepl > 0) {
-    const delai = croco.attaque == 1
+    const délai = croco.attaque == 1
       ? ((CROCO_DEPL_DELAI / 2) as i32)
       : (CROCO_DEPL_DELAI as i32);
-    if (delai > 0) {
-      const frac = (croco.minuteurDepl as f32) / (delai as f32);
+    if (délai > 0) {
+      const frac = (croco.minuteurDepl as f32) / (délai as f32);
       const dx = deltaDirX(croco.dir) as f32;
       const dy = deltaDirY(croco.dir) as f32;
       renderX -= dx * frac;
@@ -669,6 +604,119 @@ function dessineGamelle(x: u8, y: u8, remplie: u8): void {
   }
 }
 
+function trouveToutescasesCouleur(couleur: u32, cases: u16[]): void {
+  for (let y: i32 = 0; y < HAUTEUR_GRILLE; y++) {
+    for (let x: i32 = 0; x < LARGEUR_GRILLE; x++) {
+      if (litCouleurCase(x, y) == couleur) {
+        cases.push(((y as u16) << 8) | (x as u16));
+      }
+    }
+  }
+}
+
+const visited = new Set<u16>();
+const parents = new Map<u16, u16>();
+const queue: u16[] = [];
+const path: u16[] = [];
+
+function trouveCheminBFS(startX: i32, startY: i32, endX: i32, endY: i32): u16[] | null {
+  const startPos = ((startY as u16) << 8) | (startX as u16);
+  const endPos = ((endY as u16) << 8) | (endX as u16);
+  
+  if (startPos == endPos) {
+    return [startPos];
+  }
+
+  visited.clear();
+  parents.clear();
+  queue.length = 0;
+  
+  visited.add(startPos);
+  queue.push(startPos);
+  
+  let head = 0;
+  let found = false;
+  
+  while (head < queue.length) {
+    const pos = queue[head++];
+    
+    if (pos == endPos) {
+      found = true;
+      break;
+    }
+    
+    const x = (pos & 0xff) as i32;
+    const y = ((pos >> 8) & 0xff) as i32;
+    
+    // Essayer les 4 directions
+    const dx: i32[] = [0, 0, -1, 1];
+    const dy: i32[] = [-1, 1, 0, 0];
+    
+    for (let i = 0; i < 4; i++) {
+      const nx = x + dx[i];
+      const ny = y + dy[i];
+      
+      if (nx < 0 || nx >= LARGEUR_GRILLE || ny < 0 || ny >= HAUTEUR_GRILLE) continue;
+      if (caseCouleur(nx, ny, Couleurs.Mur)) continue;
+      
+      const npos = ((ny as u16) << 8) | (nx as u16);
+      
+      if (!visited.has(npos)) {
+        visited.add(npos);
+        parents.set(npos, pos);
+        queue.push(npos);
+      }
+    }
+  }
+  
+  if (!found) {
+    return null;
+  }
+  
+  // Reconstruire le chemin en remontant les parents
+  let current = endPos;
+
+  path.length = 0;
+  while (current != startPos) {
+    path.push(current);
+    current = parents.get(current);
+  }
+  path.push(startPos);
+  return path;
+}
+
+function construirecasesValides(casesCibles: u16[], casesValides: u16[]): void {
+  
+  // Ajouter toutes les cases cibles
+  for (let i = 0; i < casesCibles.length; i++) {
+    casesValides.push(casesCibles[i]);
+  }
+  
+  // Pour chaque paire de cases cibles
+  for (let i = 0; i < casesCibles.length; i++) {
+    const posA = casesCibles[i];
+    const ax = (posA & 0xff) as i32;
+    const ay = ((posA >> 8) & 0xff) as i32;
+    
+    for (let j = i + 1; j < casesCibles.length; j++) {
+      const posB = casesCibles[j];
+      const bx = (posB & 0xff) as i32;
+      const by = ((posB >> 8) & 0xff) as i32;
+      
+      // Trouve le chemin le plus court entre A et B
+      const chemin = trouveCheminBFS(ax, ay, bx, by);
+      if (chemin != null) {
+        for (let k = 0; k < chemin.length; k++) {
+          // Vérifier que la case n'est pas déjà dans casesValides pour éviter les doublons
+          if (!casesValides.includes(chemin[k])) {
+            casesValides.push(chemin[k]);
+          }
+        }
+      }
+    }
+  }
+}
+
 function trouvePointDepart(couleur: u32): u16 {
   for (let y: i32 = 0; y < HAUTEUR_GRILLE; y++) {
     for (let x: i32 = 0; x < LARGEUR_GRILLE; x++) {
@@ -679,6 +727,27 @@ function trouvePointDepart(couleur: u32): u16 {
     }
   }
   return INVALIDE_POS;
+}
+
+function choisiNouvelleCible(croco: Croco, cases: u16[]): void {
+  if (cases.length == 0) {
+    croco.targetX = INVALIDE;
+    croco.targetY = INVALIDE;
+    return;
+  }
+  
+  // Choisir une case aléatoire différente de la position actuelle si possible
+  let tentatives = 0;
+  let pos: u16;
+  do {
+    const idx = randomRange(cases.length);
+    pos = cases[idx];
+    tentatives++;
+  } while (tentatives < 10 && cases.length > 1 && 
+           (pos & 0xff) == croco.x && ((pos >> 8) & 0xff) == croco.y);
+             
+  croco.targetX = (pos & 0xff) as u8;
+  croco.targetY = ((pos >> 8) & 0xff) as u8;
 }
 
 function trouveNiemePoint(couleur: u32, index: i32): u16 {
@@ -701,22 +770,24 @@ function trouveCrocoPourGamelle(x: u8, y: u8): u8 {
   const gx = x as i32;
   const gy = y as i32;
 
-  function indexCouleur(couleur: u32): u8 {
-    for (let i: i32 = 0; i < NB_CROCOS; i++) {
-      if (couleursCrocos[i] == couleur) return i as u8;
-    }
-    return INVALIDE;
-  }
-
   const dx: i32[] = [0, 0, -1, 1];
   const dy: i32[] = [-1, 1, 0, 0];
+  
   for (let i: i32 = 0; i < 4; i++) {
     const nx = gx + dx[i];
     const ny = gy + dy[i];
     if (nx < 0 || ny < 0 || nx >= LARGEUR_GRILLE || ny >= HAUTEUR_GRILLE) continue;
-    const idx = indexCouleur(litCouleurCase(nx, ny));
-    if (idx != INVALIDE) return idx;
+    
+    const pos = ((ny as u16) << 8) | (nx as u16);
+    
+    // Verifie si cette position est dans les cases valides de l'un des crocos
+    for (let crocoIdx: i32 = 0; crocoIdx < NB_CROCOS; crocoIdx++) {
+      if (casesValidesCrocos[crocoIdx].includes(pos)) {
+        return crocoIdx as u8;
+      }
+    }
   }
+  
   return INVALIDE;
 }
 
@@ -738,6 +809,8 @@ function initCroco(index: u8, croco: Croco, couleur: u32): void {
   croco.attaque = 0;
   croco.minuteurDepl = 0;
   croco.casesDepuisChgmDir = 0;
+  croco.targetX = INVALIDE;
+  croco.targetY = INVALIDE;
 }
 
 function assigneGamelle(index: u8): void {
@@ -758,35 +831,56 @@ function assigneGamelle(index: u8): void {
   }
 }
 
-function deplaceCroco(croco: Croco, couleur: u32): void {
+function deplaceCroco(croco: Croco, couleur: u32, indexCroco: i32): void {
+  // Si pas de cible ou cible atteinte, choisir une nouvelle cible
+  if (croco.targetX == INVALIDE || (croco.x == croco.targetX && croco.y == croco.targetY)) {
+    choisiNouvelleCible(croco, casesCiblesCrocos[indexCroco]);
+    if (croco.targetX == INVALIDE) {
+      log("Aucune cible pour croco " + indexCroco.toString());
+      croco.dir = Direction.IMMOBILE as u8;
+      return;
+    }
+  }
+
   const oldX = croco.x;
   const oldY = croco.y;
   const oldDir = croco.dir;
 
-  // Choisi la direction du crocodile
-  let dir = croco.attaque == 1
-    ? dirAttaqueCroco(croco, couleur, joueur.x, joueur.y)
-    : choisisDirValide(croco.x, croco.y, croco.dir, couleur);
-
-  // Si le crocodile attaque, on ne change pas de direction si on a changé de direction il y a moins de 2 cases
-  if (croco.attaque == 1 && dir != oldDir && croco.casesDepuisChgmDir < 2) {
-    dir = oldDir;
-    // Si la direction choisie n'est pas valide, on choisit une nouvelle direction valide
-    if (!dirValidePourCouleur(croco.x, croco.y, dir, couleur)) {
-      dir = choisisDirValide(croco.x, croco.y, croco.dir, couleur);
+  // Calcule la direction vers la cible
+  const dx = (croco.targetX as i32) - (croco.x as i32);
+  const dy = (croco.targetY as i32) - (croco.y as i32);
+  
+  let meilleurDir = Direction.IMMOBILE as u8;
+  let meilleureDistance: i32 = 0x7fffffff;
+  
+  // Essayer toutes les directions et choisir celle qui rapproche le plus de la cible
+  for (let dir: u8 = 1; dir <= 4; dir++) {
+    if (!dirValidePourCrocoIndex(croco.x, croco.y, dir, indexCroco)) continue;
+    
+    const nx = (croco.x as i32) + deltaDirX(dir);
+    const ny = (croco.y as i32) + deltaDirY(dir);
+    const ndx = (croco.targetX as i32) - nx;
+    const ndy = (croco.targetY as i32) - ny;
+    const dist = (ndx < 0 ? -ndx : ndx) + (ndy < 0 ? -ndy : ndy);
+    
+    // Préférer la direction qui rapproche de la cible, ou garder la direction actuelle en cas d'égalité
+    if (dist < meilleureDistance || (dist == meilleureDistance && dir == oldDir)) {
+      meilleureDistance = dist;
+      meilleurDir = dir;
     }
   }
 
-  // Si la direction choisie n'est pas valide, on ne fait rien
-  if (!dirValidePourCouleur(croco.x, croco.y, dir, couleur)) {
+  if (meilleurDir == Direction.IMMOBILE) {
+    // Aucune direction valide, choisir une nouvelle cible
+    choisiNouvelleCible(croco, casesCiblesCrocos[indexCroco]);
     croco.dir = Direction.IMMOBILE as u8;
     return;
   }
 
   // Déplace le crocodile
-  croco.x = (croco.x + deltaDirX(dir)) as u8;
-  croco.y = (croco.y + deltaDirY(dir)) as u8;
-  croco.dir = dir;
+  croco.x = (croco.x + deltaDirX(meilleurDir)) as u8;
+  croco.y = (croco.y + deltaDirY(meilleurDir)) as u8;
+  croco.dir = meilleurDir;
 
   // Met à jour le compteur de cases depuis le dernier changement de direction
   if (croco.dir != oldDir) {
@@ -917,6 +1011,16 @@ export function init(): void {
   jeu.etat = EtatJeu.EN_COURS as u8;
   jeu.vies = VIES_DEPART;
 
+  // Trouve toutes les cases colorées pour chaque croco
+  trouveToutescasesCouleur(Couleurs.CrocoRouge, casesCiblesCrocoRouge);
+  trouveToutescasesCouleur(Couleurs.CrocoViolet, casesCiblesCrocoViolet);
+  trouveToutescasesCouleur(Couleurs.CrocoVert, casesCiblesCrocoVert);
+  
+  // Construit les ensembles de cases valides (sur les plus courts chemins)
+  construirecasesValides(casesCiblesCrocoRouge, casesValidesCrocoRouge);
+  construirecasesValides(casesCiblesCrocoViolet, casesValidesCrocoViolet);
+  construirecasesValides(casesCiblesCrocoVert, casesValidesCrocoVert);
+
   // Initialise les crocodiles
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
     const croco = lesCrocos[i];
@@ -998,14 +1102,15 @@ export function update(): void {
 
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
     const croco = lesCrocos[i];
-    croco.attaque = caseCouleur(joueur.x, joueur.y, couleursCrocos[i]) ? 1 : 0;
+    const npos = ((joueur.y as u16) << 8) | (joueur.x as u16);
+    croco.attaque = casesValidesCrocos[i].includes(npos) ? 1 : 0;
   }
 
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
     const croco = lesCrocos[i];
     if (croco.minuteurDepl == 0) {
       const couleur = couleursCrocos[i];
-      deplaceCroco(croco, couleur);
+      deplaceCroco(croco, couleur, i);
       const delai =
         croco.attaque == 1 ? ((CROCO_DEPL_DELAI / 2) as u8) : CROCO_DEPL_DELAI;
       croco.minuteurDepl = delai == 0 ? 1 : delai;
@@ -1035,7 +1140,7 @@ export function update(): void {
   }
 
   // Vérifier si le joueur touche un piège actif
-  verifieCollisionPieges();
+  verifieCollisionPièges();
 }
 
 // Dessine la grille et les crocodiles
@@ -1051,8 +1156,6 @@ export function draw(): void {
           y * TAILLE_CASE,
           TAILLE_CASE,
           TAILLE_CASE,
-          // estMur ? Couleurs.Mur : Couleurs.Sol
-          // litCouleurCase(x, y)
           Couleurs.Sol
         );
       }
@@ -1103,6 +1206,17 @@ export function draw(): void {
     const offsetY = (i & 1) == 0 ? bounce : -bounce;
     drawSprite(s("heart"), coeurX - (i * pasCoeur), offsetY);
   }
+
+  // Dessine les chemins possibles pour chaque croco (pour debug)
+  // for (let i = 0; i < NB_CROCOS; i++) {
+  //   const casesValides = casesValidesCrocos[i];
+  //   for (let j = 0; j < casesValides.length; j++) {
+  //     const pos = casesValides[j];
+  //     const x = (pos & 0xff) as i32;
+  //     const y = ((pos >> 8) & 0xff) as i32;
+  //     fillRect(x * TAILLE_CASE + TAILLE_CASE / 4, y * TAILLE_CASE + TAILLE_CASE / 4, TAILLE_CASE / 2, TAILLE_CASE / 2, couleursCrocos[i]);
+  //   }
+  // }
 
   if (jeu.etat == EtatJeu.FIN) {
     drawStartMessageBox("IL VA TE MANGER...", Couleurs.MessageBoxFond, Couleurs.MessageBoxTexte);
