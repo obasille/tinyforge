@@ -604,7 +604,7 @@ function dessineGamelle(x: u8, y: u8, remplie: u8): void {
   }
 }
 
-function trouveToutescasesCouleur(couleur: u32, cases: u16[]): void {
+function trouveCasesCouleur(couleur: u32, cases: u16[]): void {
   for (let y: i32 = 0; y < HAUTEUR_GRILLE; y++) {
     for (let x: i32 = 0; x < LARGEUR_GRILLE; x++) {
       if (litCouleurCase(x, y) == couleur) {
@@ -614,33 +614,42 @@ function trouveToutescasesCouleur(couleur: u32, cases: u16[]): void {
   }
 }
 
-const visited = new Set<u16>();
-const parents = new Map<u16, u16>();
-const queue: u16[] = [];
-const path: u16[] = [];
+// Tableaux statiques pour BFS
+const MAX_BFS_SIZE: i32 = 256; // Plus grand que 20x10 = 200 cases
+const queueBFS = new StaticArray<u16>(MAX_BFS_SIZE);
+const parentsBFS = new StaticArray<u16>(MAX_BFS_SIZE);
+let tailleQueueBFS: i32 = 0;
+let tailleParentsBFS: i32 = 0;
 
-function trouveCheminBFS(startX: i32, startY: i32, endX: i32, endY: i32): u16[] | null {
+// Directions pour BFS
+const directionX = new StaticArray<i32>(4);
+const directionY = new StaticArray<i32>(4);
+directionX[0] = 0;  directionY[0] = -1;  // HAUT
+directionX[1] = 0;  directionY[1] = 1;   // BAS
+directionX[2] = -1; directionY[2] = 0;   // GAUCHE
+directionX[3] = 1;  directionY[3] = 0;   // DROITE
+
+function donneProchaineCaseCheminBFS(startX: i32, startY: i32, endX: i32, endY: i32): u16 {
   const startPos = ((startY as u16) << 8) | (startX as u16);
   const endPos = ((endY as u16) << 8) | (endX as u16);
   
   if (startPos == endPos) {
-    return [startPos];
+    return startPos;
   }
 
-  visited.clear();
-  parents.clear();
-  queue.length = 0;
+  tailleParentsBFS = 0;
+  tailleQueueBFS = 0;
   
-  visited.add(startPos);
-  queue.push(startPos);
+  // Start BFS from end position to find start
+  queueBFS[tailleQueueBFS++] = endPos;
   
   let head = 0;
   let found = false;
-  
-  while (head < queue.length) {
-    const pos = queue[head++];
+
+  while (head < tailleQueueBFS) {
+    const pos = queueBFS[head++];
     
-    if (pos == endPos) {
+    if (pos == startPos) {
       found = true;
       break;
     }
@@ -648,44 +657,53 @@ function trouveCheminBFS(startX: i32, startY: i32, endX: i32, endY: i32): u16[] 
     const x = (pos & 0xff) as i32;
     const y = ((pos >> 8) & 0xff) as i32;
     
-    // Essayer les 4 directions
-    const dx: i32[] = [0, 0, -1, 1];
-    const dy: i32[] = [-1, 1, 0, 0];
-    
+    // Essayer les 4 directions    
     for (let i = 0; i < 4; i++) {
-      const nx = x + dx[i];
-      const ny = y + dy[i];
+      const nx = x + directionX[i];
+      const ny = y + directionY[i];
       
       if (nx < 0 || nx >= LARGEUR_GRILLE || ny < 0 || ny >= HAUTEUR_GRILLE) continue;
       if (caseCouleur(nx, ny, Couleurs.Mur)) continue;
       
       const npos = ((ny as u16) << 8) | (nx as u16);
       
-      if (!visited.has(npos)) {
-        visited.add(npos);
-        parents.set(npos, pos);
-        queue.push(npos);
+      // Check if already in queue
+      let dejaDansQueue = false;
+      for (let j = 0; j < tailleQueueBFS; j++) {
+        if (queueBFS[j] == npos) {
+          dejaDansQueue = true;
+          break;
+        }
+      }
+      
+      if (!dejaDansQueue && tailleQueueBFS < MAX_BFS_SIZE) {
+        parentsBFS[tailleParentsBFS++] = pos;
+        queueBFS[tailleQueueBFS++] = npos;
       }
     }
   }
   
   if (!found) {
-    return null;
+    return INVALIDE_POS;
   }
   
-  // Reconstruire le chemin en remontant les parents
-  let current = endPos;
-
-  path.length = 0;
-  while (current != startPos) {
-    path.push(current);
-    current = parents.get(current);
+  // Find index of startPos in queue
+  let idx = -1;
+  for (let i = 0; i < tailleQueueBFS; i++) {
+    if (queueBFS[i] == startPos) {
+      idx = i;
+      break;
+    }
   }
-  path.push(startPos);
-  return path;
+  
+  if (idx <= 0) {
+    return INVALIDE_POS;
+  }
+  
+  return parentsBFS[idx - 1];
 }
 
-function construirecasesValides(casesCibles: u16[], casesValides: u16[]): void {
+function construireCasesValides(casesCibles: u16[], casesValides: u16[]): void {
   
   // Ajouter toutes les cases cibles
   for (let i = 0; i < casesCibles.length; i++) {
@@ -704,14 +722,21 @@ function construirecasesValides(casesCibles: u16[], casesValides: u16[]): void {
       const by = ((posB >> 8) & 0xff) as i32;
       
       // Trouve le chemin le plus court entre A et B
-      const chemin = trouveCheminBFS(ax, ay, bx, by);
-      if (chemin != null) {
-        for (let k = 0; k < chemin.length; k++) {
+      const prochaineCase = donneProchaineCaseCheminBFS(ax, ay, bx, by);
+      if (prochaineCase != INVALIDE_POS) {
+        // Reconstruct path
+        let current = posA;
+        while (current != posB) {
           // Vérifier que la case n'est pas déjà dans casesValides pour éviter les doublons
-          if (!casesValides.includes(chemin[k])) {
-            casesValides.push(chemin[k]);
+          if (!casesValides.includes(current)) {
+            casesValides.push(current);
           }
+          const idx = queueBFS.indexOf(current);
+          current = parentsBFS[idx - 1];
         }
+          if (!casesValides.includes(current)) {
+            casesValides.push(current);
+          }
       }
     }
   }
@@ -770,12 +795,9 @@ function trouveCrocoPourGamelle(x: u8, y: u8): u8 {
   const gx = x as i32;
   const gy = y as i32;
 
-  const dx: i32[] = [0, 0, -1, 1];
-  const dy: i32[] = [-1, 1, 0, 0];
-  
   for (let i: i32 = 0; i < 4; i++) {
-    const nx = gx + dx[i];
-    const ny = gy + dy[i];
+    const nx = gx + directionX[i];
+    const ny = gy + directionY[i];
     if (nx < 0 || ny < 0 || nx >= LARGEUR_GRILLE || ny >= HAUTEUR_GRILLE) continue;
     
     const pos = ((ny as u16) << 8) | (nx as u16);
@@ -831,56 +853,56 @@ function assigneGamelle(index: u8): void {
   }
 }
 
-function deplaceCroco(croco: Croco, couleur: u32, indexCroco: i32): void {
+function déplaceCroco(croco: Croco, couleur: u32, indexCroco: i32): void {
   // Si pas de cible ou cible atteinte, choisir une nouvelle cible
   if (croco.targetX == INVALIDE || (croco.x == croco.targetX && croco.y == croco.targetY)) {
     choisiNouvelleCible(croco, casesCiblesCrocos[indexCroco]);
     if (croco.targetX == INVALIDE) {
-      log("Aucune cible pour croco " + indexCroco.toString());
       croco.dir = Direction.IMMOBILE as u8;
       return;
     }
   }
 
-  const oldX = croco.x;
-  const oldY = croco.y;
-  const oldDir = croco.dir;
-
-  // Calcule la direction vers la cible
-  const dx = (croco.targetX as i32) - (croco.x as i32);
-  const dy = (croco.targetY as i32) - (croco.y as i32);
-  
-  let meilleurDir = Direction.IMMOBILE as u8;
-  let meilleureDistance: i32 = 0x7fffffff;
-  
-  // Essayer toutes les directions et choisir celle qui rapproche le plus de la cible
-  for (let dir: u8 = 1; dir <= 4; dir++) {
-    if (!dirValidePourCrocoIndex(croco.x, croco.y, dir, indexCroco)) continue;
-    
-    const nx = (croco.x as i32) + deltaDirX(dir);
-    const ny = (croco.y as i32) + deltaDirY(dir);
-    const ndx = (croco.targetX as i32) - nx;
-    const ndy = (croco.targetY as i32) - ny;
-    const dist = (ndx < 0 ? -ndx : ndx) + (ndy < 0 ? -ndy : ndy);
-    
-    // Préférer la direction qui rapproche de la cible, ou garder la direction actuelle en cas d'égalité
-    if (dist < meilleureDistance || (dist == meilleureDistance && dir == oldDir)) {
-      meilleureDistance = dist;
-      meilleurDir = dir;
-    }
+  // Trouve le chemin le plus court vers la cible
+  for (let i = 0; i < 100; i++) {
+    const prochaineCase1 = donneProchaineCaseCheminBFS(croco.x + i, croco.y, croco.targetX, croco.targetY);
   }
-
-  if (meilleurDir == Direction.IMMOBILE) {
-    // Aucune direction valide, choisir une nouvelle cible
+  const prochaineCase = donneProchaineCaseCheminBFS(croco.x, croco.y, croco.targetX, croco.targetY);
+  
+  if (prochaineCase == INVALIDE_POS) {
+    // Pas de chemin trouvé, choisir une nouvelle cible
+    choisiNouvelleCible(croco, casesCiblesCrocos[indexCroco]);
+    croco.dir = Direction.IMMOBILE as u8;
+    return;
+  }
+  
+  // Le prochain pas est la deuxième position dans le chemin (la première est la position actuelle)
+  const prochainX = (prochaineCase & 0xff) as i32;
+  const prochainY = ((prochaineCase >> 8) & 0xff) as i32;
+  
+  // Vérifie que le prochain pas est une case valide pour ce croco
+  if (!casesValidesCrocos[indexCroco].includes(prochaineCase)) {
+    // La case n'est pas valide, choisir une nouvelle cible
     choisiNouvelleCible(croco, casesCiblesCrocos[indexCroco]);
     croco.dir = Direction.IMMOBILE as u8;
     return;
   }
 
+  // log("Croco " + indexCroco.toString() + " se déplace vers (" + prochainX.toString() + "," + prochainY.toString() + ") cible (" + croco.targetX.toString() + "," + croco.targetY.toString() + ")");
+  
+  // Calcule la direction pour atteindre la prochaine case
+  const dx = prochainX - (croco.x as i32);
+  const dy = prochainY - (croco.y as i32);
+  const dir = donneDir(dx, dy);
+  
+  const oldX = croco.x;
+  const oldY = croco.y;
+  const oldDir = croco.dir;
+
   // Déplace le crocodile
-  croco.x = (croco.x + deltaDirX(meilleurDir)) as u8;
-  croco.y = (croco.y + deltaDirY(meilleurDir)) as u8;
-  croco.dir = meilleurDir;
+  croco.x = prochainX as u8;
+  croco.y = prochainY as u8;
+  croco.dir = dir;
 
   // Met à jour le compteur de cases depuis le dernier changement de direction
   if (croco.dir != oldDir) {
@@ -1012,14 +1034,14 @@ export function init(): void {
   jeu.vies = VIES_DEPART;
 
   // Trouve toutes les cases colorées pour chaque croco
-  trouveToutescasesCouleur(Couleurs.CrocoRouge, casesCiblesCrocoRouge);
-  trouveToutescasesCouleur(Couleurs.CrocoViolet, casesCiblesCrocoViolet);
-  trouveToutescasesCouleur(Couleurs.CrocoVert, casesCiblesCrocoVert);
+  trouveCasesCouleur(Couleurs.CrocoRouge, casesCiblesCrocoRouge);
+  trouveCasesCouleur(Couleurs.CrocoViolet, casesCiblesCrocoViolet);
+  trouveCasesCouleur(Couleurs.CrocoVert, casesCiblesCrocoVert);
   
   // Construit les ensembles de cases valides (sur les plus courts chemins)
-  construirecasesValides(casesCiblesCrocoRouge, casesValidesCrocoRouge);
-  construirecasesValides(casesCiblesCrocoViolet, casesValidesCrocoViolet);
-  construirecasesValides(casesCiblesCrocoVert, casesValidesCrocoVert);
+  construireCasesValides(casesCiblesCrocoRouge, casesValidesCrocoRouge);
+  construireCasesValides(casesCiblesCrocoViolet, casesValidesCrocoViolet);
+  construireCasesValides(casesCiblesCrocoVert, casesValidesCrocoVert);
 
   // Initialise les crocodiles
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
@@ -1110,10 +1132,10 @@ export function update(): void {
     const croco = lesCrocos[i];
     if (croco.minuteurDepl == 0) {
       const couleur = couleursCrocos[i];
-      deplaceCroco(croco, couleur, i);
-      const delai =
+      déplaceCroco(croco, couleur, i);
+      const délai =
         croco.attaque == 1 ? ((CROCO_DEPL_DELAI / 2) as u8) : CROCO_DEPL_DELAI;
-      croco.minuteurDepl = delai == 0 ? 1 : delai;
+      croco.minuteurDepl = délai == 0 ? 1 : délai;
     }
   }
 
@@ -1208,15 +1230,15 @@ export function draw(): void {
   }
 
   // Dessine les chemins possibles pour chaque croco (pour debug)
-  // for (let i = 0; i < NB_CROCOS; i++) {
-  //   const casesValides = casesValidesCrocos[i];
-  //   for (let j = 0; j < casesValides.length; j++) {
-  //     const pos = casesValides[j];
-  //     const x = (pos & 0xff) as i32;
-  //     const y = ((pos >> 8) & 0xff) as i32;
-  //     fillRect(x * TAILLE_CASE + TAILLE_CASE / 4, y * TAILLE_CASE + TAILLE_CASE / 4, TAILLE_CASE / 2, TAILLE_CASE / 2, couleursCrocos[i]);
-  //   }
-  // }
+  for (let i = 0; i < NB_CROCOS; i++) {
+    const casesValides = casesValidesCrocos[i];
+    for (let j = 0; j < casesValides.length; j++) {
+      const pos = casesValides[j];
+      const x = (pos & 0xff) as i32;
+      const y = ((pos >> 8) & 0xff) as i32;
+      fillRect(x * TAILLE_CASE + TAILLE_CASE / 4, y * TAILLE_CASE + TAILLE_CASE / 4, TAILLE_CASE / 2, TAILLE_CASE / 2, couleursCrocos[i]);
+    }
+  }
 
   if (jeu.etat == EtatJeu.FIN) {
     drawStartMessageBox("IL VA TE MANGER...", Couleurs.MessageBoxFond, Couleurs.MessageBoxTexte);
