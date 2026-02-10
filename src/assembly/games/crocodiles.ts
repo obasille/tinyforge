@@ -5,7 +5,7 @@
 // Attention : Évitez de vous faire attraper par les crocodiles qui patrouillent le niveau.
 // Contrôles : Flèches pour se déplacer, START pour redémarrer.
 
-// Quand le joueur est sur le chemin d'un crocodile (tel qu'identifé par la couleur du pixel correspondant dans le sprite du level), double la vitesse du croco concerné. Utilise CrocoInfo pour stocker la vitesse
+// Quand le joueur est sur le chemin d'un crocodile (tel qu'identifié par la couleur du pixel correspondant dans le sprite du level), double la vitesse du croco concerné. Utilise CrocoInfo pour stocker la vitesse
 
 import {
   Button,
@@ -23,7 +23,6 @@ import {
   getLastSpriteAddress,
   getLastSpriteHeight,
   getLastSpriteWidth,
-  log,
   randomRange,
   readSpriteInfo,
   s,
@@ -55,6 +54,7 @@ enum Couleurs {
   MessageBoxTexte = c(0xffaa00),
   MessageBoxFondVictoire = c(0x1a2a1a),
   MessageBoxTexteVictoire = c(0x00ff00),
+  Joueur = c(0xffff00),
   CrocoRouge = c(0xff0000),
   CrocoViolet = c(0xff00ff),
   CrocoVert = c(0x00ff00),
@@ -64,7 +64,7 @@ enum Couleurs {
   Gamelle = c(0x583de8),
   Tunnel1 = c(0x707070),
   Tunnel2 = c(0x909090),
-  Piège = c(0xffff00),
+  Piège = c(0x804000),
 }
 
 enum Direction {
@@ -117,7 +117,6 @@ class Croco {
   gamelleY: u8;
   gamelleRemplie: u8; // 0 = vide, 1 = remplie
   attaque: u8; // 0 = normal, 1 = attaque
-  casesDepuisChgmDir: u8;
   targetX: u8; // Position X de la cible
   targetY: u8; // Position Y de la cible
 }
@@ -458,52 +457,6 @@ function donneDir(dx: i32, dy: i32): u8 {
   return Direction.IMMOBILE as u8;
 }
 
-const tableauDir = new StaticArray<u8>(4);
-
-function choisisDirValide(x: u8, y: u8, dir: u8, couleur: u32): u8 {
-  let dirRetour = Direction.IMMOBILE as u8;
-  if (dir == Direction.HAUT) dirRetour = Direction.BAS as u8;
-  else if (dir == Direction.BAS) dirRetour = Direction.HAUT as u8;
-  else if (dir == Direction.GAUCHE) dirRetour = Direction.DROITE as u8;
-  else if (dir == Direction.DROITE) dirRetour = Direction.GAUCHE as u8;
-
-  let count: i32 = 0;
-
-  for (let d: u8 = 1; d <= 4; d++) {
-    if (d == dirRetour) continue;
-    if (!dirValidePourCouleur(x, y, d, couleur)) continue;
-    tableauDir[count] = d;
-    count++;
-  }
-
-  if (count == 1) return tableauDir[0];
-  if (count >= 2) {
-    const r = randomRange(count);
-    return tableauDir[r];
-  }
-
-  if (dirRetour != Direction.IMMOBILE && dirValidePourCouleur(x, y, dirRetour, couleur)) {
-    return dirRetour;
-  }
-  return Direction.IMMOBILE as u8;
-}
-
-function dirValidePourCouleur(x: u8, y: u8, dir: u8, couleur: u32): bool {
-  const nx = (x as i32) + deltaDirX(dir);
-  const ny = (y as i32) + deltaDirY(dir);
-  return caseCouleur(nx, ny, couleur);
-}
-
-function dirValidePourCrocoIndex(x: u8, y: u8, dir: u8, indexCroco: i32): bool {
-  const nx = (x as i32) + deltaDirX(dir);
-  const ny = (y as i32) + deltaDirY(dir);
-  
-  if (nx < 0 || nx >= LARGEUR_GRILLE || ny < 0 || ny >= HAUTEUR_GRILLE) return false;
-  
-  const npos = ((ny as u16) << 8) | (nx as u16);
-  return casesValidesCrocos[indexCroco].includes(npos);
-}
-
 function verifiePositionJoueur(px: u8, py: u8): bool {
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
     const croco = lesCrocos[i];
@@ -830,7 +783,6 @@ function initCroco(index: u8, croco: Croco, couleur: u32): void {
   croco.gamelleRemplie = 0; // Gamelles vides au départ
   croco.attaque = 0;
   croco.minuteurDepl = 0;
-  croco.casesDepuisChgmDir = 0;
   croco.targetX = INVALIDE;
   croco.targetY = INVALIDE;
 }
@@ -853,20 +805,52 @@ function assigneGamelle(index: u8): void {
   }
 }
 
-function déplaceCroco(croco: Croco, couleur: u32, indexCroco: i32): void {
-  // Si pas de cible ou cible atteinte, choisir une nouvelle cible
-  if (croco.targetX == INVALIDE || (croco.x == croco.targetX && croco.y == croco.targetY)) {
-    choisiNouvelleCible(croco, casesCiblesCrocos[indexCroco]);
-    if (croco.targetX == INVALIDE) {
-      croco.dir = Direction.IMMOBILE as u8;
-      return;
+function initJoueur(): void {
+  // Trouve toutes les cases avec la couleur Joueur
+  let casesJoueur: u16[] = [];
+  trouveCasesCouleur(Couleurs.Joueur, casesJoueur);
+  
+  // Choisit une case aléatoire parmi les positions Joueur trouvées
+  let spawn: u16;
+  if (casesJoueur.length > 0) {
+    const idx = randomRange(casesJoueur.length);
+    spawn = casesJoueur[idx];
+  } else {
+    // Fallback : centre de la grille si aucune position trouvée
+    warn("Aucune position Joueur trouvée dans le niveau");
+    spawn = (((HAUTEUR_GRILLE / 2) as u16) << 8) | ((LARGEUR_GRILLE / 2) as u16);
+  }
+  
+  joueur.x = (spawn & 0xff) as u8;
+  joueur.y = ((spawn >> 8) & 0xff) as u8;
+  joueur.viandePortee = INVALIDE;
+  joueur.minuteurDepl = 0;
+  joueur.invincible = 0;
+  joueur.dirDepl = Direction.IMMOBILE as u8;
+  joueur.tunnelEtat = 0;
+  joueur.tunnelTimer = 0;
+  joueur.tunnelDestX = INVALIDE;
+  joueur.tunnelDestY = INVALIDE;
+  joueur.startupDelay = 60;
+}
+
+function déplaceCroco(croco: Croco, indexCroco: i32): void {
+  // Si en mode attaque, cibler le joueur
+  if (croco.attaque == 1) {
+    croco.targetX = joueur.x;
+    croco.targetY = joueur.y;
+  } else {
+    // Si pas de cible ou cible atteinte, choisir une nouvelle cible
+    if (croco.targetX == INVALIDE || (croco.x == croco.targetX && croco.y == croco.targetY)) {
+      choisiNouvelleCible(croco, casesCiblesCrocos[indexCroco]);
+      if (croco.targetX == INVALIDE) {
+        croco.dir = Direction.IMMOBILE as u8;
+        return;
+      }
     }
   }
 
   // Trouve le chemin le plus court vers la cible
-  for (let i = 0; i < 100; i++) {
-    const prochaineCase1 = donneProchaineCaseCheminBFS(croco.x + i, croco.y, croco.targetX, croco.targetY);
-  }
   const prochaineCase = donneProchaineCaseCheminBFS(croco.x, croco.y, croco.targetX, croco.targetY);
   
   if (prochaineCase == INVALIDE_POS) {
@@ -876,7 +860,6 @@ function déplaceCroco(croco: Croco, couleur: u32, indexCroco: i32): void {
     return;
   }
   
-  // Le prochain pas est la deuxième position dans le chemin (la première est la position actuelle)
   const prochainX = (prochaineCase & 0xff) as i32;
   const prochainY = ((prochaineCase >> 8) & 0xff) as i32;
   
@@ -888,8 +871,6 @@ function déplaceCroco(croco: Croco, couleur: u32, indexCroco: i32): void {
     return;
   }
 
-  // log("Croco " + indexCroco.toString() + " se déplace vers (" + prochainX.toString() + "," + prochainY.toString() + ") cible (" + croco.targetX.toString() + "," + croco.targetY.toString() + ")");
-  
   // Calcule la direction pour atteindre la prochaine case
   const dx = prochainX - (croco.x as i32);
   const dy = prochainY - (croco.y as i32);
@@ -903,13 +884,6 @@ function déplaceCroco(croco: Croco, couleur: u32, indexCroco: i32): void {
   croco.x = prochainX as u8;
   croco.y = prochainY as u8;
   croco.dir = dir;
-
-  // Met à jour le compteur de cases depuis le dernier changement de direction
-  if (croco.dir != oldDir) {
-    croco.casesDepuisChgmDir = 0;
-  } else if (croco.x != oldX || croco.y != oldY) {
-    croco.casesDepuisChgmDir = (croco.casesDepuisChgmDir + 1) as u8;
-  }
 }
 
 function doneViandePos(index: u8): u16 {
@@ -1010,29 +984,6 @@ export function init(): void {
     return;
   }
 
-  // Initialise le joueur
-  const spawn = trouveNiemePoint(Couleurs.Sol, 0);
-  if (spawn != INVALIDE_POS) {
-    joueur.x = (spawn & 0xff) as u8;
-    joueur.y = ((spawn >> 8) & 0xff) as u8;
-  } else {
-    joueur.x = (LARGEUR_GRILLE / 2) as u8;
-    joueur.y = (HAUTEUR_GRILLE / 2) as u8;
-  }
-  joueur.viandePortee = INVALIDE; // Aucune viande portée au départ
-  joueur.minuteurDepl = 0;
-  joueur.invincible = 0;
-  joueur.dirDepl = Direction.IMMOBILE as u8;
-  joueur.tunnelEtat = 0;
-  joueur.tunnelTimer = 0;
-  joueur.tunnelDestX = INVALIDE;
-  joueur.tunnelDestY = INVALIDE;
-  joueur.startupDelay = 60; // 1 seconde à 60fps
-
-  // Initialise le jeu
-  jeu.etat = EtatJeu.EN_COURS as u8;
-  jeu.vies = VIES_DEPART;
-
   // Trouve toutes les cases colorées pour chaque croco
   trouveCasesCouleur(Couleurs.CrocoRouge, casesCiblesCrocoRouge);
   trouveCasesCouleur(Couleurs.CrocoViolet, casesCiblesCrocoViolet);
@@ -1042,6 +993,9 @@ export function init(): void {
   construireCasesValides(casesCiblesCrocoRouge, casesValidesCrocoRouge);
   construireCasesValides(casesCiblesCrocoViolet, casesValidesCrocoViolet);
   construireCasesValides(casesCiblesCrocoVert, casesValidesCrocoVert);
+
+  // Initialise le joueur (après avoir construit les chemins des crocos)
+  initJoueur();
 
   // Initialise les crocodiles
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
@@ -1070,6 +1024,10 @@ export function init(): void {
   for (let i = 0; i < NB_PIEGES; i++) {
     initPiège(i as u8);
   }
+
+  // Initialise le jeu
+  jeu.etat = EtatJeu.EN_COURS as u8;
+  jeu.vies = VIES_DEPART;
 }
 
 // Mise à jour du jeu
@@ -1131,8 +1089,7 @@ export function update(): void {
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
     const croco = lesCrocos[i];
     if (croco.minuteurDepl == 0) {
-      const couleur = couleursCrocos[i];
-      déplaceCroco(croco, couleur, i);
+      déplaceCroco(croco, i);
       const délai =
         croco.attaque == 1 ? ((CROCO_DEPL_DELAI / 2) as u8) : CROCO_DEPL_DELAI;
       croco.minuteurDepl = délai == 0 ? 1 : délai;
@@ -1230,15 +1187,15 @@ export function draw(): void {
   }
 
   // Dessine les chemins possibles pour chaque croco (pour debug)
-  for (let i = 0; i < NB_CROCOS; i++) {
-    const casesValides = casesValidesCrocos[i];
-    for (let j = 0; j < casesValides.length; j++) {
-      const pos = casesValides[j];
-      const x = (pos & 0xff) as i32;
-      const y = ((pos >> 8) & 0xff) as i32;
-      fillRect(x * TAILLE_CASE + TAILLE_CASE / 4, y * TAILLE_CASE + TAILLE_CASE / 4, TAILLE_CASE / 2, TAILLE_CASE / 2, couleursCrocos[i]);
-    }
-  }
+  // for (let i = 0; i < NB_CROCOS; i++) {
+  //   const casesValides = casesValidesCrocos[i];
+  //   for (let j = 0; j < casesValides.length; j++) {
+  //     const pos = casesValides[j];
+  //     const x = (pos & 0xff) as i32;
+  //     const y = ((pos >> 8) & 0xff) as i32;
+  //     fillRect(x * TAILLE_CASE + TAILLE_CASE / 4, y * TAILLE_CASE + TAILLE_CASE / 4, TAILLE_CASE / 2, TAILLE_CASE / 2, couleursCrocos[i]);
+  //   }
+  // }
 
   if (jeu.etat == EtatJeu.FIN) {
     drawStartMessageBox("IL VA TE MANGER...", Couleurs.MessageBoxFond, Couleurs.MessageBoxTexte);
