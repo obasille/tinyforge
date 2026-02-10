@@ -1,13 +1,21 @@
 // cspell:language en,fr
-import { s, drawSpriteScaled } from "../../sdk";
+import { drawSpriteScaled, readSpriteInfo, getLastSpriteAddress, getLastSpriteWidth, getLastSpriteHeight } from "../../sdk";
 import { LARGEUR_GRILLE, HAUTEUR_GRILLE, Couleurs } from "./types";
 
-export const NIVEAU_1: i32 = s("level1");
-
 let adresseNiveau: usize = 0;
+let levelSpriteId: i32 = -1;
 
-export function initAdresseNiveau(adresse: usize): void {
-  adresseNiveau = adresse;
+export function chargeNiveau(spriteId: i32): boolean {
+  if (!readSpriteInfo(spriteId)) return false;
+  const largeur = getLastSpriteWidth();
+  const hauteur = getLastSpriteHeight();
+  adresseNiveau = getLastSpriteAddress();
+  if (largeur != LARGEUR_GRILLE || hauteur != HAUTEUR_GRILLE) {
+    // warn("Taille niveau != grille");
+    return false;
+  }
+  levelSpriteId = spriteId;
+  return true;
 }
 
 export function litCouleurCase(x: i32, y: i32): u32 {
@@ -33,7 +41,7 @@ export function peutBouger(x: i32, y: i32): bool {
 }
 
 export function dessineGrille(): void {
-  drawSpriteScaled(NIVEAU_1, 0, 0, 16, 16);
+  drawSpriteScaled(levelSpriteId, 0, 0, 16, 16);
 }
 
 export function trouvePointDepart(couleur: u32): u16 {

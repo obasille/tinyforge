@@ -50,7 +50,19 @@ async function runBuild(target) {
 }
 
 function isGameFile(filePath) {
-  return filePath.startsWith(gamesDir + path.sep) && filePath.endsWith('.ts');
+  if (!filePath.startsWith(gamesDir + path.sep) || !filePath.endsWith('.ts')) {
+    return null;
+  }
+  const relativePath = path.relative(gamesDir, filePath);
+  const parts = relativePath.split(path.sep);
+  
+  if (parts.length === 1) {
+    // File directly in games folder - return filename without extension
+    return path.basename(filePath, '.ts');
+  } else {
+    // File in subdirectory - return subdirectory name
+    return parts[0];
+  }
 }
 
 function isSdkFile(filePath) {
@@ -67,9 +79,9 @@ function handleAssemblyChange(filePath) {
     return;
   }
 
-  if (isGameFile(filePath)) {
-    const baseName = path.basename(filePath, '.ts');
-    runBuild(baseName);
+  const gameName = isGameFile(filePath);
+  if (gameName) {
+    runBuild(gameName);
   }
 }
 

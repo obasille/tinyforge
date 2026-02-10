@@ -7,16 +7,11 @@
 
 import {
   Button,
-  HEIGHT,
   WIDTH,
   buttonPressed,
   drawSprite,
   drawStartMessageBox,
   fillRect,
-  getLastSpriteAddress,
-  getLastSpriteHeight,
-  getLastSpriteWidth,
-  readSpriteInfo,
   s,
   warn,
 } from "../sdk";
@@ -30,7 +25,6 @@ import {
   lesTunnels,
   lesPièges,
   couleursCrocos,
-  casesCiblesCrocos,
   casesCiblesCrocoRouge,
   casesCiblesCrocoViolet,
   casesCiblesCrocoVert,
@@ -53,7 +47,7 @@ import {
   INVINCIBLE_TICKS,
 } from "./crocodiles/types";
 
-import { NIVEAU_1, dessineGrille, trouveCasesCouleur, caseCouleur, initAdresseNiveau } from "./crocodiles/level";
+import { chargeNiveau, dessineGrille, trouveCasesCouleur, caseCouleur } from "./crocodiles/level";
 import { construireCasesValides } from "./crocodiles/pathfinding";
 import { verifiePositionJoueur } from "./crocodiles/utils";
 import { initJoueur, deplaceJoueur, dessineTeteJoueur } from "./crocodiles/player";
@@ -73,12 +67,8 @@ import { initPiège, majPièges, verifieCollisionPièges, dessinePiège } from "
 // Initialisation du jeu
 export function init(): void {
   // Charge le niveau
-  if (!readSpriteInfo(NIVEAU_1)) return;
-  const largeur = getLastSpriteWidth();
-  const hauteur = getLastSpriteHeight();
-  initAdresseNiveau(getLastSpriteAddress());
-  if (largeur != LARGEUR_GRILLE || hauteur != HAUTEUR_GRILLE) {
-    warn("Taille niveau != grille");
+  if (!chargeNiveau(s("level1"))) {
+    warn("Échec du chargement du niveau");
     return;
   }
 
