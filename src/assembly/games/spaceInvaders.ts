@@ -8,19 +8,19 @@ import {
   c,
   clearFramebuffer,
   drawNumber,
-  drawString,
   drawStartMessageBox,
+  drawString,
   fillRect,
+  getU16,
   getU8,
   HEIGHT,
   log,
   playSfx,
   RAM_START,
   randomRange,
+  setU16,
   setU8,
   WIDTH,
-  setU16,
-  getU16,
 } from "../sdk";
 
 // === Constants ===

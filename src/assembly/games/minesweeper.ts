@@ -10,7 +10,6 @@ import {
   drawRect,
   drawSprite,
   drawStartMessageBox,
-  s,
   fillCircle,
   fillRect,
   getU8,
@@ -23,6 +22,7 @@ import {
   playSfx,
   RAM_START,
   randomRange,
+  s,
   setU8,
   stopMusic,
 } from "../sdk";

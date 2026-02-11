@@ -19,9 +19,9 @@ export const INVINCIBLE_TICKS: u8 = 180; // ~3s @ 60fps
 export const NB_TUNNELS: i32 = 2;
 export const TUNNEL_CYCLE_TICKS: u16 = 600; // 10s @ 60fps
 export const TUNNEL_ANIM_TICKS: u8 = 12;
-export const NB_PIEGES: i32 = 4;
-export const PIEGE_MIN_TICKS: u16 = 120; // 2s @ 60fps
-export const PIEGE_MAX_TICKS: u16 = 300; // 5s @ 60fps
+export const NB_PIÈGES: i32 = 4;
+export const PIÈGE_MIN_TICKS: u16 = 120; // 2s @ 60fps
+export const PIÈGE_MAX_TICKS: u16 = 300; // 5s @ 60fps
 
 export const INVALIDE: u8 = 0xff;
 export const INVALIDE_POS: u16 = 0xffff;

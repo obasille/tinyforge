@@ -16,12 +16,15 @@
     "invuln",
     "Mathf",
     "Nieme",
+    "offsetof",
     "Pacman",
+    "pathfinding",
     "Platformer",
     "Portee",
     "proch",
     "pset",
     "Tete",
+    "usize",
     "verifie"
   ]
 }

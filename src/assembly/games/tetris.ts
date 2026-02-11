@@ -3,7 +3,6 @@
 
 import {
   Button,
-  RAM_START,
   buttonDown,
   buttonPressed,
   c,
@@ -14,11 +13,12 @@ import {
   drawString,
   fillRect,
   getU8,
+  HEIGHT,
   log,
+  RAM_START,
   randomRange,
   setU8,
   WIDTH,
-  HEIGHT,
 } from "../sdk";
 
 // === Constants ===

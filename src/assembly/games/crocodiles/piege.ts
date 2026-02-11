@@ -16,9 +16,9 @@ import {
   joueur,
   LARGEUR_GRILLE,
   lesPièges,
-  NB_PIEGES,
-  PIEGE_MAX_TICKS,
-  PIEGE_MIN_TICKS,
+  NB_PIÈGES,
+  PIÈGE_MAX_TICKS,
+  PIÈGE_MIN_TICKS,
   Piège,
   TAILLE_CASE,
 } from "./types";
@@ -37,7 +37,7 @@ export function initPiège(index: u8): void {
           piège.actif = 0; // Commence désactivé
           piège.present = 1;
           // Timer aléatoire initial entre 2 et 5 secondes
-          piège.timer = (PIEGE_MIN_TICKS + randomRange((PIEGE_MAX_TICKS - PIEGE_MIN_TICKS) as i32)) as u16;
+          piège.timer = (PIÈGE_MIN_TICKS + randomRange((PIÈGE_MAX_TICKS - PIÈGE_MIN_TICKS) as i32)) as u16;
           return;
         }
         count++;
@@ -54,7 +54,7 @@ export function initPiège(index: u8): void {
 }
 
 export function majPièges(): void {
-  for (let i: i32 = 0; i < NB_PIEGES; i++) {
+  for (let i: i32 = 0; i < NB_PIÈGES; i++) {
     const piège = lesPièges[i];
     if (!piège.present) continue;
     
@@ -64,7 +64,7 @@ export function majPièges(): void {
       // Change l'état du piège
       piège.actif = piège.actif == 1 ? 0 : 1;
       // Nouveau timer aléatoire entre 2 et 5 secondes
-      piège.timer = (PIEGE_MIN_TICKS + randomRange((PIEGE_MAX_TICKS - PIEGE_MIN_TICKS) as i32)) as u16;
+      piège.timer = (PIÈGE_MIN_TICKS + randomRange((PIÈGE_MAX_TICKS - PIÈGE_MIN_TICKS) as i32)) as u16;
     }
   }
 }
@@ -72,7 +72,7 @@ export function majPièges(): void {
 export function verifieCollisionPièges(): void {
   if (joueur.invincible > 0) return;
   
-  for (let i: i32 = 0; i < NB_PIEGES; i++) {
+  for (let i: i32 = 0; i < NB_PIÈGES; i++) {
     const piège = lesPièges[i];
     if (!piège.present || !piège.actif) continue;
     

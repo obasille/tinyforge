@@ -39,7 +39,7 @@ import {
   lesTunnels,
   lesViandes,
   NB_CROCOS,
-  NB_PIEGES,
+  NB_PIÈGES,
   NB_TUNNELS,
   TAILLE_CASE,
   TUNNEL_ANIM_TICKS,
@@ -84,7 +84,7 @@ import {
   dessineGamelle,
   dessineViande,
   initViande,
-  ramasseViande
+  ramasseViande,
 } from "./crocodiles/viande";
 
 // === Cycle de vie ===
@@ -134,7 +134,7 @@ export function init(): void {
   }
 
   // Initialise les pièges
-  for (let i = 0; i < NB_PIEGES; i++) {
+  for (let i = 0; i < NB_PIÈGES; i++) {
     initPiège(i as u8);
   }
 
@@ -255,7 +255,7 @@ export function draw(): void {
   }
 
   // Dessine les pièges
-  for (let i: i32 = 0; i < NB_PIEGES; i++) {
+  for (let i: i32 = 0; i < NB_PIÈGES; i++) {
     dessinePiège(lesPièges[i]);
   }
 
