@@ -1,9 +1,5 @@
 // cspell:language en,fr
-import {
-  drawSprite,
-  s,
-  warn,
-} from "../../sdk";
+import { drawSprite, s, warn } from "../../sdk";
 
 import { litCouleurCase } from "./level";
 import {
@@ -25,12 +21,12 @@ import {
 export function initTunnel(index: u8): void {
   const tunnel = lesTunnels[index];
   const couleur = index == 0 ? Couleurs.Tunnel1 : Couleurs.Tunnel2;
-  
+
   // Trouve tous les pixels de cette couleur
   let count: i32 = 0;
   let pos0: u16 = INVALIDE_POS;
   let pos1: u16 = INVALIDE_POS;
-  
+
   for (let y: i32 = 0; y < HAUTEUR_GRILLE; y++) {
     for (let x: i32 = 0; x < LARGEUR_GRILLE; x++) {
       if (litCouleurCase(x, y) == couleur) {
@@ -43,14 +39,20 @@ export function initTunnel(index: u8): void {
       }
     }
   }
-  
+
   // Log des avertissements si nécessaire
   if (count == 1) {
     warn("Tunnel " + index.toString() + ": seulement 1 pixel trouvé");
   } else if (count > 2) {
-    warn("Tunnel " + index.toString() + ": " + count.toString() + " pixels trouvés (2 attendus)");
+    warn(
+      "Tunnel " +
+        index.toString() +
+        ": " +
+        count.toString() +
+        " pixels trouvés (2 attendus)",
+    );
   }
-  
+
   // Configure le tunnel si exactement 2 pixels trouvés
   if (count == 2) {
     tunnel.x0 = (pos0 & 0xff) as u8;
@@ -98,11 +100,11 @@ export function essaieTeleportTunnel(): void {
 
   let destX = INVALIDE;
   let destY = INVALIDE;
-  
+
   for (let i: i32 = 0; i < NB_TUNNELS; i++) {
     const t = lesTunnels[i];
     if (!t.present || !t.ouvert) continue;
-    
+
     if (px == t.x0 && py == t.y0) {
       destX = t.x1;
       destY = t.y1;

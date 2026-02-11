@@ -7,11 +7,7 @@ import {
   readSpriteInfo,
 } from "../../sdk";
 
-import {
-  Couleurs,
-  HAUTEUR_GRILLE,
-  LARGEUR_GRILLE,
-} from "./types";
+import { Couleurs, HAUTEUR_GRILLE, LARGEUR_GRILLE } from "./types";
 
 let adresseNiveau: usize = 0;
 let levelSpriteId: i32 = -1;

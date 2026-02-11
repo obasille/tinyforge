@@ -25,15 +25,15 @@ import {
 
 @unmanaged
 class Vars {
-  playerX: i32;     // 0
-  playerY: i32;     // 4
-  animFrame: i32;   // 8
+  playerX: i32; // 0
+  playerY: i32; // 4
+  animFrame: i32; // 8
 }
 
 const vars = changetype<Vars>(RAM_START);
 
 // === lifecycle ===
-  
+
 export function init(): void {
   clearFramebuffer(c(0xff000000)); // black
 
@@ -77,7 +77,7 @@ export function draw(): void {
   drawSpriteScaled(s("level1"), 0, 0, 16, 16);
 
   const speed = 0.3;
-  const i = <u32>Math.floor(vars.animFrame * speed / 2) % 9;
+  const i = <u32>Math.floor((vars.animFrame * speed) / 2) % 9;
   const o = <u32>Math.floor(vars.animFrame * speed) % 350;
   drawSprite(s("dino", i as i32, 0), -30 + o, 10, true, true); // draw sprite at (10,10)
   drawNumber(1, 30, i, c(0x0000ff)); // draw animation frame count

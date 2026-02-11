@@ -1,10 +1,6 @@
-// @ts-ignore - No type definitions available for @assemblyscript/loader
+// @ts-expect-error - No type definitions available for @assemblyscript/loader
 import * as loader from '@assemblyscript/loader';
-import {
-  INPUT_ADDR,
-  MOUSE_ADDR,
-  SDK_RNG_SEED_ADDR,
-} from '../memory-map.js';
+import { INPUT_ADDR, MOUSE_ADDR, SDK_RNG_SEED_ADDR } from '../memory-map.js';
 import { audioManager } from './audio-manager.js';
 import { addConsoleEntry } from './console-panel.js';
 import { spriteManager } from './sprite-manager.js';
@@ -30,30 +26,31 @@ const requireElement = <T extends HTMLElement>(id: string): T => {
   return el as T;
 };
 
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js");
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js');
   });
 }
 
 const getOrientationAngle = (): number => {
-  const legacyOrientation = (window as Window & { orientation?: number }).orientation;
+  const legacyOrientation = (window as Window & { orientation?: number })
+    .orientation;
   return screen.orientation?.angle ?? legacyOrientation ?? 0;
 };
 
 const setLandscapeClass = (): void => {
   const angle = getOrientationAngle();
-  document.body.classList.toggle("landscape-left", angle === 90);
-  document.body.classList.toggle("landscape-right", angle === 270);
+  document.body.classList.toggle('landscape-left', angle === 90);
+  document.body.classList.toggle('landscape-right', angle === 270);
 };
 
-window.addEventListener("orientationchange", setLandscapeClass);
-window.addEventListener("load", setLandscapeClass);
+window.addEventListener('orientationchange', setLandscapeClass);
+window.addEventListener('load', setLandscapeClass);
 
-const canvas = requireElement<HTMLCanvasElement>("screen");
-const ctx = canvas.getContext("2d", { alpha: false });
+const canvas = requireElement<HTMLCanvasElement>('screen');
+const ctx = canvas.getContext('2d', { alpha: false });
 if (!ctx) {
-  throw new Error("Failed to acquire 2D rendering context.");
+  throw new Error('Failed to acquire 2D rendering context.');
 }
 const ctx2d = ctx;
 
@@ -64,8 +61,8 @@ let hasAborted = false;
 let animationFrameId: number | null = null;
 
 const memory = new WebAssembly.Memory({
-  initial: 16,   // 16 × 64 KB = 1 MB
-  maximum: 16    // fixed, no growth
+  initial: 16, // 16 × 64 KB = 1 MB
+  maximum: 16, // fixed, no growth
 });
 
 function formatGameDisplayName(gameName: string): string {
@@ -105,7 +102,8 @@ function initializeRngSeed(): void {
   const view = new DataView(memory.buffer);
   const current = view.getInt32(SDK_RNG_SEED_ADDR, true);
   if (current === 0) {
-    const seed = (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) & 0x7fffffff;
+    const seed =
+      (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) & 0x7fffffff;
     view.setInt32(SDK_RNG_SEED_ADDR, seed, true);
   }
 }
@@ -120,14 +118,21 @@ const fb32 = new Uint32Array(memory.buffer, 0, WIDTH * HEIGHT);
 const image = new ImageData(fb, WIDTH, HEIGHT);
 
 // Allow external access to memory for tools
-(window as Window & { getMemory?: () => WebAssembly.Memory }).getMemory = () => memory;
+(window as Window & { getMemory?: () => WebAssembly.Memory }).getMemory = () =>
+  memory;
 
 // Open memory viewer in new window
 function openMemoryViewer(): void {
-  const viewer = window.open('memory-viewer.html', 'TinyForge Memory Viewer', 
-    'width=1200,height=800,menubar=no,toolbar=no');
+  const viewer = window.open(
+    'memory-viewer.html',
+    'TinyForge Memory Viewer',
+    'width=1200,height=800,menubar=no,toolbar=no',
+  );
   if (!viewer) {
-    addConsoleEntry('ERROR', 'Failed to open memory viewer. Please allow popups.');
+    addConsoleEntry(
+      'ERROR',
+      'Failed to open memory viewer. Please allow popups.',
+    );
   }
 }
 
@@ -138,22 +143,25 @@ let update: WasmLifecycle | null = null;
 let draw: WasmLifecycle | null = null;
 
 // Load a game cartridge
-async function loadGame(gameName: string, { skipInit = false }: { skipInit?: boolean } = {}): Promise<void> {
+async function loadGame(
+  gameName: string,
+  { skipInit = false }: { skipInit?: boolean } = {},
+): Promise<void> {
   // Stop current game loop
   if (animationFrameId !== null) {
     cancelAnimationFrame(animationFrameId);
     animationFrameId = null;
   }
-  
+
   // Stop any playing music
   audioManager.stopMusic();
-  
+
   hasAborted = false;
   const displayName = formatGameDisplayName(gameName);
   addConsoleEntry('LOG', `Loading ${displayName}...`);
-  
+
   try {
-    const wasm = await loader.instantiateStreaming(
+    const wasm = (await loader.instantiateStreaming(
       fetch(`./assets/cartridges/${gameName}.wasm`),
       {
         env: {
@@ -162,66 +170,89 @@ async function loadGame(gameName: string, { skipInit = false }: { skipInit?: boo
             // See AS __getString implementation in wasm-string.js
             hasAborted = true;
             const getString = (value: number): string =>
-              wasmExports?.__getString ? wasmExports.__getString(value) : String(value);
+              wasmExports?.__getString
+                ? wasmExports.__getString(value)
+                : String(value);
             const msgText = getString(msg);
             const fileText = getString(file);
             const errorMsg = `Abort at ${fileText} ${line}:${column} => ${msgText}`;
             addConsoleEntry('ABORT', errorMsg);
-            console.error("WASM abort:", { msg: msgText, file: fileText, line, column });
+            console.error('WASM abort:', {
+              msg: msgText,
+              file: fileText,
+              line,
+              column,
+            });
           },
           trace: (msg: number) => {
-            const text = wasmExports?.__getString ? wasmExports.__getString(msg) : String(msg);
+            const text = wasmExports?.__getString
+              ? wasmExports.__getString(msg)
+              : String(msg);
             addConsoleEntry('TRACE', text);
           },
           // Fast framebuffer clear using native JS fill()
           clearFramebuffer: (color: number) => {
-            fb32.fill(color | 0xFF000000);
+            fb32.fill(color | 0xff000000);
           },
           // Console logging functions
           'console.log': (msg: number) => {
-            const text = wasmExports?.__getString ? wasmExports.__getString(msg) : String(msg);
+            const text = wasmExports?.__getString
+              ? wasmExports.__getString(msg)
+              : String(msg);
             addConsoleEntry('LOG', text);
           },
           'console.warn': (msg: number) => {
-            const text = wasmExports?.__getString ? wasmExports.__getString(msg) : String(msg);
+            const text = wasmExports?.__getString
+              ? wasmExports.__getString(msg)
+              : String(msg);
             addConsoleEntry('WARN', text);
           },
           'console.error': (msg: number) => {
-            const text = wasmExports?.__getString ? wasmExports.__getString(msg) : String(msg);
+            const text = wasmExports?.__getString
+              ? wasmExports.__getString(msg)
+              : String(msg);
             addConsoleEntry('ERROR', text);
           },
           // Audio functions
           'audio.playSfx': (id: number, volume: number) => {
-            const idString = wasmExports?.__getString ? wasmExports.__getString(id) : String(id);
+            const idString = wasmExports?.__getString
+              ? wasmExports.__getString(id)
+              : String(id);
             audioManager.playSfx(idString, volume);
           },
           'audio.playMusic': (id: number, volume: number) => {
-            const idString = wasmExports?.__getString ? wasmExports.__getString(id) : String(id);
+            const idString = wasmExports?.__getString
+              ? wasmExports.__getString(id)
+              : String(id);
             audioManager.playMusic(idString, volume);
           },
           'audio.stopMusic': () => {
             audioManager.stopMusic();
-          }
-        }
-      }
-    ) as LoaderResult;
+          },
+        },
+      },
+    )) as LoaderResult;
 
     // Capture exports for use in import functions
     wasmExports = wasm.exports;
 
     // Validate required exports
     const required = ['init', 'update', 'draw'] as const;
-    const missing = required.filter((name) => typeof wasm.instance.exports[name] !== 'function');
-    
+    const missing = required.filter(
+      (name) => typeof wasm.instance.exports[name] !== 'function',
+    );
+
     if (missing.length > 0) {
-      throw new Error(`Cartridge missing required exports: ${missing.join(', ')}`);
+      throw new Error(
+        `Cartridge missing required exports: ${missing.join(', ')}`,
+      );
     }
-    
+
     // Assign lifecycle functions
     init = wasm.instance.exports.init ?? null;
     update = wasm.instance.exports.update ?? null;
     draw = wasm.instance.exports.draw ?? null;
-    
+
     // Initialize the game (skip if hot reloading to preserve state)
     if (!skipInit) {
       init?.();
@@ -229,14 +260,13 @@ async function loadGame(gameName: string, { skipInit = false }: { skipInit?: boo
     } else {
       addConsoleEntry('LOG', `${displayName} hot reloaded (memory preserved)`);
     }
-    
+
     // Start game loop
     last = performance.now();
     acc = 0;
     inputMask = 0;
     prevInputMask = 0;
     requestAnimationFrame(frame);
-    
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     addConsoleEntry('ERROR', `Failed to load ${displayName}: ${message}`);
@@ -251,7 +281,7 @@ const GAME_STORAGE_KEY = 'tinyforge.selectedGame';
 function getStoredGame(): string {
   try {
     return localStorage.getItem(GAME_STORAGE_KEY) || '';
-  } catch (e) {
+  } catch {
     return '';
   }
 }
@@ -263,7 +293,7 @@ function setStoredGame(gameName: string): void {
     } else {
       localStorage.removeItem(GAME_STORAGE_KEY);
     }
-  } catch (e) {
+  } catch {
     // Ignore storage errors (private mode, disabled storage, etc.)
   }
 }
@@ -293,7 +323,7 @@ async function fetchWasmGameList(): Promise<string[]> {
       .map((href) => href.split('/').pop() || '')
       .map((file) => file.replace(/\.wasm$/, ''));
     return Array.from(new Set(games)).sort();
-  } catch (e) {
+  } catch {
     return [];
   }
 }
@@ -341,18 +371,18 @@ async function checkWasmUpdate(): Promise<void> {
   try {
     const response = await fetch(`./assets/cartridges/${currentGame}.wasm`, {
       method: 'HEAD',
-      cache: 'no-cache'
+      cache: 'no-cache',
     });
-    
+
     const modified = response.headers.get('Last-Modified');
-    
+
     if (lastModified && modified && modified !== lastModified) {
       lastModified = modified;
       hotReload();
     } else if (!lastModified) {
       lastModified = modified;
     }
-  } catch (e) {
+  } catch {
     // Ignore errors (file might not exist yet, server down, etc.)
   }
 }
@@ -376,14 +406,20 @@ Promise.all([
     const sfxCount = audioManager.getSfxCount();
     const musicCount = audioManager.getMusicCount();
     const size = audioManager.getDataSize();
-    addConsoleEntry('LOG', `Audio system initialized: ${sfxCount} SFX, ${musicCount} music tracks, ${(size / 1024).toFixed(1)} KB`);
+    addConsoleEntry(
+      'LOG',
+      `Audio system initialized: ${sfxCount} SFX, ${musicCount} music tracks, ${(size / 1024).toFixed(1)} KB`,
+    );
   }),
   spriteManager.loadSprites().then(() => {
     const count = spriteManager.getSpriteCount();
     const size = spriteManager.getDataSize();
-    addConsoleEntry('LOG', `Sprite system initialized: ${count} sprites, ${(size / 1024).toFixed(1)} KB`);
+    addConsoleEntry(
+      'LOG',
+      `Sprite system initialized: ${count} sprites, ${(size / 1024).toFixed(1)} KB`,
+    );
   }),
-  populateGameSelector()
+  populateGameSelector(),
 ] as const).then(([, , games]) => {
   // Load game after assets and game list are ready
   addConsoleEntry('LOG', 'All assets loaded, starting game...');
@@ -425,7 +461,7 @@ const pauseBtn = requireElement<HTMLButtonElement>('pause-game');
 function togglePause(): void {
   isPaused = !isPaused;
   pauseBtn.textContent = isPaused ? 'Resume (P)' : 'Pause (P)';
-  
+
   if (isPaused) {
     addConsoleEntry('LOG', 'Game paused');
     // Stop animation loop
@@ -460,7 +496,7 @@ function toggleFullscreen(): void {
   const exitFullscreen = document.exitFullscreen?.bind(document);
 
   if (!document.fullscreenElement && requestFullscreen) {
-    requestFullscreen().catch(err => {
+    requestFullscreen().catch((err) => {
       const message = err instanceof Error ? err.message : String(err);
       addConsoleEntry('ERROR', `Failed to enter fullscreen: ${message}`);
     });
@@ -470,7 +506,9 @@ function toggleFullscreen(): void {
 }
 
 // Fullscreen button
-const fullscreenBtn = document.getElementById('fullscreen-btn') as HTMLButtonElement | null;
+const fullscreenBtn = document.getElementById(
+  'fullscreen-btn',
+) as HTMLButtonElement | null;
 fullscreenBtn?.addEventListener('click', toggleFullscreen);
 
 function formatScreenshotFilename(gameName: string): string {
@@ -509,7 +547,9 @@ function takeScreenshot(): void {
 }
 
 // Screenshot button
-const screenshotBtn = document.getElementById('screenshot-btn') as HTMLButtonElement | null;
+const screenshotBtn = document.getElementById(
+  'screenshot-btn',
+) as HTMLButtonElement | null;
 screenshotBtn?.addEventListener('click', takeScreenshot);
 
 // Keyboard shortcuts: R to restart, P to pause, F for fullscreen, C to copy color
@@ -532,12 +572,15 @@ window.addEventListener('keydown', (e: KeyboardEvent) => {
   } else if ((e.key === 'c' || e.key === 'C') && !e.repeat) {
     const colorValue = colorRgbEl?.textContent;
     if (colorValue && colorValue !== '--') {
-      navigator.clipboard.writeText(colorValue).then(() => {
-        addConsoleEntry('LOG', `Copied color: ${colorValue}`);
-      }).catch(err => {
-        const message = err instanceof Error ? err.message : String(err);
-        addConsoleEntry('ERROR', `Failed to copy color: ${message}`);
-      });
+      navigator.clipboard
+        .writeText(colorValue)
+        .then(() => {
+          addConsoleEntry('LOG', `Copied color: ${colorValue}`);
+        })
+        .catch((err) => {
+          const message = err instanceof Error ? err.message : String(err);
+          addConsoleEntry('ERROR', `Failed to copy color: ${message}`);
+        });
     }
     e.preventDefault();
   }
@@ -545,12 +588,12 @@ window.addEventListener('keydown', (e: KeyboardEvent) => {
 
 // Input handling
 const keyMap = {
-  up:    1 << 0,
-  down:  1 << 1,
-  left:  1 << 2,
+  up: 1 << 0,
+  down: 1 << 1,
+  left: 1 << 2,
   right: 1 << 3,
-  a:     1 << 4,
-  b:     1 << 5,
+  a: 1 << 4,
+  b: 1 << 5,
   start: 1 << 6,
 } as const;
 
@@ -569,7 +612,7 @@ let inputMask = 0;
 let prevInputMask = 0;
 let isPaused = false;
 
-const blockTouchScroll = window.matchMedia("(pointer: coarse)").matches;
+const blockTouchScroll = window.matchMedia('(pointer: coarse)').matches;
 const preventIfTouchScrollBlocked = (event: Event): void => {
   if (blockTouchScroll) {
     event.preventDefault();
@@ -585,7 +628,7 @@ let mouseY = -1;
 let mouseButtons = 0;
 let prevMouseButtons = 0;
 
-window.addEventListener("keydown", (e: KeyboardEvent) => {
+window.addEventListener('keydown', (e: KeyboardEvent) => {
   const mapped = keyCodeMap[e.code];
   if (mapped !== undefined) {
     inputMask |= mapped;
@@ -593,7 +636,7 @@ window.addEventListener("keydown", (e: KeyboardEvent) => {
   }
 });
 
-window.addEventListener("keyup", (e: KeyboardEvent) => {
+window.addEventListener('keyup', (e: KeyboardEvent) => {
   const mapped = keyCodeMap[e.code];
   if (mapped !== undefined) {
     inputMask &= ~mapped;
@@ -640,12 +683,12 @@ const updateMouseFromClient = (clientX: number, clientY: number): void => {
 };
 
 // Update mouse position when cursor moves over canvas
-canvas.addEventListener("mousemove", (e: MouseEvent) => {
+canvas.addEventListener('mousemove', (e: MouseEvent) => {
   updateMouseFromClient(e.clientX, e.clientY);
 });
 
 // Set coordinates to -1 when mouse leaves canvas
-canvas.addEventListener("mouseleave", () => {
+canvas.addEventListener('mouseleave', () => {
   mouseX = -1;
   mouseY = -1;
 });
@@ -656,15 +699,15 @@ function mapMouseButton(button: number): number {
 }
 
 // Track button presses (bit 0=left, bit 1=right, bit 2=middle)
-canvas.addEventListener("mousedown", (e: MouseEvent) => {
+canvas.addEventListener('mousedown', (e: MouseEvent) => {
   const btn = mapMouseButton(e.button);
   if (btn !== -1) {
-    mouseButtons |= (1 << btn);
+    mouseButtons |= 1 << btn;
     e.preventDefault();
   }
 });
 
-canvas.addEventListener("mouseup", (e: MouseEvent) => {
+canvas.addEventListener('mouseup', (e: MouseEvent) => {
   const btn = mapMouseButton(e.button);
   if (btn !== -1) {
     mouseButtons &= ~(1 << btn);
@@ -673,65 +716,95 @@ canvas.addEventListener("mouseup", (e: MouseEvent) => {
 });
 
 // Touch input: map taps to left mouse button.
-canvas.addEventListener("touchstart", (event: TouchEvent) => {
-  preventIfTouchScrollBlocked(event);
-  const touch = event.touches[0];
-  if (!touch) return;
-  updateMouseFromClient(touch.clientX, touch.clientY);
-  mouseButtons |= 1;
-}, { passive: false });
+canvas.addEventListener(
+  'touchstart',
+  (event: TouchEvent) => {
+    preventIfTouchScrollBlocked(event);
+    const touch = event.touches[0];
+    if (!touch) return;
+    updateMouseFromClient(touch.clientX, touch.clientY);
+    mouseButtons |= 1;
+  },
+  { passive: false },
+);
 
-canvas.addEventListener("touchmove", (event: TouchEvent) => {
-  preventIfTouchScrollBlocked(event);
-  const touch = event.touches[0];
-  if (!touch) return;
-  updateMouseFromClient(touch.clientX, touch.clientY);
-}, { passive: false });
+canvas.addEventListener(
+  'touchmove',
+  (event: TouchEvent) => {
+    preventIfTouchScrollBlocked(event);
+    const touch = event.touches[0];
+    if (!touch) return;
+    updateMouseFromClient(touch.clientX, touch.clientY);
+  },
+  { passive: false },
+);
 
-canvas.addEventListener("touchend", (event: TouchEvent) => {
-  preventIfTouchScrollBlocked(event);
-  mouseButtons &= ~1;
-  if (event.touches.length === 0) {
+canvas.addEventListener(
+  'touchend',
+  (event: TouchEvent) => {
+    preventIfTouchScrollBlocked(event);
+    mouseButtons &= ~1;
+    if (event.touches.length === 0) {
+      mouseX = -1;
+      mouseY = -1;
+    }
+  },
+  { passive: false },
+);
+
+canvas.addEventListener(
+  'touchcancel',
+  (event: TouchEvent) => {
+    preventIfTouchScrollBlocked(event);
+    mouseButtons &= ~1;
     mouseX = -1;
     mouseY = -1;
-  }
-}, { passive: false });
-
-canvas.addEventListener("touchcancel", (event: TouchEvent) => {
-  preventIfTouchScrollBlocked(event);
-  mouseButtons &= ~1;
-  mouseX = -1;
-  mouseY = -1;
-}, { passive: false });
+  },
+  { passive: false },
+);
 
 // Onscreen buttons
 
-document.querySelectorAll<HTMLButtonElement>("[data-input]").forEach((button) => {
-  const input = button.dataset.input as keyof typeof keyMap | undefined;
-  if (input && input in keyMap) {
-    const press = () => {
-      inputMask |= keyMap[input];
-    };
-    const release = () => {
-      inputMask &= ~keyMap[input];
-    };
-    button.addEventListener("touchstart", (event: TouchEvent) => {
-      preventIfTouchScrollBlocked(event);
-      press();
-    }, { passive: false });
-    button.addEventListener("touchend", (event: TouchEvent) => {
-      preventIfTouchScrollBlocked(event);
-      release();
-    }, { passive: false });
-    button.addEventListener("touchcancel", (event: TouchEvent) => {
-      preventIfTouchScrollBlocked(event);
-      release();
-    }, { passive: false });
-    button.addEventListener("mousedown", press);
-    button.addEventListener("mouseup", release);
-    button.addEventListener("mouseleave", release);
-  }
-});
+document
+  .querySelectorAll<HTMLButtonElement>('[data-input]')
+  .forEach((button) => {
+    const input = button.dataset.input as keyof typeof keyMap | undefined;
+    if (input && input in keyMap) {
+      const press = () => {
+        inputMask |= keyMap[input];
+      };
+      const release = () => {
+        inputMask &= ~keyMap[input];
+      };
+      button.addEventListener(
+        'touchstart',
+        (event: TouchEvent) => {
+          preventIfTouchScrollBlocked(event);
+          press();
+        },
+        { passive: false },
+      );
+      button.addEventListener(
+        'touchend',
+        (event: TouchEvent) => {
+          preventIfTouchScrollBlocked(event);
+          release();
+        },
+        { passive: false },
+      );
+      button.addEventListener(
+        'touchcancel',
+        (event: TouchEvent) => {
+          preventIfTouchScrollBlocked(event);
+          release();
+        },
+        { passive: false },
+      );
+      button.addEventListener('mousedown', press);
+      button.addEventListener('mouseup', release);
+      button.addEventListener('mouseleave', release);
+    }
+  });
 
 const pressStart = (event: Event): void => {
   preventIfTouchScrollBlocked(event);
@@ -741,44 +814,50 @@ const releaseStart = (event: Event): void => {
   preventIfTouchScrollBlocked(event);
   inputMask &= ~keyMap.start;
 };
-canvas.addEventListener("mousedown", pressStart);
-window.addEventListener("mouseup", releaseStart);
+canvas.addEventListener('mousedown', pressStart);
+window.addEventListener('mouseup', releaseStart);
 
 // Next button: switch to next game
 document
   .querySelectorAll<HTMLButtonElement>("[data-action='next']")
   .forEach((button) => {
     const press = () => {
-      const select = document.getElementById('game-select') as HTMLSelectElement;
+      const select = document.getElementById(
+        'game-select',
+      ) as HTMLSelectElement;
       if (select) {
         const options = Array.from(select.options);
-        const idx = options.findIndex(opt => opt.value === select.value);
+        const idx = options.findIndex((opt) => opt.value === select.value);
         const nextIdx = (idx + 1) % options.length;
         select.selectedIndex = nextIdx;
         select.dispatchEvent(new Event('change'));
       }
     };
-    button.addEventListener("touchstart", (event: TouchEvent) => {
-      preventIfTouchScrollBlocked(event);
-      press();
-    }, { passive: false });
-    button.addEventListener("mousedown", press);
+    button.addEventListener(
+      'touchstart',
+      (event: TouchEvent) => {
+        preventIfTouchScrollBlocked(event);
+        press();
+      },
+      { passive: false },
+    );
+    button.addEventListener('mousedown', press);
   });
 
 // Prevent context menu on right-click
-canvas.addEventListener("contextmenu", (e: MouseEvent) => {
+canvas.addEventListener('contextmenu', (e: MouseEvent) => {
   e.preventDefault();
 });
 
 // === Fixed Timestep Loop ===
 
 // This ensures deterministic game logic regardless of actual frame rate
-const TICK_HZ = 60;                    // Target simulation rate (60 updates per second)
-const DT = 1000 / TICK_HZ;             // Delta time per update (16.67ms)
-const MAX_UPDATES = 5;                 // Safety cap to prevent spiral of death
+const TICK_HZ = 60; // Target simulation rate (60 updates per second)
+const DT = 1000 / TICK_HZ; // Delta time per update (16.67ms)
+const MAX_UPDATES = 5; // Safety cap to prevent spiral of death
 
-let last = performance.now();          // Last frame timestamp
-let acc = 0;                           // Time accumulator for fixed timestep
+let last = performance.now(); // Last frame timestamp
+let acc = 0; // Time accumulator for fixed timestep
 
 // === Dev Tools ===
 let fps = 60;
@@ -788,9 +867,9 @@ let lastFpsUpdate = performance.now();
 // Performance timing
 let avgUpdateTime = 0;
 let avgDrawTime = 0;
-const PERF_SAMPLE_COUNT = 60;  // Average over 60 frames
-let updateTimeSamples: number[] = [];
-let drawTimeSamples: number[] = [];
+const PERF_SAMPLE_COUNT = 60; // Average over 60 frames
+const updateTimeSamples: number[] = [];
+const drawTimeSamples: number[] = [];
 
 const fpsEl = requireElement<HTMLElement>('fps');
 const updateTimeEl = requireElement<HTMLElement>('update-time');
@@ -802,10 +881,18 @@ const mouseEl = requireElement<HTMLElement>('mouse');
 const mouseButtonsEl = requireElement<HTMLElement>('mouse-buttons');
 const colorArgbEl = requireElement<HTMLElement>('color-argb');
 const colorRgbEl = requireElement<HTMLElement>('color-rgb');
-const colorSwatchEl = document.getElementById('color-swatch') as HTMLSpanElement | null;
-const rngSeedInput = document.getElementById('rng-seed-input') as HTMLInputElement | null;
-const rngSeedApply = document.getElementById('rng-seed-apply') as HTMLButtonElement | null;
-const rngSeedRandom = document.getElementById('rng-seed-random') as HTMLButtonElement | null;
+const colorSwatchEl = document.getElementById(
+  'color-swatch',
+) as HTMLSpanElement | null;
+const rngSeedInput = document.getElementById(
+  'rng-seed-input',
+) as HTMLInputElement | null;
+const rngSeedApply = document.getElementById(
+  'rng-seed-apply',
+) as HTMLButtonElement | null;
+const rngSeedRandom = document.getElementById(
+  'rng-seed-random',
+) as HTMLButtonElement | null;
 
 const applyRngSeedInput = (): void => {
   if (!rngSeedInput) return;
@@ -820,7 +907,8 @@ const applyRngSeedInput = (): void => {
 };
 
 const randomizeRngSeed = (): void => {
-  const nextSeed = (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) & 0x7fffffff;
+  const nextSeed =
+    (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) & 0x7fffffff;
   setRngSeed(nextSeed);
   if (rngSeedInput) {
     rngSeedInput.value = formatSeedHex(nextSeed);
@@ -846,7 +934,7 @@ if (rngSeedInput) {
 
 // Pause game when tab is hidden, resume when visible
 // This stops the animation loop entirely to save CPU when tab is in background
-document.addEventListener("visibilitychange", () => {
+document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     // Tab hidden - animation loop will stop naturally
     if (animationFrameId !== null) {
@@ -856,16 +944,16 @@ document.addEventListener("visibilitychange", () => {
   } else {
     // Tab visible - restart animation loop
     if (!animationFrameId && !hasAborted) {
-      last = performance.now();          // Reset reference time on resume
-      acc = 0;                           // Clear accumulated time
+      last = performance.now(); // Reset reference time on resume
+      acc = 0; // Clear accumulated time
       animationFrameId = requestAnimationFrame(frame);
     }
   }
 });
 
 function frame(now: number): void {
-  animationFrameId = null;  // Clear ID since this frame is running
-  
+  animationFrameId = null; // Clear ID since this frame is running
+
   // Stop if WASM has aborted
   if (hasAborted) {
     return;
@@ -889,32 +977,32 @@ function frame(now: number): void {
   // Multiple updates may occur per frame if rendering is slow
   let updates = 0;
   let totalUpdateTime = 0;
-  
+
   while (acc >= DT && updates < MAX_UPDATES && !hasAborted) {
     try {
       const updateStart = performance.now();
-      
+
       // Write input state to WASM memory
       const inputView = new DataView(memory.buffer);
-      
+
       // Keyboard input
       // Layout: [u8 buttons][u8 prev_buttons]
       inputView.setUint8(INPUT_ADDR, inputMask);
       inputView.setUint8(INPUT_ADDR + 1, prevInputMask);
-      
+
       // Mouse input
       // Layout: [i16 x][i16 y][u8 buttons][u8 prev_buttons]
       inputView.setInt16(MOUSE_ADDR, mouseX, true);
       inputView.setInt16(MOUSE_ADDR + 2, mouseY, true);
       inputView.setUint8(MOUSE_ADDR + 4, mouseButtons);
       inputView.setUint8(MOUSE_ADDR + 5, prevMouseButtons);
-      
-      update();                          // Game logic update
-      prevInputMask = inputMask;         // Track previous input state
-      prevMouseButtons = mouseButtons;   // Track previous mouse state
-      acc -= DT;                         // Consume one timestep
+
+      update(); // Game logic update
+      prevInputMask = inputMask; // Track previous input state
+      prevMouseButtons = mouseButtons; // Track previous mouse state
+      acc -= DT; // Consume one timestep
       updates++;
-      
+
       totalUpdateTime += performance.now() - updateStart;
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -923,12 +1011,12 @@ function frame(now: number): void {
       break;
     }
   }
-  
+
   // If we hit the update cap, skip frames rather than spiraling
   // This prevents the game from freezing while trying to catch up
   if (updates >= MAX_UPDATES) {
-    console.warn("Max updates reached, skipping frames");
-    acc = 0;                           // Reset to prevent runaway
+    console.warn('Max updates reached, skipping frames');
+    acc = 0; // Reset to prevent runaway
   }
 
   // Render current state (runs at display refresh rate)
@@ -952,14 +1040,14 @@ function frame(now: number): void {
     if (samples.length > PERF_SAMPLE_COUNT) samples.shift();
     return samples.reduce((a, b) => a + b, 0) / samples.length;
   }
-  
+
   avgUpdateTime = updatePerfMetric(updateTimeSamples, totalUpdateTime);
   avgDrawTime = updatePerfMetric(drawTimeSamples, drawTime);
 
   // Update FPS counter
   frameCount++;
   if (now - lastFpsUpdate >= 1000) {
-    fps = Math.round(frameCount * 1000 / (now - lastFpsUpdate));
+    fps = Math.round((frameCount * 1000) / (now - lastFpsUpdate));
     frameCount = 0;
     lastFpsUpdate = now;
   }
@@ -970,9 +1058,11 @@ function frame(now: number): void {
   drawTimeEl.textContent = avgDrawTime.toFixed(2);
   updatesEl.textContent = String(updates);
   accEl.textContent = String(Math.round(acc));
-  inputEl.textContent = '0x' + inputMask.toString(16).padStart(2, '0').toUpperCase();
+  inputEl.textContent =
+    '0x' + inputMask.toString(16).padStart(2, '0').toUpperCase();
   mouseEl.textContent = `${mouseX}, ${mouseY}`;
-  mouseButtonsEl.textContent = '0x' + mouseButtons.toString(16).padStart(2, '0').toUpperCase();
+  mouseButtonsEl.textContent =
+    '0x' + mouseButtons.toString(16).padStart(2, '0').toUpperCase();
   if (colorArgbEl && colorRgbEl) {
     if (mouseX >= 0 && mouseX < WIDTH && mouseY >= 0 && mouseY < HEIGHT) {
       const pixel = fb32[mouseY * WIDTH + mouseX] >>> 0;
@@ -981,7 +1071,8 @@ function frame(now: number): void {
       const b = (pixel >> 16) & 0xff;
       const a = (pixel >>> 24) & 0xff;
       const argb = '0x' + pixel.toString(16).toUpperCase().padStart(8, '0');
-      const rgb = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`.toUpperCase();
+      const rgb =
+        `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`.toUpperCase();
       colorArgbEl.textContent = argb;
       colorRgbEl.textContent = rgb;
       if (colorSwatchEl) {

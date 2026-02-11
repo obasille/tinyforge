@@ -61,16 +61,16 @@ enum GameState {
 // === RAM Layout ===
 @unmanaged
 class Vars {
-  paddleX: f32;       // 0
-  ballX: f32;         // 4
-  ballY: f32;         // 8
-  ballVX: f32;        // 12
-  ballVY: f32;        // 16
-  state: u8;          // 20
-  lives: i32;         // 24
-  score: i32;         // 28
+  paddleX: f32; // 0
+  ballX: f32; // 4
+  ballY: f32; // 8
+  ballVX: f32; // 12
+  ballVY: f32; // 16
+  state: u8; // 20
+  lives: i32; // 24
+  score: i32; // 28
   bricksRemaining: i32; // 32
-  ballLaunched: u8;   // 36
+  ballLaunched: u8; // 36
 }
 
 const vars = changetype<Vars>(RAM_START);
@@ -97,8 +97,9 @@ function initBricks(): void {
 
 function resetBall(): void {
   // Position ball on paddle
-  vars.ballX = vars.paddleX + ((PADDLE_WIDTH / 2) as f32) - ((BALL_SIZE / 2) as f32);
-  vars.ballY = ((PADDLE_Y - BALL_SIZE) as f32);
+  vars.ballX =
+    vars.paddleX + ((PADDLE_WIDTH / 2) as f32) - ((BALL_SIZE / 2) as f32);
+  vars.ballY = (PADDLE_Y - BALL_SIZE) as f32;
   vars.ballVX = 0.0;
   vars.ballVY = 0.0;
   vars.ballLaunched = 0;
@@ -145,20 +146,21 @@ function checkCollisions(): void {
     ballX + (BALL_SIZE as f32) >= paddleX &&
     ballX <= paddleX + (PADDLE_WIDTH as f32)
   ) {
-    vars.ballY = ((PADDLE_Y - BALL_SIZE) as f32);
-    
+    vars.ballY = (PADDLE_Y - BALL_SIZE) as f32;
+
     // Bounce angle based on hit position
-    const hitPos = (ballX + ((BALL_SIZE / 2) as f32) - paddleX) / (PADDLE_WIDTH as f32);
+    const hitPos =
+      (ballX + ((BALL_SIZE / 2) as f32) - paddleX) / (PADDLE_WIDTH as f32);
     ballVX = (hitPos - 0.5) * 6.0;
     ballVY = -Mathf.abs(ballVY);
-    
+
     // Limit speed
     const speed = Mathf.sqrt(ballVX * ballVX + ballVY * ballVY);
     if (speed > BALL_SPEED_MAX) {
       ballVX = (ballVX * BALL_SPEED_MAX) / speed;
       ballVY = (ballVY * BALL_SPEED_MAX) / speed;
     }
-    
+
     vars.ballVX = ballVX;
     vars.ballVY = ballVY;
     playSfx("tap", 0.4);
@@ -168,7 +170,7 @@ function checkCollisions(): void {
   if (ballY > (HEIGHT as f32)) {
     vars.lives--;
     playSfx("explosion", 0.2);
-    
+
     if (vars.lives <= 0) {
       vars.state = GameState.GAME_OVER as u8;
       log("Game Over!");
@@ -178,16 +180,13 @@ function checkCollisions(): void {
   }
 
   // Brick collisions
-  const ballCenterX = ballX + ((BALL_SIZE / 2) as f32);
-  const ballCenterY = ballY + ((BALL_SIZE / 2) as f32);
-  
   for (let row: i32 = 0; row < BRICK_ROWS; row++) {
     for (let col: i32 = 0; col < BRICK_COLS; col++) {
       if (getBrick(col, row) == 0) continue;
-      
+
       const brickX = BRICK_OFFSET_X + col * BRICK_WIDTH;
       const brickY = BRICK_OFFSET_Y + row * BRICK_HEIGHT;
-      
+
       // Check collision with brick
       if (
         ballX + (BALL_SIZE as f32) >= (brickX as f32) &&
@@ -200,29 +199,29 @@ function checkCollisions(): void {
         vars.bricksRemaining--;
         vars.score += 10 * (row + 1); // Higher rows worth more
         playSfx("tap", 0.5);
-        
+
         // Determine bounce direction based on hit side
         const prevBallX = ballX - ballVX;
         const prevBallY = ballY - ballVY;
-        
+
         const fromLeft = prevBallX + (BALL_SIZE as f32) <= (brickX as f32);
         const fromRight = prevBallX >= ((brickX + BRICK_WIDTH) as f32);
         const fromTop = prevBallY + (BALL_SIZE as f32) <= (brickY as f32);
         const fromBottom = prevBallY >= ((brickY + BRICK_HEIGHT) as f32);
-        
+
         if (fromLeft || fromRight) {
           vars.ballVX = -ballVX;
         }
         if (fromTop || fromBottom) {
           vars.ballVY = -ballVY;
         }
-        
+
         // Check for level complete
         if (vars.bricksRemaining == 0) {
           vars.state = GameState.LEVEL_COMPLETE as u8;
           log("Level Complete!");
         }
-        
+
         return; // Only handle one brick per frame
       }
     }
@@ -233,13 +232,13 @@ function checkCollisions(): void {
 export function init(): void {
   // Initialize paddle
   vars.paddleX = (WIDTH / 2 - PADDLE_WIDTH / 2) as f32;
-  
+
   // Initialize ball
   resetBall();
-  
+
   // Initialize bricks
   initBricks();
-  
+
   // Initialize game state
   vars.lives = STARTING_LIVES;
   vars.score = 0;
@@ -248,19 +247,19 @@ export function init(): void {
 
 export function update(): void {
   const state = vars.state;
-  
+
   // Start game from start screen
   if (state == GameState.START_SCREEN && buttonPressed(Button.START)) {
     vars.state = GameState.PLAYING as u8;
     return;
   }
-  
+
   // Restart from game over
   if (state == GameState.GAME_OVER && buttonPressed(Button.START)) {
     init();
     return;
   }
-  
+
   // Next level from level complete
   if (state == GameState.LEVEL_COMPLETE && buttonPressed(Button.START)) {
     initBricks();
@@ -268,9 +267,9 @@ export function update(): void {
     vars.state = GameState.PLAYING as u8;
     return;
   }
-  
+
   if (state != GameState.PLAYING) return;
-  
+
   // Paddle movement
   let paddleX = vars.paddleX;
   if (buttonDown(Button.LEFT)) {
@@ -284,12 +283,12 @@ export function update(): void {
     }
   }
   vars.paddleX = paddleX;
-  
+
   // Launch ball
   if (vars.ballLaunched == 0 && buttonPressed(Button.A)) {
     launchBall();
   }
-  
+
   // Update ball position (if launched)
   if (vars.ballLaunched == 1) {
     vars.ballX += vars.ballVX;
@@ -297,18 +296,19 @@ export function update(): void {
     checkCollisions();
   } else {
     // Keep ball on paddle before launch
-    vars.ballX = vars.paddleX + ((PADDLE_WIDTH / 2) as f32) - ((BALL_SIZE / 2) as f32);
+    vars.ballX =
+      vars.paddleX + ((PADDLE_WIDTH / 2) as f32) - ((BALL_SIZE / 2) as f32);
   }
 }
 
 export function draw(): void {
   clearFramebuffer(c(0x0a0a0a));
-  
+
   const state = vars.state;
   const paddleX = vars.paddleX as i32;
   const ballX = vars.ballX as i32;
   const ballY = vars.ballY as i32;
-  
+
   // Draw bricks
   for (let row: i32 = 0; row < BRICK_ROWS; row++) {
     const color = c(BRICK_COLORS[row]);
@@ -316,25 +316,31 @@ export function draw(): void {
       if (getBrick(col, row) == 1) {
         const brickX = BRICK_OFFSET_X + col * BRICK_WIDTH;
         const brickY = BRICK_OFFSET_Y + row * BRICK_HEIGHT;
-        fillRect(brickX + 1, brickY + 1, BRICK_WIDTH - 2, BRICK_HEIGHT - 2, color);
+        fillRect(
+          brickX + 1,
+          brickY + 1,
+          BRICK_WIDTH - 2,
+          BRICK_HEIGHT - 2,
+          color,
+        );
         drawRect(brickX, brickY, BRICK_WIDTH, BRICK_HEIGHT, c(0x444444));
       }
     }
   }
-  
+
   // Draw paddle
   fillRect(paddleX, PADDLE_Y, PADDLE_WIDTH, PADDLE_HEIGHT, c(0x00aaff));
-  
+
   // Draw ball
   fillRect(ballX, ballY, BALL_SIZE, BALL_SIZE, c(0xffffff));
-  
+
   // Draw UI
   drawString(4, 4, "SCORE:", c(0xaaaaaa));
   drawNumber(50, 4, vars.score, c(0xffffff));
-  
+
   drawString(WIDTH - 60, 4, "LIVES:", c(0xaaaaaa));
   drawNumber(WIDTH - 15, 4, vars.lives, c(0xff0000));
-  
+
   // Game messages
   if (state == GameState.START_SCREEN) {
     drawStartMessageBox("BREAKOUT", c(0x1a1a1a), c(0x00aaff));

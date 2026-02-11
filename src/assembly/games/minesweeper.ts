@@ -52,27 +52,23 @@ enum GameState {
 
 @unmanaged
 class Vars {
-  cursorX: i32;      // 0
-  cursorY: i32;      // 4
-  state: u8;         // 8
+  cursorX: i32; // 0
+  cursorY: i32; // 4
+  state: u8; // 8
   revealedCount: u8; // 9
-  flagCount: u8;     // 10
-  _padding: u8;      // 11
+  flagCount: u8; // 10
+  _padding: u8; // 11
 }
 
 const vars = changetype<Vars>(RAM_START);
 const GRID_START = RAM_START + sizeof<Vars>(); // 100 bytes - grid data (10×10)
 
 // === Grid Helpers ===
-// @ts-expect-error AssemblyScript decorator
-@inline
 function getCellData(x: i32, y: i32): u8 {
   if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return 0;
   return getU8(GRID_START + (y * GRID_SIZE + x));
 }
 
-// @ts-expect-error AssemblyScript decorator
-@inline
 function setCellData(x: i32, y: i32, data: u8): void {
   if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return;
   setU8(GRID_START + (y * GRID_SIZE + x), data);

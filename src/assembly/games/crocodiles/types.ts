@@ -1,10 +1,5 @@
 // cspell:language en,fr
-import {
-  HEIGHT,
-  RAM_START,
-  WIDTH,
-  c,
-} from "../../sdk";
+import { HEIGHT, RAM_START, WIDTH, c } from "../../sdk";
 
 // === Constantes ===
 export const TAILLE_CASE: i32 = 16;
@@ -171,13 +166,21 @@ export const couleursCrocos: u32[] = [
 ];
 
 // cases cibles de chaque croco (format: y<<8 | x)
-export let casesCiblesCrocoRouge: u16[] = [];
-export let casesCiblesCrocoViolet: u16[] = [];
-export let casesCiblesCrocoVert: u16[] = [];
-export const casesCiblesCrocos: u16[][] = [casesCiblesCrocoRouge, casesCiblesCrocoViolet, casesCiblesCrocoVert];
+export const casesCiblesCrocoRouge: u16[] = [];
+export const casesCiblesCrocoViolet: u16[] = [];
+export const casesCiblesCrocoVert: u16[] = [];
+export const casesCiblesCrocos: u16[][] = [
+  casesCiblesCrocoRouge,
+  casesCiblesCrocoViolet,
+  casesCiblesCrocoVert,
+];
 
 // cases valides pour les chemins de chaque croco, calculées au lancement du niveau (format: y<<8 | x)
-export let casesValidesCrocoRouge: u16[] = [];
-export let casesValidesCrocoViolet: u16[] = [];
-export let casesValidesCrocoVert: u16[] = [];
-export const casesValidesCrocos: u16[][] = [casesValidesCrocoRouge, casesValidesCrocoViolet, casesValidesCrocoVert];
+export const casesValidesCrocoRouge: u16[] = [];
+export const casesValidesCrocoViolet: u16[] = [];
+export const casesValidesCrocoVert: u16[] = [];
+export const casesValidesCrocos: u16[][] = [
+  casesValidesCrocoRouge,
+  casesValidesCrocoViolet,
+  casesValidesCrocoVert,
+];

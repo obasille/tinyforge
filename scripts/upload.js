@@ -43,11 +43,16 @@ async function collectFiles(dir) {
   return results;
 }
 
-async function uploadDirectory(client, { localPath, remotePath, required, clean }) {
+async function uploadDirectory(
+  client,
+  { localPath, remotePath, required, clean },
+) {
   const exists = await fileExists(localPath);
   if (!exists) {
     if (required) {
-      throw new Error(`Missing ${path.basename(localPath)}/ directory. Run a build before uploading.`);
+      throw new Error(
+        `Missing ${path.basename(localPath)}/ directory. Run a build before uploading.`,
+      );
     }
     return;
   }
@@ -78,7 +83,10 @@ async function uploadRootFiles(client) {
     if (!entry.isFile()) continue;
     const name = entry.name;
     if (rootFiles.includes(name) || patterns.some((re) => re.test(name))) {
-      await client.uploadFrom(path.join(repoRoot, name), path.posix.join('/', name));
+      await client.uploadFrom(
+        path.join(repoRoot, name),
+        path.posix.join('/', name),
+      );
     }
   }
 }
@@ -99,19 +107,19 @@ try {
     localPath: assetsPath,
     remotePath: '/assets',
     required: true,
-    clean: true
+    clean: true,
   });
   await uploadDirectory(client, {
     localPath: iconsPath,
     remotePath: '/icons',
     required: false,
-    clean: true
+    clean: true,
   });
   await uploadDirectory(client, {
     localPath: distPath,
     remotePath: '/dist',
     required: true,
-    clean: true
+    clean: true,
   });
   console.log('Upload complete.');
 } catch (error) {

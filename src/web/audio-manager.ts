@@ -1,17 +1,14 @@
 // Audio Manager - Handles SFX and Music playback
 //
-// NOTE: Creating the AudioContext in the constructor (before user interaction) 
+// NOTE: Creating the AudioContext in the constructor (before user interaction)
 // will trigger a browser warning: "AudioContext was not allowed to start."
 // This is expected behavior due to browser autoplay policies.
-// 
+//
 // The audio system will still work correctly - audio simply won't play until
 // after the user interacts with the page (clicks start button, presses a key, etc.).
 // Games should call playMusic() after detecting user input, not in init().
 
-import {
-  AssetDescriptor,
-  AssetLoader,
-} from './asset-loader.js';
+import { AssetDescriptor, AssetLoader } from './asset-loader.js';
 import { addConsoleEntry } from './console-panel.js';
 
 class AudioManager {
@@ -23,7 +20,9 @@ class AudioManager {
 
   public constructor() {
     const AudioContextCtor =
-      window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      window.AudioContext ||
+      (window as Window & { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
     if (!AudioContextCtor) {
       throw new Error('AudioContext is not supported in this browser.');
     }
@@ -38,8 +37,10 @@ class AudioManager {
    * @returns {number}
    */
   public getDataSize(): number {
-    return [...this.sfxBuffers.values(), ...this.musicBuffers.values()]
-      .reduce((sum, buf) => sum + buf.length * buf.numberOfChannels * 4, 0);
+    return [...this.sfxBuffers.values(), ...this.musicBuffers.values()].reduce(
+      (sum, buf) => sum + buf.length * buf.numberOfChannels * 4,
+      0,
+    );
   }
 
   /**
@@ -66,9 +67,9 @@ class AudioManager {
       // Load SFX files
       const sfxAssets: AssetDescriptor[] = await AssetLoader.scanDirectory(
         './assets/sfx/',
-        /\.(wav|mp3|ogg)$/i
+        /\.(wav|mp3|ogg)$/i,
       );
-      
+
       for (const asset of sfxAssets) {
         await this.loadAudioFile(this.sfxBuffers, asset.id, asset.url, 'SFX');
       }
@@ -76,11 +77,16 @@ class AudioManager {
       // Load music files
       const musicAssets: AssetDescriptor[] = await AssetLoader.scanDirectory(
         './assets/music/',
-        /\.(wav|mp3|ogg)$/i
+        /\.(wav|mp3|ogg)$/i,
       );
-      
+
       for (const asset of musicAssets) {
-        await this.loadAudioFile(this.musicBuffers, asset.id, asset.url, 'Music');
+        await this.loadAudioFile(
+          this.musicBuffers,
+          asset.id,
+          asset.url,
+          'Music',
+        );
       }
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -95,17 +101,20 @@ class AudioManager {
     bufferMap: Map<string, AudioBuffer>,
     id: string,
     url: string,
-    type: string
+    type: string,
   ): Promise<void> {
     try {
       AssetLoader.checkDuplicate(bufferMap, id, url, type);
-      
+
       const arrayBuffer = await AssetLoader.fetchBinary(url);
       const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
       bufferMap.set(id, audioBuffer);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      addConsoleEntry('WARN', `Failed to load ${type} ${id} from ${url}: ${message}`);
+      addConsoleEntry(
+        'WARN',
+        `Failed to load ${type} ${id} from ${url}: ${message}`,
+      );
     }
   }
 
@@ -121,10 +130,10 @@ class AudioManager {
 
     const source = this.audioContext.createBufferSource();
     const gainNode = this.audioContext.createGain();
-    
+
     source.buffer = buffer;
     gainNode.gain.value = Math.max(0, Math.min(1, volume));
-    
+
     source.connect(gainNode);
     gainNode.connect(this.audioContext.destination);
     source.start(0);
@@ -135,7 +144,7 @@ class AudioManager {
    */
   public playMusic(id: string, volume = 1.0): void {
     this.stopMusic();
-    
+
     const buffer = this.musicBuffers.get(id);
     if (!buffer) {
       addConsoleEntry('WARN', `Music ${id} not loaded`);
@@ -144,15 +153,15 @@ class AudioManager {
 
     const source = this.audioContext.createBufferSource();
     const gainNode = this.audioContext.createGain();
-    
+
     source.buffer = buffer;
     source.loop = true;
     gainNode.gain.value = Math.max(0, Math.min(1, volume));
-    
+
     source.connect(gainNode);
     gainNode.connect(this.audioContext.destination);
     source.start(0);
-    
+
     this.currentMusic = source;
   }
 

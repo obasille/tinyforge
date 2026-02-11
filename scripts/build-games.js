@@ -22,16 +22,16 @@ const outputDir = 'assets/cartridges';
 function buildGame(fileName, showMode = false) {
   const modeLabel = showMode && isDebug ? ' (debug)' : '';
   console.log(`Building ${fileName}${modeLabel}...`);
-  
+
   try {
     mkdirSync(outputDir, { recursive: true });
     execSync(
       `npx asc src/assembly/games/${fileName}.ts -o ${outputDir}/${fileName}.wasm --config src/assembly/games/asconfig.json ${target}`,
-      { stdio: 'inherit' }
+      { stdio: 'inherit' },
     );
     console.log(`✓ ${fileName}`);
     return true;
-  } catch (error) {
+  } catch {
     console.error(`✗ ${fileName} failed`);
     return false;
   }
@@ -40,10 +40,10 @@ function buildGame(fileName, showMode = false) {
 // Mode 1: Build all games
 if (files.length === 0) {
   const gamesDir = 'src/assembly/games';
-  
+
   const gameFiles = readdirSync(gamesDir)
-    .filter(file => file.endsWith('.ts'))
-    .map(file => file.replace('.ts', ''));
+    .filter((file) => file.endsWith('.ts'))
+    .map((file) => file.replace('.ts', ''));
 
   if (gameFiles.length === 0) {
     console.log('No game files found in src/assembly/games/ directory');
@@ -71,23 +71,28 @@ let failed = 0;
 for (const filePath of files) {
   // Remove .ts extension if present
   let fileName = basename(filePath, '.ts');
-  
+
   // If no .ts was removed, try removing it from the original
   if (fileName === filePath && filePath.endsWith('.ts')) {
     fileName = filePath.slice(0, -3);
   }
-  
+
   // Check if path includes directory
-  const parts = filePath.split(/[\/\\]/);
-  const dir = parts.length > 2 ? `${parts[0]}/${parts[1]}/${parts[2]}` : 'src/assembly/games';
-  
+  const parts = filePath.split(/[/\\]/);
+  const dir =
+    parts.length > 2
+      ? `${parts[0]}/${parts[1]}/${parts[2]}`
+      : 'src/assembly/games';
+
   // For simple filenames, extract just the basename
   if (parts.length === 1) {
     fileName = parts[0].replace(/\.ts$/, '');
   }
 
   if (dir !== 'src/assembly/games') {
-    console.error(`Skipping ${filePath} - not in src/assembly/games/ directory`);
+    console.error(
+      `Skipping ${filePath} - not in src/assembly/games/ directory`,
+    );
     failed++;
     continue;
   }

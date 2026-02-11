@@ -38,22 +38,22 @@ enum GameState {
 @unmanaged
 class Vars {
   // Player 1 (top paddle)
-  p1X: f32;      // 0
-  p1Score: i32;  // 4
+  p1X: f32; // 0
+  p1Score: i32; // 4
 
   // Player 2 (bottom paddle)
-  p2X: f32;      // 8
-  p2Score: i32;  // 12
+  p2X: f32; // 8
+  p2Score: i32; // 12
 
   // Ball
-  ballX: f32;    // 16
-  ballY: f32;    // 20
-  ballVX: f32;   // 24
-  ballVY: f32;   // 28
+  ballX: f32; // 16
+  ballY: f32; // 20
+  ballVX: f32; // 24
+  ballVY: f32; // 28
 
   // Game state
-  state: u8;     // 32
-  winner: u8;    // 33
+  state: u8; // 32
+  winner: u8; // 33
   countdown: i32; // 36
   servingPlayer: i32; // 40
 }
@@ -212,7 +212,7 @@ export function update(): void {
   // Handle countdown
   if (vars.countdown > 0) {
     vars.countdown--;
-    
+
     // Launch ball when countdown reaches 0
     if (vars.countdown == 0) {
       const servingPlayer = vars.servingPlayer;
@@ -296,7 +296,7 @@ export function draw(): void {
   if (state == GameState.PLAYING && vars.countdown > 0) {
     const secondsLeft = vars.countdown / 60;
     let countdownText = "";
-    
+
     if (secondsLeft >= 3) {
       countdownText = "3";
     } else if (secondsLeft == 2) {
@@ -306,7 +306,7 @@ export function draw(): void {
     } else {
       countdownText = "GO!";
     }
-    
+
     // Draw centered countdown text
     fillRect(WIDTH / 2 - 12, HEIGHT / 2 - 10, 24, 20, c(0x303030)); // Clear area
     const textX = secondsLeft > 0 ? WIDTH / 2 - 2 : WIDTH / 2 - 10;

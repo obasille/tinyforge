@@ -1,7 +1,7 @@
 // Asset Loader Utility - Common functionality for loading game assets
 // Shared between audio, sprites, and future asset types
 
-import { addConsoleEntry } from "./console-panel.js";
+import { addConsoleEntry } from './console-panel.js';
 
 export type AssetDescriptor = {
   id: string;
@@ -30,7 +30,7 @@ export class AssetLoader {
    * Only id is required.
    */
   public static parseAssetFilename(filename: string): ParsedAsset | null {
-    const basename = filename.split(/[\/\\]/).pop();
+    const basename = filename.split(/[/\\]/).pop();
     if (!basename) return null;
     let decoded = basename;
     try {
@@ -79,7 +79,7 @@ export class AssetLoader {
     return links
       .map((a) => a.getAttribute('href'))
       .filter((href): href is string => Boolean(href && pattern.test(href)))
-      .map((href) => href.split(/[\/\\]/).pop())
+      .map((href) => href.split(/[/\\]/).pop())
       .filter((href): href is string => Boolean(href)); // Remove path, keep only filename
   }
 
@@ -91,9 +91,17 @@ export class AssetLoader {
    * @param type - Type of asset (for logging, e.g., 'Sprite', 'SFX')
    * @returns true if duplicate detected
    */
-  public static checkDuplicate(collection: IdCollection, id: string, url: string, type: string): boolean {
+  public static checkDuplicate(
+    collection: IdCollection,
+    id: string,
+    url: string,
+    type: string,
+  ): boolean {
     if (collection.has(id)) {
-      addConsoleEntry('WARN', `${type} ID ${id} already loaded, overwriting with ${url}`);
+      addConsoleEntry(
+        'WARN',
+        `${type} ID ${id} already loaded, overwriting with ${url}`,
+      );
       return true;
     }
     return false;
@@ -111,7 +119,7 @@ export class AssetLoader {
     dirUrl: string,
     filePattern: RegExp,
     minId: number | null = null,
-    maxId: number | null = null
+    maxId: number | null = null,
   ): Promise<AssetDescriptor[]> {
     try {
       const response = await fetch(dirUrl);
@@ -121,13 +129,16 @@ export class AssetLoader {
 
       const html = await response.text();
       const files = this.parseDirectoryListing(html, filePattern);
-      
+
       const assets: AssetDescriptor[] = [];
       for (const file of files) {
         const parsed = this.parseAssetFilename(file);
         if (!parsed) continue;
         if (parsed.id.length > this.MAX_ID_LENGTH) {
-          addConsoleEntry('WARN', `Asset ID "${parsed.id}" exceeds ${this.MAX_ID_LENGTH} characters, skipping ${file}`);
+          addConsoleEntry(
+            'WARN',
+            `Asset ID "${parsed.id}" exceeds ${this.MAX_ID_LENGTH} characters, skipping ${file}`,
+          );
           continue;
         }
 
@@ -143,10 +154,10 @@ export class AssetLoader {
           format: parsed.format,
           info: parsed.info,
           filename: file,
-          url: `${dirUrl}${file}`
+          url: `${dirUrl}${file}`,
         });
       }
-      
+
       return assets;
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);

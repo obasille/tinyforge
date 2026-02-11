@@ -55,15 +55,15 @@ enum GameState {
 // === RAM Layout ===
 @unmanaged
 class Vars {
-  state: u8;         // 0
-  difficulty: u8;    // 1
-  bulletActive: u8;  // 2
-  fireCooldown: u8;  // 3
-  score: i32;        // 4
-  playerX: i32;      // 8
-  playerY: i32;      // 12
-  bulletX: i32;      // 16
-  bulletY: i32;      // 20
+  state: u8; // 0
+  difficulty: u8; // 1
+  bulletActive: u8; // 2
+  fireCooldown: u8; // 3
+  score: i32; // 4
+  playerX: i32; // 8
+  playerY: i32; // 12
+  bulletX: i32; // 16
+  bulletY: i32; // 20
 }
 
 const vars = changetype<Vars>(RAM_START);
@@ -173,7 +173,11 @@ export function update(): void {
 
   // Weapon handling
   if (vars.fireCooldown > 0) vars.fireCooldown--;
-  if (vars.bulletActive == 0 && vars.fireCooldown == 0 && buttonPressed(Button.A)) {
+  if (
+    vars.bulletActive == 0 &&
+    vars.fireCooldown == 0 &&
+    buttonPressed(Button.A)
+  ) {
     vars.bulletActive = 1;
     vars.fireCooldown = FIRE_COOLDOWN;
     vars.bulletX = playerX + PLAYER_WIDTH / 2 - BULLET_WIDTH / 2;
@@ -239,7 +243,13 @@ export function draw(): void {
   fillRect(playerX + 4, playerY - 4, PLAYER_WIDTH - 8, 4, c(0x008866));
 
   if (vars.bulletActive != 0) {
-    fillRect(vars.bulletX, vars.bulletY, BULLET_WIDTH, BULLET_HEIGHT, c(0xffff99));
+    fillRect(
+      vars.bulletX,
+      vars.bulletY,
+      BULLET_WIDTH,
+      BULLET_HEIGHT,
+      c(0xffff99),
+    );
   }
 
   // Draw meteors

@@ -1,9 +1,5 @@
 // cspell:language en,fr
-import {
-  drawSprite,
-  s,
-  warn,
-} from "../../sdk";
+import { drawSprite, s, warn } from "../../sdk";
 
 import { trouveCrocoPourGamelle } from "./croco";
 import { trouveNiemePoint } from "./level";
@@ -15,7 +11,7 @@ import {
   lesCrocos,
   lesViandes,
   NB_CROCOS,
-  TAILLE_CASE
+  TAILLE_CASE,
 } from "./types";
 
 // === Viandes ===
@@ -87,7 +83,11 @@ export function deposeViande(jx: u8, jy: u8): void {
   if (joueur.viandePortee == INVALIDE) return;
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
     const croco = lesCrocos[i];
-    if (croco.gamelleX == jx && croco.gamelleY == jy && croco.gamelleRemplie == 0) {
+    if (
+      croco.gamelleX == jx &&
+      croco.gamelleY == jy &&
+      croco.gamelleRemplie == 0
+    ) {
       croco.gamelleRemplie = 1;
       joueur.viandePortee = INVALIDE;
       return;
@@ -101,7 +101,7 @@ export function dessineGamelle(x: u8, y: u8, remplie: u8): void {
   const baseX = (x as i32) * TAILLE_CASE;
   const baseY = (y as i32) * TAILLE_CASE;
   drawSprite(s("plate"), baseX, baseY);
-  
+
   // Dessiner la viande sur la gamelle si elle est remplie
   if (remplie == 1) {
     drawSprite(s("meat"), baseX, baseY);

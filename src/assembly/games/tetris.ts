@@ -44,17 +44,17 @@ enum GameState {
 // === RAM Layout ===
 @unmanaged
 class Vars {
-  score: i32;            // 0
-  lines: i32;            // 4
-  currentX: i32;         // 8
-  currentY: i32;         // 12
-  state: u8;             // 16
-  currentType: u8;       // 17
-  currentRotation: u8;   // 18
-  fallTimer: u8;         // 19
-  fallDelay: u8;         // 20
-  level: u8;             // 21
-  nextType: u8;          // 22
+  score: i32; // 0
+  lines: i32; // 4
+  currentX: i32; // 8
+  currentY: i32; // 12
+  state: u8; // 16
+  currentType: u8; // 17
+  currentRotation: u8; // 18
+  fallTimer: u8; // 19
+  fallDelay: u8; // 20
+  level: u8; // 21
+  nextType: u8; // 22
 }
 
 const vars = changetype<Vars>(RAM_START);
@@ -90,26 +90,18 @@ const PIECE_COLORS: u32[] = [
 ];
 
 // === Board Helpers ===
-// @ts-expect-error AssemblyScript decorator
-@inline
 function boardIndex(x: i32, y: i32): usize {
   return BOARD_START + (y * BOARD_WIDTH + x);
 }
 
-// @ts-expect-error AssemblyScript decorator
-@inline
 function getBoardCell(x: i32, y: i32): u8 {
   return getU8(boardIndex(x, y));
 }
 
-// @ts-expect-error AssemblyScript decorator
-@inline
 function setBoardCell(x: i32, y: i32, value: u8): void {
   setU8(boardIndex(x, y), value);
 }
 
-// @ts-expect-error AssemblyScript decorator
-@inline
 function shapeMask(pieceType: u8, rotation: u8): i32 {
   return SHAPES[(pieceType as i32) * 4 + (rotation as i32)];
 }
@@ -201,7 +193,7 @@ function updateFallDelay(): void {
 function spawnPiece(): void {
   const nextType = vars.nextType;
   const nextRotation: u8 = 0;
-  const nextX = (BOARD_WIDTH / 2) - 2;
+  const nextX = BOARD_WIDTH / 2 - 2;
   const nextY = -1;
 
   if (!canPlace(nextType, nextX, nextY, nextRotation)) {
@@ -230,7 +222,7 @@ function tryMove(dx: i32, dy: i32): bool {
 
 function tryRotate(clockwise: bool): void {
   const rot = vars.currentRotation;
-  const nextRot = clockwise ? ((rot + 1) & 3) as u8 : ((rot + 3) & 3) as u8;
+  const nextRot = clockwise ? (((rot + 1) & 3) as u8) : (((rot + 3) & 3) as u8);
 
   if (canPlace(vars.currentType, vars.currentX, vars.currentY, nextRot)) {
     vars.currentRotation = nextRot;

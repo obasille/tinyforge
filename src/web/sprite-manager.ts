@@ -8,10 +8,7 @@ import {
   SPRITE_TABLE_ADDR,
   SPRITE_TABLE_HEADER_SIZE,
 } from '../memory-map.js';
-import {
-  AssetDescriptor,
-  AssetLoader,
-} from './asset-loader.js';
+import { AssetDescriptor, AssetLoader } from './asset-loader.js';
 import { addConsoleEntry } from './console-panel.js';
 
 type SpriteEntry = {
@@ -65,13 +62,12 @@ class SpriteManager {
     try {
       const spriteAssets: AssetDescriptor[] = await AssetLoader.scanDirectory(
         './assets/sprites/',
-        /\.(png|jpg|jpeg)$/i
+        /\.(png|jpg|jpeg)$/i,
       );
 
       for (const asset of spriteAssets) {
         await this.loadSprite(asset);
       }
-
 
       // Write all loaded sprites to WASM memory
       this.writeSpritesToMemory();
@@ -94,10 +90,10 @@ class SpriteManager {
 
       // Check if this is a sprite sheet (format: ID~COLSxROWS-*.ext)
       const sheetMatch = format.match(/^(\d+)x(\d+)$/);
-      
+
       // Load image
       const image = await AssetLoader.loadImage(url);
-      
+
       if (sheetMatch) {
         // Sprite sheet detected
         const cols = parseInt(sheetMatch[1], 10);
@@ -109,32 +105,41 @@ class SpriteManager {
       }
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      addConsoleEntry('WARN', `Failed to load sprite ${asset.id} from ${asset.url}: ${message}`);
+      addConsoleEntry(
+        'WARN',
+        `Failed to load sprite ${asset.id} from ${asset.url}: ${message}`,
+      );
     }
   }
 
   /**
    * Load a single sprite image
    */
-  private async loadSingleSprite(image: HTMLImageElement, id: string, url: string): Promise<void> {
+  private async loadSingleSprite(
+    image: HTMLImageElement,
+    id: string,
+    url: string,
+  ): Promise<void> {
     const canvas = document.createElement('canvas');
     canvas.width = image.width;
     canvas.height = image.height;
     const ctx = canvas.getContext('2d', { colorSpace: 'srgb' });
     if (!ctx) {
-      throw new Error('Failed to create 2D canvas context for sprite extraction.');
+      throw new Error(
+        'Failed to create 2D canvas context for sprite extraction.',
+      );
     }
     ctx.drawImage(image, 0, 0);
-    
+
     // Get RGBA pixel data
     const imageData = ctx.getImageData(0, 0, image.width, image.height);
-    
+
     const entry = {
       width: image.width,
       height: image.height,
       cols: 1,
       rows: 1,
-      frames: [imageData.data]
+      frames: [imageData.data],
     };
     this.setEntry(id, entry, url);
   }
@@ -152,49 +157,57 @@ class SpriteManager {
     id: string,
     cols: number,
     rows: number,
-    url: string
+    url: string,
   ): Promise<void> {
     const spriteWidth = Math.floor(image.width / cols);
     const spriteHeight = Math.floor(image.height / rows);
-    
+
     // Create a temporary canvas for extraction
     const canvas = document.createElement('canvas');
     canvas.width = spriteWidth;
     canvas.height = spriteHeight;
     const ctx = canvas.getContext('2d');
     if (!ctx) {
-      throw new Error('Failed to create 2D canvas context for sprite sheet extraction.');
+      throw new Error(
+        'Failed to create 2D canvas context for sprite sheet extraction.',
+      );
     }
-    
+
     // Extract each sprite from the sheet
     const frames: Uint8ClampedArray[] = [];
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
         // Clear canvas
         ctx.clearRect(0, 0, spriteWidth, spriteHeight);
-        
+
         // Draw the sprite region
         const sx = col * spriteWidth;
         const sy = row * spriteHeight;
         ctx.drawImage(
           image,
-          sx, sy, spriteWidth, spriteHeight,  // Source
-          0, 0, spriteWidth, spriteHeight      // Destination
+          sx,
+          sy,
+          spriteWidth,
+          spriteHeight, // Source
+          0,
+          0,
+          spriteWidth,
+          spriteHeight, // Destination
         );
-        
+
         // Get pixel data
         const imageData = ctx.getImageData(0, 0, spriteWidth, spriteHeight);
-        
+
         frames.push(imageData.data);
       }
     }
-    
+
     const entry = {
       width: spriteWidth,
       height: spriteHeight,
       cols,
       rows,
-      frames
+      frames,
     };
     this.setEntry(id, entry, url);
   }
@@ -224,14 +237,14 @@ class SpriteManager {
     const lookup = new Uint16Array(
       this.memory.buffer,
       SPRITE_TABLE_ADDR + lookupOffset,
-      (SPRITE_ID_ENTRY_SIZE / 2) * count
+      (SPRITE_ID_ENTRY_SIZE / 2) * count,
     );
     lookup.fill(0);
 
     const infoTable = new Uint8Array(
       this.memory.buffer,
       SPRITE_TABLE_ADDR + infoOffset,
-      SPRITE_INFO_ENTRY_SIZE * count
+      SPRITE_INFO_ENTRY_SIZE * count,
     );
     infoTable.fill(0);
 
@@ -239,7 +252,10 @@ class SpriteManager {
     for (const [index, id] of this.idByIndex) {
       const name = id;
       if (name.length > SPRITE_ID_MAX_CHARS) {
-        addConsoleEntry('WARN', `Sprite ID "${name}" exceeds ${SPRITE_ID_MAX_CHARS} chars, skipping lookup entry`);
+        addConsoleEntry(
+          'WARN',
+          `Sprite ID "${name}" exceeds ${SPRITE_ID_MAX_CHARS} chars, skipping lookup entry`,
+        );
         continue;
       }
       const baseIndex = index * (SPRITE_ID_ENTRY_SIZE / 2);
@@ -247,26 +263,31 @@ class SpriteManager {
         lookup[baseIndex + i] = name.charCodeAt(i);
       }
     }
-    
+
     // Write pixel data
     const spriteDataView = new Uint8Array(
       this.memory.buffer,
       SPRITE_TABLE_ADDR + dataStartOffset,
-      SPRITE_DATA_SIZE
+      SPRITE_DATA_SIZE,
     );
     let writeOffset = 0;
-    
+
     for (const [index, id] of this.idByIndex) {
       const entry = this.entries.get(id);
       if (!entry) continue;
 
-      const infoAddr = SPRITE_TABLE_ADDR + infoOffset + (index * SPRITE_INFO_ENTRY_SIZE);
+      const infoAddr =
+        SPRITE_TABLE_ADDR + infoOffset + index * SPRITE_INFO_ENTRY_SIZE;
       const frameSize = entry.width * entry.height * 4;
       const frameCount = entry.frames.length;
 
-      view.setUint32(infoAddr + 0, SPRITE_TABLE_ADDR + dataStartOffset + dataOffset, true); // Data offset (absolute)
-      view.setUint32(infoAddr + 4, frameSize, true);  // Data size per frame
-      view.setUint16(infoAddr + 8, entry.width, true);  // Width
+      view.setUint32(
+        infoAddr + 0,
+        SPRITE_TABLE_ADDR + dataStartOffset + dataOffset,
+        true,
+      ); // Data offset (absolute)
+      view.setUint32(infoAddr + 4, frameSize, true); // Data size per frame
+      view.setUint16(infoAddr + 8, entry.width, true); // Width
       view.setUint16(infoAddr + 10, entry.height, true); // Height
       view.setUint8(infoAddr + 12, entry.cols);
       view.setUint8(infoAddr + 13, entry.rows);
@@ -279,12 +300,15 @@ class SpriteManager {
         dataOffset += pixelData.length;
       }
     }
-    
+
     this.nextDataOffset = dataOffset;
-    
+
     // Check if we exceeded available memory
     if (this.nextDataOffset > SPRITE_DATA_SIZE) {
-      addConsoleEntry('WARN', `Sprite data exceeds allocated memory: ${this.nextDataOffset} bytes (max: ${SPRITE_DATA_SIZE})`);
+      addConsoleEntry(
+        'WARN',
+        `Sprite data exceeds allocated memory: ${this.nextDataOffset} bytes (max: ${SPRITE_DATA_SIZE})`,
+      );
     }
   }
 
@@ -299,7 +323,10 @@ class SpriteManager {
       return this.indexById.get(id) ?? -1;
     }
     if (this.nextIndex > 255) {
-      addConsoleEntry('WARN', `Sprite limit reached (256). Cannot load ${id} from ${url}`);
+      addConsoleEntry(
+        'WARN',
+        `Sprite limit reached (256). Cannot load ${id} from ${url}`,
+      );
       return -1;
     }
     const index = this.nextIndex;

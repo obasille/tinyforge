@@ -55,7 +55,7 @@ function isGameFile(filePath) {
   }
   const relativePath = path.relative(gamesDir, filePath);
   const parts = relativePath.split(path.sep);
-  
+
   if (parts.length === 1) {
     // File directly in games folder - return filename without extension
     return path.basename(filePath, '.ts');

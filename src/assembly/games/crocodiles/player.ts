@@ -21,17 +21,13 @@ import {
   TAILLE_CASE,
   TUNNEL_ANIM_TICKS,
 } from "./types";
-import {
-  deltaDirX,
-  deltaDirY,
-  donneDir,
-} from "./utils";
+import { deltaDirX, deltaDirY, donneDir } from "./utils";
 
 export function initJoueur(): void {
   // Trouve toutes les cases avec la couleur Joueur
-  let casesJoueur: u16[] = [];
+  const casesJoueur: u16[] = [];
   trouveCasesCouleur(Couleurs.Joueur, casesJoueur);
-  
+
   // Choisit une case aléatoire parmi les positions Joueur trouvées
   let spawn: u16;
   if (casesJoueur.length > 0) {
@@ -40,9 +36,10 @@ export function initJoueur(): void {
   } else {
     // Fallback : centre de la grille si aucune position trouvée
     warn("Aucune position Joueur trouvée dans le niveau");
-    spawn = (((HAUTEUR_GRILLE / 2) as u16) << 8) | ((LARGEUR_GRILLE / 2) as u16);
+    spawn =
+      (((HAUTEUR_GRILLE / 2) as u16) << 8) | ((LARGEUR_GRILLE / 2) as u16);
   }
-  
+
   joueur.x = (spawn & 0xff) as u8;
   joueur.y = ((spawn >> 8) & 0xff) as u8;
   joueur.viandePortee = INVALIDE;
@@ -102,23 +99,26 @@ export function dessineTeteJoueur(): void {
     renderX -= dx * frac;
     renderY -= dy * frac;
     if (renderX < 0.0) renderX += LARGEUR_GRILLE as f32;
-    else if (renderX >= (LARGEUR_GRILLE as f32)) renderX -= LARGEUR_GRILLE as f32;
+    else if (renderX >= (LARGEUR_GRILLE as f32))
+      renderX -= LARGEUR_GRILLE as f32;
     if (renderY < 0.0) renderY += HAUTEUR_GRILLE as f32;
-    else if (renderY >= (HAUTEUR_GRILLE as f32)) renderY -= HAUTEUR_GRILLE as f32;
+    else if (renderY >= (HAUTEUR_GRILLE as f32))
+      renderY -= HAUTEUR_GRILLE as f32;
   }
   const baseX = (renderX * (TAILLE_CASE as f32)) as i32;
   const baseY = (renderY * (TAILLE_CASE as f32)) as i32;
   let alpha: u8 = 255;
   if (joueur.invincible > 0) {
     const t = (joueur.invincible as i32) & 15;
-    const tri = t < 8 ? t : (15 - t);
-    alpha = (128 + (tri * 16)) as u8;
+    const tri = t < 8 ? t : 15 - t;
+    alpha = (128 + tri * 16) as u8;
   }
   let scaleNum: i32 = 8;
   if (joueur.tunnelEtat == 1) {
     scaleNum = ((joueur.tunnelTimer as i32) * 8) / (TUNNEL_ANIM_TICKS as i32);
   } else if (joueur.tunnelEtat == 2) {
-    scaleNum = 8 - (((joueur.tunnelTimer as i32) * 8) / (TUNNEL_ANIM_TICKS as i32));
+    scaleNum =
+      8 - ((joueur.tunnelTimer as i32) * 8) / (TUNNEL_ANIM_TICKS as i32);
   }
   if (scaleNum <= 0) return;
   if (scaleNum >= 8) {
@@ -126,7 +126,7 @@ export function dessineTeteJoueur(): void {
   } else {
     drawSpriteScaledDown(s("player"), baseX, baseY, scaleNum, 8);
   }
-  
+
   // Dessine la viande portée au-dessus du joueur
   if (joueur.viandePortee != INVALIDE && scaleNum >= 8) {
     drawSprite(s("meat"), baseX + TAILLE_CASE / 3, baseY + TAILLE_CASE / 3);

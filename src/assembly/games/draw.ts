@@ -56,12 +56,12 @@ export function update(): void {
     // Mouvement continu si A est maintenu
     // Gauche
     if (buttonDown(Button.LEFT)) {
-      vars.posAxe1 -= 1
+      vars.posAxe1 -= 1;
       bouge = true;
     }
     // Droite
     if (buttonDown(Button.RIGHT)) {
-      vars.posAxe1 += 1
+      vars.posAxe1 += 1;
       bouge = true;
     }
     // Haut
@@ -78,12 +78,12 @@ export function update(): void {
     // Mouvement uniquement au moment où le bouton est pressé (pas à pas)
     // Gauche
     if (buttonPressed(Button.LEFT)) {
-      vars.posAxe1 -= 1
+      vars.posAxe1 -= 1;
       bouge = true;
     }
     // Droite
     if (buttonPressed(Button.RIGHT)) {
-      vars.posAxe1 += 1
+      vars.posAxe1 += 1;
       bouge = true;
     }
     // Haut
@@ -126,4 +126,3 @@ export function draw(): void {
   // Dessine le joueur en vert à sa position actuelle
   pset(vars.posAxe1, vars.posAxe2, vert);
 }
-

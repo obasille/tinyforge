@@ -63,11 +63,11 @@ class Coin {
 
 // Define platforms (x, y, width, height)
 const platforms: Platform[] = [
-  { x: 0, y: GROUND_Y, w: WIDTH, h: 40 },      // Ground
-  { x: 50, y: 160, w: 60, h: 8 },              // Platform 1
-  { x: 150, y: 130, w: 70, h: 8 },             // Platform 2
-  { x: 240, y: 100, w: 60, h: 8 },             // Platform 3
-  { x: 120, y: 70, w: 80, h: 8 },              // Platform 4 (top)
+  { x: 0, y: GROUND_Y, w: WIDTH, h: 40 }, // Ground
+  { x: 50, y: 160, w: 60, h: 8 }, // Platform 1
+  { x: 150, y: 130, w: 70, h: 8 }, // Platform 2
+  { x: 240, y: 100, w: 60, h: 8 }, // Platform 3
+  { x: 120, y: 70, w: 80, h: 8 }, // Platform 4 (top)
 ];
 
 // Spike traps that fall from the sky
@@ -85,14 +85,14 @@ const coin: Coin = { x: 0, y: 0, active: false };
 function spawnRandomCoin(): void {
   const platformIndex = randomRange(platforms.length);
   const plat = platforms[platformIndex];
-  
+
   // Random X position on the platform (with some margin)
   const margin = 20;
   const coinX = plat.x + margin + randomRange(plat.w - margin * 2);
-  
+
   // Y position just above the platform (24x24 sprite)
   const coinY = plat.y - 24;
-  
+
   coin.x = coinX;
   coin.y = coinY;
   coin.active = true;
@@ -103,18 +103,18 @@ function spawnRandomCoin(): void {
 
 @unmanaged
 class Vars {
-  playerX: f32;       // 0
-  playerY: f32;       // 4
-  velocityX: f32;     // 8
-  velocityY: f32;     // 12
-  grounded: u8;       // 16
-  facingRight: u8;    // 17
-  animFrame: i32;     // 20
-  animTimer: i32;     // 24
-  lives: i32;         // 28
-  state: u8;          // 32
-  invulnTimer: i32;   // 36 (invulnerability after hit)
-  gameTimer: i32;     // 40
+  playerX: f32; // 0
+  playerY: f32; // 4
+  velocityX: f32; // 8
+  velocityY: f32; // 12
+  grounded: u8; // 16
+  facingRight: u8; // 17
+  animFrame: i32; // 20
+  animTimer: i32; // 24
+  lives: i32; // 28
+  state: u8; // 32
+  invulnTimer: i32; // 36 (invulnerability after hit)
+  gameTimer: i32; // 40
   coinsCollected: i32; // 44
 }
 
@@ -130,9 +130,9 @@ const INVULN_TIME: i32 = 120; // 2 seconds at 60fps
 const DIFFICULTY_SCALE: f32 = 10; // Lower = faster difficulty increase (10 => one 10th per second)
 
 // === lifecycle ===
-  
+
 export function init(): void {
-  clearFramebuffer(c(0x87CEEB)); // Sky blue
+  clearFramebuffer(c(0x87ceeb)); // Sky blue
 
   // Initialize player position
   vars.playerX = 50;
@@ -186,7 +186,7 @@ export function update(): void {
 
   // Horizontal movement
   vars.velocityX = 0;
-  
+
   if (buttonDown(Button.LEFT)) {
     vars.velocityX = -MOVE_SPEED;
     vars.facingRight = 0;
@@ -213,8 +213,8 @@ export function update(): void {
 
   // Keep player in horizontal bounds (accounting for tail position)
   const tailOffset = vars.facingRight ? TAIL_LENGTH : 0;
-  if (vars.playerX < <f32>(-tailOffset)) {
-    vars.playerX = <f32>(-tailOffset);
+  if (vars.playerX < <f32>-tailOffset) {
+    vars.playerX = <f32>-tailOffset;
   }
   const maxX = <f32>(WIDTH - PLAYER_WIDTH + tailOffset);
   if (vars.playerX > maxX) {
@@ -223,29 +223,32 @@ export function update(): void {
 
   // Platform collision (use collision box, not full sprite)
   vars.grounded = 0;
-  
+
   // Check for collision only if falling
   if (vars.velocityY >= 0) {
     const px = <i32>vars.playerX;
     const py = <i32>vars.playerY;
 
     // Calculate collision box position (exclude tail and head transparent pixels)
-    const collisionX = vars.facingRight ? px + TAIL_LENGTH : px + HEAD_TRANSPARENT;
+    const collisionX = vars.facingRight
+      ? px + TAIL_LENGTH
+      : px + HEAD_TRANSPARENT;
     const collisionW = COLLISION_WIDTH;
     const collisionH = PLAYER_HEIGHT;
 
     for (let i = 0; i < platforms.length; i++) {
       const plat = platforms[i];
-    
+
       // Check if collision box is overlapping platform horizontally
-      const overlapX = collisionX + collisionW > plat.x && collisionX < plat.x + plat.w;
-    
+      const overlapX =
+        collisionX + collisionW > plat.x && collisionX < plat.x + plat.w;
+
       // Check if player's feet are at or below platform top
       if (overlapX) {
         const prevY = py - <i32>vars.velocityY;
         const prevBottom = prevY + collisionH;
         const currBottom = py + collisionH;
-      
+
         // Check if player crossed platform surface this frame
         if (prevBottom <= plat.y && currBottom >= plat.y) {
           vars.playerY = <f32>(plat.y - collisionH);
@@ -272,12 +275,16 @@ export function update(): void {
   // Update spikes
   for (let i = 0; i < SPIKE_COUNT; i++) {
     const spike = spikes[i];
-    
+
     // Increase difficulty over time: spikes spawn faster and move faster
-    const difficultyMultiplier: f32 = 1 + (<f32>vars.gameTimer) / (DIFFICULTY_SCALE * 60);
+    const difficultyMultiplier: f32 =
+      1 + <f32>vars.gameTimer / (DIFFICULTY_SCALE * 60);
     const minInterval = 60; // Don't spawn faster than every second
     const baseInterval = 180 + i * 120;
-    const adjustedInterval = max(minInterval, <i32>((<f32>baseInterval) / difficultyMultiplier));
+    const adjustedInterval = max(
+      minInterval,
+      <i32>(<f32>baseInterval / difficultyMultiplier),
+    );
 
     // Activate spikes periodically (faster as time goes on)
     if (!spike.active && vars.gameTimer % adjustedInterval == 0) {
@@ -307,9 +314,15 @@ export function update(): void {
         // Box collision (exclude last 3 pixels on head side - transparent in sprites)
         const HEAD_SPIKE_MARGIN: i32 = 3;
         const collideLeft = vars.facingRight ? px : px + HEAD_SPIKE_MARGIN;
-        const collideRight = vars.facingRight ? px + PLAYER_WIDTH - HEAD_SPIKE_MARGIN : px + PLAYER_WIDTH;
-        if (collideRight > sx && collideLeft < sx + 16 &&
-            py + PLAYER_HEIGHT > sy && py < sy + 16) {
+        const collideRight = vars.facingRight
+          ? px + PLAYER_WIDTH - HEAD_SPIKE_MARGIN
+          : px + PLAYER_WIDTH;
+        if (
+          collideRight > sx &&
+          collideLeft < sx + 16 &&
+          py + PLAYER_HEIGHT > sy &&
+          py < sy + 16
+        ) {
           // Hit! Lose a life
           vars.lives--;
           vars.invulnTimer = INVULN_TIME;
@@ -333,7 +346,9 @@ export function update(): void {
     const px = <i32>vars.playerX;
     const py = <i32>vars.playerY;
     const HEAD_TRANSPARENT: i32 = 7;
-    const collisionX = vars.facingRight ? px + TAIL_LENGTH : px + HEAD_TRANSPARENT;
+    const collisionX = vars.facingRight
+      ? px + TAIL_LENGTH
+      : px + HEAD_TRANSPARENT;
     const adjustedWidth = COLLISION_WIDTH;
 
     // Coin is 24x24 pixels
@@ -345,7 +360,7 @@ export function update(): void {
     ) {
       vars.coinsCollected++;
       playSfx("tap", 0.6); // Coin collect sound
-      
+
       // Spawn new coin at random location
       spawnRandomCoin();
     }
@@ -354,14 +369,14 @@ export function update(): void {
 
 export function draw(): void {
   // Sky background
-  clearFramebuffer(c(0x87CEEB));
+  clearFramebuffer(c(0x87ceeb));
 
   const state = vars.state;
 
   // Draw platforms
   for (let i = 0; i < platforms.length; i++) {
     const plat = platforms[i];
-    const color = i == 0 ? c(0x8B4513) : c(0x228B22); // Brown for ground, green for platforms
+    const color = i == 0 ? c(0x8b4513) : c(0x228b22); // Brown for ground, green for platforms
     fillRect(plat.x, plat.y, plat.w, plat.h, color);
   }
 
@@ -372,7 +387,7 @@ export function draw(): void {
       const sx = <i32>spike.x;
       const sy = <i32>spike.y;
       // Draw as red squares for simplicity
-      fillRect(sx, sy, 16, 16, c(0xFF0000));
+      fillRect(sx, sy, 16, 16, c(0xff0000));
       // Draw inner dark square for depth
       fillRect(sx + 4, sy + 4, 8, 8, c(0x880000));
     }
@@ -393,17 +408,17 @@ export function draw(): void {
   }
 
   // Draw title and lives
-  drawString(10, 10, "DINO WORLD", c(0xFFFFFF));
-  
+  drawString(10, 10, "DINO WORLD", c(0xffffff));
+
   // Draw lives as hearts
   for (let i: i32 = 0; i < vars.lives && i < STARTING_LIVES; i++) {
-    fillCircle(10 + i * 15, 30, 4, c(0xFF0000));
+    fillCircle(10 + i * 15, 30, 4, c(0xff0000));
   }
 
   // Draw coins collected in top-right
   drawSprite(s("coin", 4), WIDTH - 70, 2);
   // Number of coins
-  drawNumber(WIDTH - 40, 8, vars.coinsCollected, c(0xFFFFFF));
+  drawNumber(WIDTH - 40, 8, vars.coinsCollected, c(0xffffff));
 
   // Draw messages
   if (state == GameState.START_SCREEN) {

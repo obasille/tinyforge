@@ -1,9 +1,5 @@
 // cspell:language en,fr
-import {
-  Direction,
-  lesCrocos,
-  NB_CROCOS,
-} from "./types";
+import { Direction, lesCrocos, NB_CROCOS } from "./types";
 
 export function deltaDirX(dir: u8): i32 {
   if (dir == Direction.GAUCHE) return -1;

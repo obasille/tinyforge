@@ -47,15 +47,15 @@ enum GameState {
 // === RAM Layout ===
 @unmanaged
 class Vars {
-  length: i32;    // 0
-  dir: u8;        // 4
-  nextDir: u8;    // 5
-  foodX: u8;      // 6
-  foodY: u8;      // 7
-  state: u8;      // 8
-  score: u8;      // 9
-  speed: u8;      // 10
-  moveTimer: u8;  // 11
+  length: i32; // 0
+  dir: u8; // 4
+  nextDir: u8; // 5
+  foodX: u8; // 6
+  foodY: u8; // 7
+  state: u8; // 8
+  score: u8; // 9
+  speed: u8; // 10
+  moveTimer: u8; // 11
 }
 
 const vars = changetype<Vars>(RAM_START);

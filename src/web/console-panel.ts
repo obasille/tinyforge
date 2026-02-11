@@ -20,13 +20,13 @@ const clearBtn = requireElement<HTMLButtonElement>('clear-console');
 export function addConsoleEntry(type: string, message: string): void {
   const entry = document.createElement('div');
   entry.className = `console-entry ${type.toLowerCase()}`;
-  
+
   const time = new Date().toLocaleTimeString();
   entry.innerHTML = `<span class="entry-time">${time}</span><span class="entry-type">[${type}]</span>${message}`;
-  
+
   consoleEntries.appendChild(entry);
   consoleEntries.scrollTop = consoleEntries.scrollHeight;
-  
+
   // Also log to browser console
   const msg = `[${type}] ${message}`;
   if (type === 'ERROR' || type === 'ABORT') console.error(msg);

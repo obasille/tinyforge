@@ -47,11 +47,7 @@ import {
   VIES_DEPART,
 } from "./crocodiles/types";
 
-import {
-  dessineCroco,
-  déplaceCroco,
-  initCroco,
-} from "./crocodiles/croco";
+import { dessineCroco, déplaceCroco, initCroco } from "./crocodiles/croco";
 import {
   caseCouleur,
   chargeNiveau,
@@ -101,7 +97,7 @@ export function init(): void {
   trouveCasesCouleur(Couleurs.CrocoRouge, casesCiblesCrocoRouge);
   trouveCasesCouleur(Couleurs.CrocoViolet, casesCiblesCrocoViolet);
   trouveCasesCouleur(Couleurs.CrocoVert, casesCiblesCrocoVert);
-  
+
   // Construit les ensembles de cases valides (sur les plus courts chemins)
   construireCasesValides(casesCiblesCrocoRouge, casesValidesCrocoRouge);
   construireCasesValides(casesCiblesCrocoViolet, casesValidesCrocoViolet);
@@ -146,13 +142,13 @@ export function init(): void {
 // Mise à jour du jeu
 export function update(): void {
   const etat = jeu.etat;
-  
+
   // Gestion du redémarrage : appuyer sur START après la fin de partie
   if (etat != EtatJeu.EN_COURS && buttonPressed(Button.START)) {
     init();
     return;
   }
-  
+
   // Si le jeu est terminé, continuer à animer le mouvement du joueur
   if (etat != EtatJeu.EN_COURS) {
     if (joueur.minuteurDepl > 0) joueur.minuteurDepl--;
@@ -248,7 +244,7 @@ export function draw(): void {
           y * TAILLE_CASE,
           TAILLE_CASE,
           TAILLE_CASE,
-          Couleurs.Sol
+          Couleurs.Sol,
         );
       }
     }
@@ -296,7 +292,7 @@ export function draw(): void {
   const pasCoeur = TAILLE_CASE + 2;
   for (let i: i32 = 0; i < (jeu.vies as i32); i++) {
     const offsetY = (i & 1) == 0 ? bounce : -bounce;
-    drawSprite(s("heart"), coeurX - (i * pasCoeur), offsetY);
+    drawSprite(s("heart"), coeurX - i * pasCoeur, offsetY);
   }
 
   // Dessine les chemins possibles pour chaque croco (pour debug)
@@ -311,8 +307,16 @@ export function draw(): void {
   // }
 
   if (jeu.etat == EtatJeu.FIN) {
-    drawStartMessageBox("IL VA TE MANGER...", Couleurs.MessageBoxFond, Couleurs.MessageBoxTexte);
+    drawStartMessageBox(
+      "IL VA TE MANGER...",
+      Couleurs.MessageBoxFond,
+      Couleurs.MessageBoxTexte,
+    );
   } else if (jeu.etat == EtatJeu.VICTOIRE) {
-    drawStartMessageBox("VICTOIRE!", Couleurs.MessageBoxFondVictoire, Couleurs.MessageBoxTexteVictoire);
+    drawStartMessageBox(
+      "VICTOIRE!",
+      Couleurs.MessageBoxFondVictoire,
+      Couleurs.MessageBoxTexteVictoire,
+    );
   }
 }
