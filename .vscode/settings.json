@@ -26,5 +26,14 @@
     "Tete",
     "usize",
     "verifie"
-  ]
+  ],
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.formatOnType": false, // required
+  "editor.formatOnPaste": true, // optional
+  "editor.formatOnSave": true, // optional
+  "editor.formatOnSaveMode": "file", // required to format on save
+  "files.autoSave": "onFocusChange",
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  } // optional but recommended
 }

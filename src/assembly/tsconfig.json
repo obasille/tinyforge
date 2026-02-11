@@ -1,9 +1,8 @@
 {
   "extends": "../../node_modules/assemblyscript/std/assembly.json",
   "compilerOptions": {
+    "ignoreDeprecations": "6.0",
     "strictPropertyInitialization": false
   },
-  "include": [
-    "./**/*.ts"
-  ]
+  "include": ["./**/*.ts"]
 }
