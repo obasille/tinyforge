@@ -2,8 +2,8 @@
 // Low-level and high-level drawing functions for rendering graphics
 
 import {
-  WIDTH,
   HEIGHT,
+  WIDTH,
 } from "./memory";
 
 /**

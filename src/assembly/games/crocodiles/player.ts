@@ -1,12 +1,31 @@
 // cspell:language en,fr
-import { warn, randomRange, drawSprite, drawSpriteScaledDown, s, buttonDown, Button } from "../../sdk";
-import { 
-  joueur, INVALIDE, Direction, JOUEUR_DEPL_DELAI, TAILLE_CASE,
-  Couleurs, TUNNEL_ANIM_TICKS, LARGEUR_GRILLE, HAUTEUR_GRILLE
+import {
+  Button,
+  buttonDown,
+  drawSprite,
+  drawSpriteScaledDown,
+  randomRange,
+  s,
+  warn,
+} from "../../sdk";
+
+import { peutBouger, trouveCasesCouleur } from "./level";
+import {
+  Couleurs,
+  Direction,
+  HAUTEUR_GRILLE,
+  INVALIDE,
+  joueur,
+  JOUEUR_DEPL_DELAI,
+  LARGEUR_GRILLE,
+  TAILLE_CASE,
+  TUNNEL_ANIM_TICKS,
 } from "./types";
-import { deltaDirX, deltaDirY, donneDir } from "./utils";
-import { peutBouger } from "./level";
-import { trouveCasesCouleur } from "./level";
+import {
+  deltaDirX,
+  deltaDirY,
+  donneDir,
+} from "./utils";
 
 export function initJoueur(): void {
   // Trouve toutes les cases avec la couleur Joueur

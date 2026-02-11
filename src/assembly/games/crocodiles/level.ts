@@ -1,6 +1,17 @@
 // cspell:language en,fr
-import { drawSpriteScaled, readSpriteInfo, getLastSpriteAddress, getLastSpriteWidth, getLastSpriteHeight } from "../../sdk";
-import { LARGEUR_GRILLE, HAUTEUR_GRILLE, Couleurs } from "./types";
+import {
+  drawSpriteScaled,
+  getLastSpriteAddress,
+  getLastSpriteHeight,
+  getLastSpriteWidth,
+  readSpriteInfo,
+} from "../../sdk";
+
+import {
+  Couleurs,
+  HAUTEUR_GRILLE,
+  LARGEUR_GRILLE,
+} from "./types";
 
 let adresseNiveau: usize = 0;
 let levelSpriteId: i32 = -1;

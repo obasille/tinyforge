@@ -1,11 +1,22 @@
 // cspell:language en,fr
-import { warn, drawSprite, s } from "../../sdk";
-import { 
-  Viande, lesViandes, lesCrocos, NB_CROCOS,
-  INVALIDE, INVALIDE_POS, Couleurs, TAILLE_CASE, joueur
-} from "./types";
-import { trouveNiemePoint } from "./level";
+import {
+  drawSprite,
+  s,
+  warn,
+} from "../../sdk";
+
 import { trouveCrocoPourGamelle } from "./croco";
+import { trouveNiemePoint } from "./level";
+import {
+  Couleurs,
+  INVALIDE,
+  INVALIDE_POS,
+  joueur,
+  lesCrocos,
+  lesViandes,
+  NB_CROCOS,
+  TAILLE_CASE
+} from "./types";
 
 // === Viandes ===
 

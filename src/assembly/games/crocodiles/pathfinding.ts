@@ -1,6 +1,11 @@
 // cspell:language en,fr
-import { LARGEUR_GRILLE, HAUTEUR_GRILLE, INVALIDE_POS, Couleurs } from "./types";
 import { caseCouleur } from "./level";
+import {
+  Couleurs,
+  HAUTEUR_GRILLE,
+  INVALIDE_POS,
+  LARGEUR_GRILLE,
+} from "./types";
 
 // Tableaux statiques pour BFS
 const MAX_BFS_SIZE: i32 = 256; // Plus grand que 20x10 = 200 cases

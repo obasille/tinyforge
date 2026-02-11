@@ -1,12 +1,27 @@
 // cspell:language en,fr
-import { warn, randomRange, fillRect, c } from "../../sdk";
-import { 
-  Piège, lesPièges, NB_PIEGES, INVALIDE, EtatJeu,
-  Couleurs, PIEGE_MIN_TICKS, PIEGE_MAX_TICKS, INVINCIBLE_TICKS,
-  joueur, jeu, TAILLE_CASE
-} from "./types";
+import {
+  c,
+  fillRect,
+  randomRange,
+} from "../../sdk";
+
 import { litCouleurCase } from "./level";
-import { LARGEUR_GRILLE, HAUTEUR_GRILLE } from "./types";
+import {
+  Couleurs,
+  EtatJeu,
+  HAUTEUR_GRILLE,
+  INVALIDE,
+  INVINCIBLE_TICKS,
+  jeu,
+  joueur,
+  LARGEUR_GRILLE,
+  lesPièges,
+  NB_PIEGES,
+  PIEGE_MAX_TICKS,
+  PIEGE_MIN_TICKS,
+  Piège,
+  TAILLE_CASE,
+} from "./types";
 
 export function initPiège(index: u8): void {
   const piège = lesPièges[index];

@@ -1,14 +1,17 @@
 // Sprite Manager - Handles sprite loading and memory management
 
-import { AssetLoader, AssetDescriptor } from './asset-loader.js';
 import {
+  SPRITE_DATA_SIZE,
   SPRITE_ID_ENTRY_SIZE,
   SPRITE_ID_MAX_CHARS,
+  SPRITE_INFO_ENTRY_SIZE,
   SPRITE_TABLE_ADDR,
   SPRITE_TABLE_HEADER_SIZE,
-  SPRITE_INFO_ENTRY_SIZE,
-  SPRITE_DATA_SIZE
 } from '../memory-map.js';
+import {
+  AssetDescriptor,
+  AssetLoader,
+} from './asset-loader.js';
 import { addConsoleEntry } from './console-panel.js';
 
 type SpriteEntry = {

@@ -1,11 +1,26 @@
 // cspell:language en,fr
-import { warn, drawSprite, s } from "../../sdk";
-import { 
-  Tunnel, lesTunnels, NB_TUNNELS, INVALIDE, INVALIDE_POS, 
-  Couleurs, Direction, TUNNEL_ANIM_TICKS, TUNNEL_CYCLE_TICKS, joueur, jeu 
-} from "./types";
+import {
+  drawSprite,
+  s,
+  warn,
+} from "../../sdk";
+
 import { litCouleurCase } from "./level";
-import { LARGEUR_GRILLE, HAUTEUR_GRILLE, TAILLE_CASE } from "./types";
+import {
+  Couleurs,
+  Direction,
+  HAUTEUR_GRILLE,
+  INVALIDE,
+  INVALIDE_POS,
+  jeu,
+  joueur,
+  LARGEUR_GRILLE,
+  lesTunnels,
+  NB_TUNNELS,
+  TAILLE_CASE,
+  TUNNEL_ANIM_TICKS,
+  TUNNEL_CYCLE_TICKS,
+} from "./types";
 
 export function initTunnel(index: u8): void {
   const tunnel = lesTunnels[index];

@@ -19,10 +19,10 @@
 import {
   INPUT_BUTTONS_ADDR,
   INPUT_BUTTONS_PREV_ADDR,
-  MOUSE_X_ADDR,
-  MOUSE_Y_ADDR,
   MOUSE_BUTTONS_ADDR,
   MOUSE_BUTTONS_PREV_ADDR,
+  MOUSE_X_ADDR,
+  MOUSE_Y_ADDR,
 } from "./memory";
 
 /** Button bit flags for keyboard input */

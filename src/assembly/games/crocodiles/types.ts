@@ -1,5 +1,10 @@
 // cspell:language en,fr
-import { HEIGHT, RAM_START, WIDTH, c } from "../../sdk";
+import {
+  HEIGHT,
+  RAM_START,
+  WIDTH,
+  c,
+} from "../../sdk";
 
 // === Constantes ===
 export const TAILLE_CASE: i32 = 16;

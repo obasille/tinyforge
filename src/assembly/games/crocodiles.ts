@@ -7,60 +7,85 @@
 
 import {
   Button,
-  WIDTH,
   buttonPressed,
   drawSprite,
   drawStartMessageBox,
   fillRect,
   s,
   warn,
+  WIDTH,
 } from "../sdk";
 
 // Imports des modules
 import {
+  casesCiblesCrocoRouge,
+  casesCiblesCrocoVert,
+  casesCiblesCrocoViolet,
+  casesValidesCrocoRouge,
+  casesValidesCrocos,
+  casesValidesCrocoVert,
+  casesValidesCrocoViolet,
+  Couleurs,
+  couleursCrocos,
+  CROCO_DEPL_DELAI,
+  EtatJeu,
+  HAUTEUR_GRILLE,
+  INVINCIBLE_TICKS,
   jeu,
   joueur,
-  lesCrocos,
-  lesViandes,
-  lesTunnels,
-  lesPièges,
-  couleursCrocos,
-  casesCiblesCrocoRouge,
-  casesCiblesCrocoViolet,
-  casesCiblesCrocoVert,
-  casesValidesCrocos,
-  casesValidesCrocoRouge,
-  casesValidesCrocoViolet,
-  casesValidesCrocoVert,
-  Couleurs,
-  EtatJeu,
-  NB_CROCOS,
-  NB_TUNNELS,
-  NB_PIEGES,
-  VIES_DEPART,
-  CROCO_DEPL_DELAI,
-  TAILLE_CASE,
   LARGEUR_GRILLE,
-  HAUTEUR_GRILLE,
+  lesCrocos,
+  lesPièges,
+  lesTunnels,
+  lesViandes,
+  NB_CROCOS,
+  NB_PIEGES,
+  NB_TUNNELS,
+  TAILLE_CASE,
   TUNNEL_ANIM_TICKS,
   TUNNEL_CYCLE_TICKS,
-  INVINCIBLE_TICKS,
+  VIES_DEPART,
 } from "./crocodiles/types";
 
-import { chargeNiveau, dessineGrille, trouveCasesCouleur, caseCouleur } from "./crocodiles/level";
+import {
+  dessineCroco,
+  déplaceCroco,
+  initCroco,
+} from "./crocodiles/croco";
+import {
+  caseCouleur,
+  chargeNiveau,
+  dessineGrille,
+  trouveCasesCouleur,
+} from "./crocodiles/level";
 import { construireCasesValides } from "./crocodiles/pathfinding";
-import { verifiePositionJoueur } from "./crocodiles/utils";
-import { initJoueur, deplaceJoueur, dessineTeteJoueur } from "./crocodiles/player";
-import { initCroco, déplaceCroco, dessineCroco } from "./crocodiles/croco";
-import { 
-  initViande, ramasseViande, dessineViande, 
-  assigneGamelle, deposeViande, dessineGamelle 
-} from "./crocodiles/viande";
-import { 
-  initTunnel, essaieTeleportTunnel, majTunnelAnimJoueur, 
-  majOuvertureTunnels, dessineTunnel 
+import {
+  dessinePiège,
+  initPiège,
+  majPièges,
+  verifieCollisionPièges,
+} from "./crocodiles/piege";
+import {
+  deplaceJoueur,
+  dessineTeteJoueur,
+  initJoueur,
+} from "./crocodiles/player";
+import {
+  dessineTunnel,
+  essaieTeleportTunnel,
+  initTunnel,
+  majOuvertureTunnels,
+  majTunnelAnimJoueur,
 } from "./crocodiles/tunnel";
-import { initPiège, majPièges, verifieCollisionPièges, dessinePiège } from "./crocodiles/piege";
+import { verifiePositionJoueur } from "./crocodiles/utils";
+import {
+  assigneGamelle,
+  deposeViande,
+  dessineGamelle,
+  dessineViande,
+  initViande,
+  ramasseViande
+} from "./crocodiles/viande";
 
 // === Cycle de vie ===
 

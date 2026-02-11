@@ -1,9 +1,13 @@
 // @ts-ignore - No type definitions available for @assemblyscript/loader
 import * as loader from '@assemblyscript/loader';
-import { addConsoleEntry } from './console-panel.js';
+import {
+  INPUT_ADDR,
+  MOUSE_ADDR,
+  SDK_RNG_SEED_ADDR,
+} from '../memory-map.js';
 import { audioManager } from './audio-manager.js';
+import { addConsoleEntry } from './console-panel.js';
 import { spriteManager } from './sprite-manager.js';
-import { INPUT_ADDR, MOUSE_ADDR, SDK_RNG_SEED_ADDR } from '../memory-map.js';
 
 type WasmLifecycle = () => void;
 type WasmInstanceExports = WebAssembly.Exports & {

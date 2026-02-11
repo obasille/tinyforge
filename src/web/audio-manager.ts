@@ -8,7 +8,10 @@
 // after the user interacts with the page (clicks start button, presses a key, etc.).
 // Games should call playMusic() after detecting user input, not in init().
 
-import { AssetLoader, AssetDescriptor } from './asset-loader.js';
+import {
+  AssetDescriptor,
+  AssetLoader,
+} from './asset-loader.js';
 import { addConsoleEntry } from './console-panel.js';
 
 class AudioManager {

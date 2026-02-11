@@ -1,13 +1,32 @@
 // cspell:language en,fr
-import { warn, randomRange, drawSprite, s } from "../../sdk";
-import { 
-  Croco, lesCrocos, NB_CROCOS, couleursCrocos, casesCiblesCrocos, casesValidesCrocos,
-  INVALIDE, INVALIDE_POS, Direction, CROCO_DEPL_DELAI, TAILLE_CASE, joueur,
-  LARGEUR_GRILLE, HAUTEUR_GRILLE
-} from "./types";
+import {
+  drawSprite,
+  randomRange,
+  s,
+  warn,
+} from "../../sdk";
+
 import { trouvePointDepart } from "./level";
 import { donneProchaineCaseCheminBFS } from "./pathfinding";
-import { deltaDirX, deltaDirY, donneDir } from "./utils";
+import {
+  casesCiblesCrocos,
+  casesValidesCrocos,
+  Croco,
+  CROCO_DEPL_DELAI,
+  Direction,
+  HAUTEUR_GRILLE,
+  INVALIDE,
+  INVALIDE_POS,
+  joueur,
+  LARGEUR_GRILLE,
+  NB_CROCOS,
+  TAILLE_CASE,
+} from "./types";
+import {
+  deltaDirX,
+  deltaDirY,
+  donneDir,
+} from "./utils";
 
 export function initCroco(index: u8, croco: Croco, couleur: u32): void {
   const pos = trouvePointDepart(couleur);
