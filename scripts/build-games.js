@@ -11,13 +11,20 @@ import { execSync } from 'child_process';
 import { mkdirSync, readdirSync } from 'fs';
 import { basename } from 'path';
 
-const args = process.argv.slice(2);
+// Parse --outdir option
+let args = process.argv.slice(2);
+let outputDir = 'assets/cartridges';
+const outdirIdx = args.indexOf('--outdir');
+if (outdirIdx !== -1 && args.length > outdirIdx + 1) {
+  outputDir = args[outdirIdx + 1];
+  args = args.slice(0, outdirIdx).concat(args.slice(outdirIdx + 2));
+}
+
 const isDebug = args[0] === 'debug';
 const files = isDebug ? args.slice(1) : args;
 
 const mode = isDebug ? 'debug' : 'release';
 const target = isDebug ? '--target debug' : '';
-const outputDir = 'assets/cartridges';
 
 function buildGame(fileName, showMode = false) {
   const modeLabel = showMode && isDebug ? ' (debug)' : '';

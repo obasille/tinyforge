@@ -4,3 +4,4 @@ node_modules/
 *.wasm.map
 /dist/
 /assets/cartridges/
+/tmp/

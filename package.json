@@ -9,6 +9,7 @@
     "build:host:watch": "tsc -p src/web/tsconfig.json --watch",
     "build:games": "node scripts/build-games.js",
     "build:debug": "node scripts/build-games.js debug",
+    "check:alloc": "node scripts/check-alloc.js",
     "watch:host": "npm run build:host:watch",
     "watch:games": "node scripts/watch-games.js",
     "upload": "node scripts/upload.js",
