@@ -35,5 +35,5 @@
   "files.autoSave": "onFocusChange",
   "[typescript]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
-  } // optional but recommended
+  }
 }
