@@ -1,14 +1,22 @@
 // cspell:language en,fr
-import { drawSprite, randomRange, s, warn } from "../../sdk";
+import {
+  drawSprite,
+  FixedArrayWithCount,
+  randomRange,
+  s,
+  warn,
+} from "../../sdk";
 
 import { trouvePointDepart } from "./level";
 import { donneProchaineCaseCheminBFS } from "./pathfinding";
 import {
-  casesCiblesCrocos,
-  casesValidesCrocos,
+  getCasesCibles,
+  getCasesValides,
   Croco,
   CROCO_DEPL_DELAI,
   Direction,
+  directionX,
+  directionY,
   HAUTEUR_GRILLE,
   INVALIDE,
   INVALIDE_POS,
@@ -40,7 +48,10 @@ export function initCroco(index: u8, croco: Croco, couleur: u32): void {
   croco.targetY = INVALIDE;
 }
 
-export function choisiNouvelleCible(croco: Croco, cases: u16[]): void {
+export function choisiNouvelleCible(
+  croco: Croco,
+  cases: FixedArrayWithCount<u16>,
+): void {
   if (cases.length == 0) {
     croco.targetX = INVALIDE;
     croco.targetY = INVALIDE;
@@ -52,7 +63,7 @@ export function choisiNouvelleCible(croco: Croco, cases: u16[]): void {
   let pos: u16;
   do {
     const idx = randomRange(cases.length);
-    pos = cases[idx];
+    pos = cases.get(idx);
     tentatives++;
   } while (
     tentatives < 10 &&
@@ -76,7 +87,7 @@ export function déplaceCroco(croco: Croco, indexCroco: i32): void {
       croco.targetX == INVALIDE ||
       (croco.x == croco.targetX && croco.y == croco.targetY)
     ) {
-      choisiNouvelleCible(croco, casesCiblesCrocos[indexCroco]);
+      choisiNouvelleCible(croco, getCasesCibles(indexCroco));
       if (croco.targetX == INVALIDE) {
         croco.dir = Direction.IMMOBILE as u8;
         return;
@@ -94,7 +105,7 @@ export function déplaceCroco(croco: Croco, indexCroco: i32): void {
 
   if (prochaineCase == INVALIDE_POS) {
     // Pas de chemin trouvé, choisir une nouvelle cible
-    choisiNouvelleCible(croco, casesCiblesCrocos[indexCroco]);
+    choisiNouvelleCible(croco, getCasesCibles(indexCroco));
     croco.dir = Direction.IMMOBILE as u8;
     return;
   }
@@ -103,9 +114,9 @@ export function déplaceCroco(croco: Croco, indexCroco: i32): void {
   const prochainY = ((prochaineCase >> 8) & 0xff) as i32;
 
   // Vérifie que le prochain pas est une case valide pour ce croco
-  if (!casesValidesCrocos[indexCroco].includes(prochaineCase)) {
+  if (!getCasesValides(indexCroco).includes(prochaineCase)) {
     // La case n'est pas valide, choisir une nouvelle cible
-    choisiNouvelleCible(croco, casesCiblesCrocos[indexCroco]);
+    choisiNouvelleCible(croco, getCasesCibles(indexCroco));
     croco.dir = Direction.IMMOBILE as u8;
     return;
   }
@@ -153,20 +164,9 @@ export function trouveCrocoPourGamelle(x: u8, y: u8): u8 {
   const gx = x as i32;
   const gy = y as i32;
 
-  const directionX = new StaticArray<i32>(4);
-  const directionY = new StaticArray<i32>(4);
-  directionX[0] = 0;
-  directionY[0] = -1;
-  directionX[1] = 0;
-  directionY[1] = 1;
-  directionX[2] = -1;
-  directionY[2] = 0;
-  directionX[3] = 1;
-  directionY[3] = 0;
-
   for (let i: i32 = 0; i < 4; i++) {
-    const nx = gx + directionX[i];
-    const ny = gy + directionY[i];
+    const nx = gx + directionX.get(i);
+    const ny = gy + directionY.get(i);
     if (nx < 0 || ny < 0 || nx >= LARGEUR_GRILLE || ny >= HAUTEUR_GRILLE)
       continue;
 
@@ -174,7 +174,7 @@ export function trouveCrocoPourGamelle(x: u8, y: u8): u8 {
 
     // Verifie si cette position est dans les cases valides de l'un des crocos
     for (let crocoIdx: i32 = 0; crocoIdx < NB_CROCOS; crocoIdx++) {
-      if (casesValidesCrocos[crocoIdx].includes(pos)) {
+      if (getCasesValides(crocoIdx).includes(pos)) {
         return crocoIdx as u8;
       }
     }

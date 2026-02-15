@@ -5,13 +5,13 @@ import { litCouleurCase } from "./level";
 import {
   Couleurs,
   EtatJeu,
+  donnePiège,
   HAUTEUR_GRILLE,
   INVALIDE,
   INVINCIBLE_TICKS,
   jeu,
   joueur,
   LARGEUR_GRILLE,
-  lesPièges,
   NB_PIÈGES,
   PIÈGE_MAX_TICKS,
   PIÈGE_MIN_TICKS,
@@ -20,7 +20,7 @@ import {
 } from "./types";
 
 export function initPiège(index: u8): void {
-  const piège = lesPièges[index];
+  const piège = donnePiège(index);
 
   // Trouve le Nième pixel de couleur Piège
   let count: i32 = 0;
@@ -52,7 +52,7 @@ export function initPiège(index: u8): void {
 
 export function majPièges(): void {
   for (let i: i32 = 0; i < NB_PIÈGES; i++) {
-    const piège = lesPièges[i];
+    const piège = donnePiège(i);
     if (!piège.present) continue;
 
     if (piège.timer > 0) {
@@ -71,7 +71,7 @@ export function verifieCollisionPièges(): void {
   if (joueur.invincible > 0) return;
 
   for (let i: i32 = 0; i < NB_PIÈGES; i++) {
-    const piège = lesPièges[i];
+    const piège = donnePiège(i);
     if (!piège.present || !piège.actif) continue;
 
     if (joueur.x == piège.x && joueur.y == piège.y) {

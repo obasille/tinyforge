@@ -1,5 +1,12 @@
 // cspell:language en,fr
-import { HEIGHT, RAM_START, WIDTH, c } from "../../sdk";
+import {
+  FixedArray,
+  FixedArrayWithCount,
+  HEIGHT,
+  RAM_START,
+  WIDTH,
+  c,
+} from "../../sdk";
 
 // === Constantes ===
 export const TAILLE_CASE: i32 = 16;
@@ -153,34 +160,111 @@ offset += szPiège;
 const piège2 = changetype<Piège>(offset);
 offset += szPiège;
 const piège3 = changetype<Piège>(offset);
+offset += szPiège;
 
-export const lesCrocos: Croco[] = [croco0, croco1, croco2];
-export const lesViandes: Viande[] = [viande0, viande1, viande2];
-export const lesTunnels: Tunnel[] = [tunnel0, tunnel1];
-export const lesPièges: Piège[] = [piège0, piège1, piège2, piège3];
+// Helper functions to get entities by index (avoids heap-allocated arrays)
+export function donneCroco(index: i32): Croco {
+  if (index == 0) return croco0;
+  if (index == 1) return croco1;
+  return croco2;
+}
 
-export const couleursCrocos: u32[] = [
-  Couleurs.CrocoRouge,
-  Couleurs.CrocoViolet,
-  Couleurs.CrocoVert,
-];
+export function donneViande(index: i32): Viande {
+  if (index == 0) return viande0;
+  if (index == 1) return viande1;
+  return viande2;
+}
 
-// cases cibles de chaque croco (format: y<<8 | x)
-export const casesCiblesCrocoRouge: u16[] = [];
-export const casesCiblesCrocoViolet: u16[] = [];
-export const casesCiblesCrocoVert: u16[] = [];
-export const casesCiblesCrocos: u16[][] = [
-  casesCiblesCrocoRouge,
-  casesCiblesCrocoViolet,
-  casesCiblesCrocoVert,
-];
+export function donneTunnel(index: i32): Tunnel {
+  if (index == 0) return tunnel0;
+  return tunnel1;
+}
 
-// cases valides pour les chemins de chaque croco, calculées au lancement du niveau (format: y<<8 | x)
-export const casesValidesCrocoRouge: u16[] = [];
-export const casesValidesCrocoViolet: u16[] = [];
-export const casesValidesCrocoVert: u16[] = [];
-export const casesValidesCrocos: u16[][] = [
-  casesValidesCrocoRouge,
-  casesValidesCrocoViolet,
-  casesValidesCrocoVert,
-];
+export function donnePiège(index: i32): Piège {
+  if (index == 0) return piège0;
+  if (index == 1) return piège1;
+  if (index == 2) return piège2;
+  return piège3;
+}
+
+export function donneCouleurCroco(index: i32): u32 {
+  if (index == 0) return Couleurs.CrocoRouge;
+  if (index == 1) return Couleurs.CrocoViolet;
+  return Couleurs.CrocoVert;
+}
+
+// Maximum size for case arrays (grid is 20x15 = 300 cells)
+const MAX_CASES_CIBLES: i32 = 100; // Max target cells per croco
+const MAX_CASES_VALIDES: i32 = 200; // Max valid path cells per croco
+
+// Allocate memory for case arrays
+// SDK FixedArrayWithCount layout: [u16 length][u16 capacity][data...]
+export const casesCiblesCrocoRouge =
+  FixedArrayWithCount.fromAddress<u16>(offset);
+offset += FixedArrayWithCount.sizeInMemory<u16>(MAX_CASES_CIBLES);
+export const casesCiblesCrocoViolet =
+  FixedArrayWithCount.fromAddress<u16>(offset);
+offset += FixedArrayWithCount.sizeInMemory<u16>(MAX_CASES_CIBLES);
+export const casesCiblesCrocoVert =
+  FixedArrayWithCount.fromAddress<u16>(offset);
+offset += FixedArrayWithCount.sizeInMemory<u16>(MAX_CASES_CIBLES);
+
+export const casesValidesCrocoRouge =
+  FixedArrayWithCount.fromAddress<u16>(offset);
+offset += FixedArrayWithCount.sizeInMemory<u16>(MAX_CASES_VALIDES);
+export const casesValidesCrocoViolet =
+  FixedArrayWithCount.fromAddress<u16>(offset);
+offset += FixedArrayWithCount.sizeInMemory<u16>(MAX_CASES_VALIDES);
+export const casesValidesCrocoVert =
+  FixedArrayWithCount.fromAddress<u16>(offset);
+offset += FixedArrayWithCount.sizeInMemory<u16>(MAX_CASES_VALIDES);
+
+// BFS pathfinding arrays (exported for use in pathfinding.ts)
+export const MAX_BFS_SIZE: i32 = 256;
+export const queueBFS = FixedArray.fromAddress<u16>(offset);
+offset += FixedArray.sizeInMemory<u16>(MAX_BFS_SIZE);
+export const parentsBFS = FixedArray.fromAddress<u16>(offset);
+offset += FixedArray.sizeInMemory<u16>(MAX_BFS_SIZE);
+
+// Direction arrays for pathfinding (4 directions: up, down, left, right)
+export const directionX = FixedArray.fromAddress<i32>(offset);
+offset += FixedArray.sizeInMemory<i32>(4);
+export const directionY = FixedArray.fromAddress<i32>(offset);
+offset += FixedArray.sizeInMemory<i32>(4);
+
+/**
+ * Initialize arrays capacities and static data
+ * Call once from game init()
+ */
+export function initTypeArrays(): void {
+  // Initialize capacities
+  casesCiblesCrocoRouge.capacity = MAX_CASES_CIBLES as u16;
+  casesCiblesCrocoViolet.capacity = MAX_CASES_CIBLES as u16;
+  casesCiblesCrocoVert.capacity = MAX_CASES_CIBLES as u16;
+  casesValidesCrocoRouge.capacity = MAX_CASES_VALIDES as u16;
+  casesValidesCrocoViolet.capacity = MAX_CASES_VALIDES as u16;
+  casesValidesCrocoVert.capacity = MAX_CASES_VALIDES as u16;
+
+  // Initialize direction arrays
+  directionX.set(0, 0);
+  directionY.set(0, -1); // UP
+  directionX.set(1, 0);
+  directionY.set(1, 1); // DOWN
+  directionX.set(2, -1);
+  directionY.set(2, 0); // LEFT
+  directionX.set(3, 1);
+  directionY.set(3, 0); // RIGHT
+}
+
+// Helper functions to get arrays by index (avoids heap-allocated array)
+export function getCasesCibles(index: i32): FixedArrayWithCount<u16> {
+  if (index == 0) return casesCiblesCrocoRouge;
+  if (index == 1) return casesCiblesCrocoViolet;
+  return casesCiblesCrocoVert;
+}
+
+export function getCasesValides(index: i32): FixedArrayWithCount<u16> {
+  if (index == 0) return casesValidesCrocoRouge;
+  if (index == 1) return casesValidesCrocoViolet;
+  return casesValidesCrocoVert;
+}

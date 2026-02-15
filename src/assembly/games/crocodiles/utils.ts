@@ -1,5 +1,5 @@
 // cspell:language en,fr
-import { Direction, lesCrocos, NB_CROCOS } from "./types";
+import { Direction, donneCroco, NB_CROCOS } from "./types";
 
 export function deltaDirX(dir: u8): i32 {
   if (dir == Direction.GAUCHE) return -1;
@@ -23,7 +23,7 @@ export function donneDir(dx: i32, dy: i32): u8 {
 
 export function verifiePositionJoueur(px: u8, py: u8): bool {
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
-    const croco = lesCrocos[i];
+    const croco = donneCroco(i);
     if (croco.x == px && croco.y == py) return true;
   }
   return false;

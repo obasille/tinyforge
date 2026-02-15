@@ -1,30 +1,21 @@
 // cspell:language en,fr
+import { FixedArrayWithCount } from "../../sdk";
 import { caseCouleur } from "./level";
 import {
   Couleurs,
+  directionX,
+  directionY,
   HAUTEUR_GRILLE,
   INVALIDE_POS,
   LARGEUR_GRILLE,
+  MAX_BFS_SIZE,
+  parentsBFS,
+  queueBFS,
 } from "./types";
 
-// Tableaux statiques pour BFS
-const MAX_BFS_SIZE: i32 = 256; // Plus grand que 20x10 = 200 cases
-const queueBFS = new StaticArray<u16>(MAX_BFS_SIZE);
-const parentsBFS = new StaticArray<u16>(MAX_BFS_SIZE);
+// BFS queue size tracking
 let tailleQueueBFS: i32 = 0;
 let tailleParentsBFS: i32 = 0;
-
-// Directions pour BFS
-const directionX = new StaticArray<i32>(4);
-const directionY = new StaticArray<i32>(4);
-directionX[0] = 0;
-directionY[0] = -1; // HAUT
-directionX[1] = 0;
-directionY[1] = 1; // BAS
-directionX[2] = -1;
-directionY[2] = 0; // GAUCHE
-directionX[3] = 1;
-directionY[3] = 0; // DROITE
 
 export function donneProchaineCaseCheminBFS(
   startX: i32,
@@ -43,13 +34,13 @@ export function donneProchaineCaseCheminBFS(
   tailleQueueBFS = 0;
 
   // Start BFS from end position to find start
-  queueBFS[tailleQueueBFS++] = endPos;
+  queueBFS.set(tailleQueueBFS++, endPos);
 
   let head = 0;
   let found = false;
 
   while (head < tailleQueueBFS) {
-    const pos = queueBFS[head++];
+    const pos = queueBFS.get(head++);
 
     if (pos == startPos) {
       found = true;
@@ -61,8 +52,8 @@ export function donneProchaineCaseCheminBFS(
 
     // Essayer les 4 directions
     for (let i = 0; i < 4; i++) {
-      const nx = x + directionX[i];
-      const ny = y + directionY[i];
+      const nx = x + directionX.get(i);
+      const ny = y + directionY.get(i);
 
       if (nx < 0 || nx >= LARGEUR_GRILLE || ny < 0 || ny >= HAUTEUR_GRILLE)
         continue;
@@ -73,15 +64,15 @@ export function donneProchaineCaseCheminBFS(
       // Check if already in queue
       let dejaDansQueue = false;
       for (let j = 0; j < tailleQueueBFS; j++) {
-        if (queueBFS[j] == npos) {
+        if (queueBFS.get(j) == npos) {
           dejaDansQueue = true;
           break;
         }
       }
 
       if (!dejaDansQueue && tailleQueueBFS < MAX_BFS_SIZE) {
-        parentsBFS[tailleParentsBFS++] = pos;
-        queueBFS[tailleQueueBFS++] = npos;
+        parentsBFS.set(tailleParentsBFS++, pos);
+        queueBFS.set(tailleQueueBFS++, npos);
       }
     }
   }
@@ -93,7 +84,7 @@ export function donneProchaineCaseCheminBFS(
   // Find index of startPos in queue
   let idx = -1;
   for (let i = 0; i < tailleQueueBFS; i++) {
-    if (queueBFS[i] == startPos) {
+    if (queueBFS.get(i) == startPos) {
       idx = i;
       break;
     }
@@ -103,26 +94,26 @@ export function donneProchaineCaseCheminBFS(
     return INVALIDE_POS;
   }
 
-  return parentsBFS[idx - 1];
+  return parentsBFS.get(idx - 1);
 }
 
 export function construireCasesValides(
-  casesCibles: u16[],
-  casesValides: u16[],
+  casesCibles: FixedArrayWithCount<u16>,
+  casesValides: FixedArrayWithCount<u16>,
 ): void {
   // Ajouter toutes les cases cibles
-  for (let i = 0; i < casesCibles.length; i++) {
-    casesValides.push(casesCibles[i]);
+  for (let i = 0; i < (casesCibles.length as i32); i++) {
+    casesValides.push(casesCibles.get(i));
   }
 
   // Pour chaque paire de cases cibles
-  for (let i = 0; i < casesCibles.length; i++) {
-    const posA = casesCibles[i];
+  for (let i = 0; i < (casesCibles.length as i32); i++) {
+    const posA = casesCibles.get(i);
     const ax = (posA & 0xff) as i32;
     const ay = ((posA >> 8) & 0xff) as i32;
 
-    for (let j = i + 1; j < casesCibles.length; j++) {
-      const posB = casesCibles[j];
+    for (let j = i + 1; j < (casesCibles.length as i32); j++) {
+      const posB = casesCibles.get(j);
       const bx = (posB & 0xff) as i32;
       const by = ((posB >> 8) & 0xff) as i32;
 
@@ -136,8 +127,16 @@ export function construireCasesValides(
           if (!casesValides.includes(current)) {
             casesValides.push(current);
           }
-          const idx = queueBFS.indexOf(current);
-          current = parentsBFS[idx - 1];
+          // Find index of current in queueBFS
+          let idx = -1;
+          for (let k = 0; k < tailleQueueBFS; k++) {
+            if (queueBFS.get(k) == current) {
+              idx = k;
+              break;
+            }
+          }
+          if (idx <= 0) break; // Safety check
+          current = parentsBFS.get(idx - 1);
         }
         if (!casesValides.includes(current)) {
           casesValides.push(current);

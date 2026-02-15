@@ -9,7 +9,7 @@ import {
   warn,
 } from "../../sdk";
 
-import { peutBouger, trouveCasesCouleur } from "./level";
+import { peutBouger, trouveNiemePoint, comptePointsCouleur } from "./level";
 import {
   Couleurs,
   Direction,
@@ -25,14 +25,13 @@ import { deltaDirX, deltaDirY, donneDir } from "./utils";
 
 export function initJoueur(): void {
   // Trouve toutes les cases avec la couleur Joueur
-  const casesJoueur: u16[] = [];
-  trouveCasesCouleur(Couleurs.Joueur, casesJoueur);
+  const nbSpawns = comptePointsCouleur(Couleurs.Joueur);
 
   // Choisit une case aléatoire parmi les positions Joueur trouvées
   let spawn: u16;
-  if (casesJoueur.length > 0) {
-    const idx = randomRange(casesJoueur.length);
-    spawn = casesJoueur[idx];
+  if (nbSpawns > 0) {
+    const idx = randomRange(nbSpawns);
+    spawn = trouveNiemePoint(Couleurs.Joueur, idx);
   } else {
     // Fallback : centre de la grille si aucune position trouvée
     warn("Aucune position Joueur trouvée dans le niveau");

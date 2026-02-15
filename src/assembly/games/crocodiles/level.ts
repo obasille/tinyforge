@@ -1,6 +1,7 @@
 // cspell:language en,fr
 import {
   drawSpriteScaled,
+  FixedArrayWithCount,
   getLastSpriteAddress,
   getLastSpriteHeight,
   getLastSpriteWidth,
@@ -79,7 +80,10 @@ export function trouveNiemePoint(couleur: u32, index: i32): u16 {
   return 0xffff; // INVALIDE_POS
 }
 
-export function trouveCasesCouleur(couleur: u32, cases: u16[]): void {
+export function trouveCasesCouleur(
+  couleur: u32,
+  cases: FixedArrayWithCount<u16>,
+): void {
   for (let y: i32 = 0; y < HAUTEUR_GRILLE; y++) {
     for (let x: i32 = 0; x < LARGEUR_GRILLE; x++) {
       if (litCouleurCase(x, y) == couleur) {
@@ -87,4 +91,16 @@ export function trouveCasesCouleur(couleur: u32, cases: u16[]): void {
       }
     }
   }
+}
+
+export function comptePointsCouleur(couleur: u32): i32 {
+  let compteur: i32 = 0;
+  for (let y: i32 = 0; y < HAUTEUR_GRILLE; y++) {
+    for (let x: i32 = 0; x < LARGEUR_GRILLE; x++) {
+      if (litCouleurCase(x, y) == couleur) {
+        compteur++;
+      }
+    }
+  }
+  return compteur;
 }
