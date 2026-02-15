@@ -1,5 +1,5 @@
 // cspell:language en,fr
-import { drawSprite, s, warn } from "../../sdk";
+import { drawSprite, s, warni } from "../../sdk";
 
 import { litCouleurCase } from "./level";
 import {
@@ -42,15 +42,9 @@ export function initTunnel(index: u8): void {
 
   // Log des avertissements si nécessaire
   if (count == 1) {
-    warn("Tunnel " + index.toString() + ": seulement 1 pixel trouvé");
+    warni("Tunnel {}: seulement 1 pixel trouvé", index);
   } else if (count > 2) {
-    warn(
-      "Tunnel " +
-        index.toString() +
-        ": " +
-        count.toString() +
-        " pixels trouvés (2 attendus)",
-    );
+    warni("Tunnel {}: {} pixels trouvés (2 attendus)", index, count);
   }
 
   // Configure le tunnel si exactement 2 pixels trouvés

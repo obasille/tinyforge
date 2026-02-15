@@ -4,7 +4,7 @@ import {
   FixedArrayWithCount,
   randomRange,
   s,
-  warn,
+  warni,
 } from "../../sdk";
 
 import { trouvePointDepart } from "./level";
@@ -30,7 +30,7 @@ import { deltaDirX, deltaDirY, donneDir } from "./utils";
 export function initCroco(index: u8, croco: Croco, couleur: u32): void {
   const pos = trouvePointDepart(couleur);
   if (pos == INVALIDE_POS) {
-    warn("Crocodile " + index.toString() + " non trouvé");
+    warni("Crocodile {} non trouvé", index);
     croco.x = INVALIDE;
     croco.y = INVALIDE;
     croco.dir = Direction.IMMOBILE as u8;

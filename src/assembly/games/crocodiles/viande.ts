@@ -1,5 +1,5 @@
 // cspell:language en,fr
-import { drawSprite, s, warn } from "../../sdk";
+import { drawSprite, s, warni } from "../../sdk";
 
 import { trouveCrocoPourGamelle } from "./croco";
 import { trouveNiemePoint } from "./level";
@@ -30,7 +30,7 @@ export function metViandePos(index: u8, x: u8, y: u8): void {
 export function initViande(index: u8): void {
   const pos = trouveNiemePoint(Couleurs.Viande, index as i32);
   if (pos == INVALIDE_POS) {
-    warn("Viande " + index.toString() + " non trouvée");
+    warni("Viande {} non trouvée", index);
     metViandePos(index, INVALIDE, INVALIDE);
     return;
   }
@@ -64,7 +64,7 @@ export function dessineViande(x: u8, y: u8): void {
 export function assigneGamelle(index: u8): void {
   const pos = trouveNiemePoint(Couleurs.Gamelle, index as i32);
   if (pos == INVALIDE_POS) {
-    warn("Gamelle " + index.toString() + " non trouvée");
+    warni("Gamelle {} non trouvée", index);
     return;
   }
   const gx = (pos & 0xff) as u8;
@@ -75,7 +75,7 @@ export function assigneGamelle(index: u8): void {
     croco.gamelleX = gx;
     croco.gamelleY = gy;
   } else {
-    warn("Gamelle " + index.toString() + " sans croco associé");
+    warni("Gamelle {} sans croco associé", index);
   }
 }
 
