@@ -1128,13 +1128,14 @@ function frame(now: number): void {
       colorArgbEl.textContent = argb;
       colorRgbEl.textContent = rgb;
       if (colorSwatchEl) {
-        colorSwatchEl.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${a / 255})`;
+        const bgColor = `rgba(${r}, ${g}, ${b}, ${a / 255})`;
+        colorSwatchEl.style.setProperty('background-color', bgColor, 'important');
       }
     } else {
       colorArgbEl.textContent = '--';
       colorRgbEl.textContent = '--';
       if (colorSwatchEl) {
-        colorSwatchEl.style.backgroundColor = 'transparent';
+        colorSwatchEl.style.setProperty('background-color', 'transparent', 'important');
       }
     }
   }
