@@ -161,6 +161,20 @@ async function loadGame(
   addConsoleEntry('LOG', `Loading ${displayName}...`);
 
   try {
+    const getString = (value: number): string =>
+      wasmExports?.__getString ? wasmExports.__getString(value) : String(value);
+    // Helper for console logging with interpolation
+    const logWithParams = (
+      type: 'LOG' | 'WARN' | 'ERROR',
+      msg: number,
+      params: Array<bigint | number | undefined>,
+    ): void => {
+      const text = getString(msg);
+      const interpolated = params
+        .filter((p) => p !== undefined)
+        .reduce((str, param) => str.replace('{}', String(param)), text);
+      addConsoleEntry(type, interpolated);
+    };
     const wasm = (await loader.instantiateStreaming(
       fetch(`./assets/cartridges/${gameName}.wasm`),
       {
@@ -169,10 +183,6 @@ async function loadGame(
           abort: (msg: number, file: number, line: number, column: number) => {
             // See AS __getString implementation in wasm-string.js
             hasAborted = true;
-            const getString = (value: number): string =>
-              wasmExports?.__getString
-                ? wasmExports.__getString(value)
-                : String(value);
             const msgText = getString(msg);
             const fileText = getString(file);
             const errorMsg = `Abort at ${fileText} ${line}:${column} => ${msgText}`;
@@ -184,34 +194,76 @@ async function loadGame(
               column,
             });
           },
-          trace: (msg: number) => {
-            const text = wasmExports?.__getString
-              ? wasmExports.__getString(msg)
-              : String(msg);
-            addConsoleEntry('TRACE', text);
-          },
           // Fast framebuffer clear using native JS fill()
           clearFramebuffer: (color: number) => {
             fb32.fill(color | 0xff000000);
           },
           // Console logging functions
+          trace: (msg: number) => {
+            addConsoleEntry('TRACE', getString(msg));
+          },
           'console.log': (msg: number) => {
-            const text = wasmExports?.__getString
-              ? wasmExports.__getString(msg)
-              : String(msg);
-            addConsoleEntry('LOG', text);
+            addConsoleEntry('LOG', getString(msg));
+          },
+          'console.logi': (
+            msg: number,
+            p1?: bigint,
+            p2?: bigint,
+            p3?: bigint,
+            p4?: bigint,
+          ) => {
+            logWithParams('LOG', msg, [p1, p2, p3, p4]);
+          },
+          'console.logf': (
+            msg: number,
+            p1?: number,
+            p2?: number,
+            p3?: number,
+            p4?: number,
+          ) => {
+            logWithParams('LOG', msg, [p1, p2, p3, p4]);
           },
           'console.warn': (msg: number) => {
-            const text = wasmExports?.__getString
-              ? wasmExports.__getString(msg)
-              : String(msg);
-            addConsoleEntry('WARN', text);
+            addConsoleEntry('WARN', getString(msg));
+          },
+          'console.warni': (
+            msg: number,
+            p1?: bigint,
+            p2?: bigint,
+            p3?: bigint,
+            p4?: bigint,
+          ) => {
+            logWithParams('WARN', msg, [p1, p2, p3, p4]);
+          },
+          'console.warnf': (
+            msg: number,
+            p1?: number,
+            p2?: number,
+            p3?: number,
+            p4?: number,
+          ) => {
+            logWithParams('WARN', msg, [p1, p2, p3, p4]);
           },
           'console.error': (msg: number) => {
-            const text = wasmExports?.__getString
-              ? wasmExports.__getString(msg)
-              : String(msg);
-            addConsoleEntry('ERROR', text);
+            addConsoleEntry('ERROR', getString(msg));
+          },
+          'console.errori': (
+            msg: number,
+            p1?: bigint,
+            p2?: bigint,
+            p3?: bigint,
+            p4?: bigint,
+          ) => {
+            logWithParams('ERROR', msg, [p1, p2, p3, p4]);
+          },
+          'console.errorf': (
+            msg: number,
+            p1?: number,
+            p2?: number,
+            p3?: number,
+            p4?: number,
+          ) => {
+            logWithParams('ERROR', msg, [p1, p2, p3, p4]);
           },
           // Audio functions
           'audio.playSfx': (id: number, volume: number) => {
