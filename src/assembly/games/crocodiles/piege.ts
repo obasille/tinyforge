@@ -34,7 +34,7 @@ export function initPiège(index: u8): void {
           piège.present = 1;
           // Timer aléatoire initial entre 2 et 5 secondes
           piège.timer = (PIÈGE_MIN_TICKS +
-            randomRange((PIÈGE_MAX_TICKS - PIÈGE_MIN_TICKS) as i32)) as u16;
+            randomRange(PIÈGE_MAX_TICKS - PIÈGE_MIN_TICKS)) as u16;
           return;
         }
         count++;
@@ -62,7 +62,7 @@ export function majPièges(): void {
       piège.actif = piège.actif == 1 ? 0 : 1;
       // Nouveau timer aléatoire entre 2 et 5 secondes
       piège.timer = (PIÈGE_MIN_TICKS +
-        randomRange((PIÈGE_MAX_TICKS - PIÈGE_MIN_TICKS) as i32)) as u16;
+        randomRange(PIÈGE_MAX_TICKS - PIÈGE_MIN_TICKS)) as u16;
     }
   }
 }

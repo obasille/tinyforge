@@ -71,7 +71,7 @@ export function assigneGamelle(index: u8): void {
   const gy = ((pos >> 8) & 0xff) as u8;
   const idx = trouveCrocoPourGamelle(gx, gy);
   if ((idx as i32) < NB_CROCOS) {
-    const croco = donneCroco(idx as i32);
+    const croco = donneCroco(idx);
     croco.gamelleX = gx;
     croco.gamelleY = gy;
   } else {
