@@ -222,7 +222,7 @@ Address        Size        Description
 
 **SDK RNG Seed (0x06B810 - 0x06B813):**
 
-- 4-byte i32 seed used by SDK `random()` and `randomRange()`
+- 4-byte u32 seed used by SDK `random()` and `randomRange()`
 - Initialized by the host and editable in devtools
 
 **Game RAM (0x06B814+):**
@@ -749,6 +749,7 @@ npm run watch:games
 ### Available Scripts
 
 **Build scripts:**
+
 - `npm run build` - Build everything (host + all games), then upload
 - `npm run build:host` - Build only the web runtime (TypeScript → JavaScript), then upload
 - `npm run build:games` - Build all games (AssemblyScript → WASM), then upload
@@ -756,14 +757,17 @@ npm run watch:games
 - `npm run build:debug` - Build all games with debug symbols and source maps
 
 **Watch scripts:**
+
 - `npm run watch:host` - Auto-rebuild host on file changes
 - `npm run watch:games` - Auto-rebuild games on file changes
 
 **Development scripts:**
+
 - `npm run serve` - Start local HTTP server on port 8080
 - `npm run dev` - Build everything, then start server
 
 **Utility scripts:**
+
 - `npm run upload` - Manually trigger FTP upload to remote server
 - `npm run check:alloc <gameName>` - Check a game for memory allocation symbols
 
@@ -776,16 +780,19 @@ npm run check:alloc <gameName>
 ```
 
 **What it does:**
+
 - Builds a debug version of the specified game
 - Uses `wasm-objdump` to inspect the WASM binary
 - Searches for allocation-related symbols: `__new`, `__alloc`, `__realloc`, `__free`, `memory.grow`, `malloc`
 - Reports any found symbols (indicating allocation code)
 
 **Prerequisites:**
+
 - Requires `wasm-objdump` to be installed and in your PATH
 - Part of the WebAssembly Binary Toolkit (WABT): https://github.com/WebAssembly/wabt
 
 **Example usage:**
+
 ```bash
 npm run check:alloc snake
 # Output: "No allocation symbols found." (good!)
@@ -795,12 +802,14 @@ npm run check:alloc myGame
 ```
 
 **When to use:**
+
 - After writing new game code with arrays or strings
 - When debugging runtime errors related to missing `__new` function
 - To validate that zero-allocation patterns are working correctly
 - Before committing new games
 
 **Troubleshooting:**
+
 - If `wasm-objdump` is not found, install WABT for your platform
 - The script builds to `tmp/debug-builds/` to avoid overwriting production builds
 - Debug builds include all symbols, making allocation detection reliable
@@ -995,8 +1004,8 @@ import { Vec2i, RAM_START } from "./console";
 
 // Define RAM layout (Vec2i needs 8 bytes: x and y as i32)
 enum Var {
-  PLAYER_POS = 0,  // 8 bytes
-  ENEMY_POS = 8,   // 8 bytes
+  PLAYER_POS = 0, // 8 bytes
+  ENEMY_POS = 8, // 8 bytes
 }
 
 // ❌ WRONG - This allocates memory!
@@ -1008,10 +1017,30 @@ playerPos.x = 10;
 playerPos.y = 20;
 
 const enemyPos = Vec2i.fromAddress(RAM_START + Var.ENEMY_POS);
-enemyPos.set(50, 100);  // Set both coordinates at once
+enemyPos.set(50, 100); // Set both coordinates at once
 ```
 
 **Important:** Even though `Vec2i` is marked `@unmanaged`, the `new` keyword still triggers allocation. Always use `fromAddress()` for zero-allocation access to pre-allocated memory.
+
+#### Text Rendering
+
+The SDK provides `drawString()` and `drawNumber()` for rendering text:
+
+```ts
+import { drawString, drawNumber } from "./console";
+
+// Draw text (UPPERCASE ONLY)
+drawString(10, 10, "SCORE:", 0xffffffff);
+drawNumber(60, 10, score, 0xffffffff);
+```
+
+**Important limitations:**
+
+- `drawString()` only supports **UPPERCASE letters (A-Z)**, numbers (0-9), and basic punctuation
+- Lowercase letters will not render correctly
+- Always use uppercase strings: `"GAME OVER"` not `"Game Over"`
+- Characters are 6×10 pixels, spaced 8 pixels apart horizontally
+- Use `drawNumber()` for rendering integer values without string allocation
 
 ### Other Guidelines
 

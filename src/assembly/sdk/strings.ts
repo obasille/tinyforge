@@ -194,9 +194,14 @@ function draw3x5Pattern(x: i32, y: i32, pattern: u16, color: u32): void {
 /**
  * Draw a string of text using bitmap font
  * Characters are spaced 8 pixels apart horizontally
+ *
+ * NOTE: Only uppercase letters (A-Z), numbers (0-9), and basic punctuation
+ * are supported. Lowercase letters will not render correctly.
+ * Always use uppercase strings with this function.
+ *
  * @param x Starting X coordinate
  * @param y Starting Y coordinate
- * @param text String to draw
+ * @param text String to draw (use UPPERCASE only)
  * @param color ABGR color value
  */
 export function drawString(x: i32, y: i32, text: string, color: u32): void {
@@ -223,7 +228,12 @@ export function measureString(text: string): i32 {
  * @param text String to draw
  * @param color ABGR color value
  */
-export function drawStringCentered(cx: i32, y: i32, text: string, color: u32): void {
+export function drawStringCentered(
+  cx: i32,
+  y: i32,
+  text: string,
+  color: u32,
+): void {
   const width = measureString(text);
   drawString(cx - (width >> 1), y, text, color);
 }
