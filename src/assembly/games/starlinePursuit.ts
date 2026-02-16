@@ -3,6 +3,7 @@
 
 import {
   c,
+  clamp,
   clearFramebuffer,
   drawLine,
   drawNumber,
@@ -21,7 +22,7 @@ import {
 
 // === Constants ===
 
-const TOTAL_STARS: i32 = 25;
+const TOTAL_STARS: i32 = 50;
 const MAX_EDGES: i32 = 80; // Generous capacity for edges
 const MIN_STAR_DISTANCE: i32 = 20; // Minimum pixels between stars
 const NUM_CLUSTERS: i32 = 3;
@@ -145,31 +146,41 @@ function addEdge(
 /**
  * Step 1: Generate evenly spaced stars using Poisson-like rejection sampling
  */
+/**
+ * Generates stars using stratified sampling for even distribution.
+ * Divides the map into a grid and places one star per cell with jitter.
+ */
 function generateStars(stars: FixedArray<Star>, count: i32, minDist: i32): i32 {
+  // Calculate grid dimensions for stratified sampling
+  const gridCols = i32(
+    Mathf.sqrt(((count * MAP_WIDTH) as f32) / (MAP_HEIGHT as f32)),
+  );
+  const gridRows = i32((count as f32) / (gridCols as f32) + 0.5);
+  const cellWidth = MAP_WIDTH / gridCols;
+  const cellHeight = MAP_HEIGHT / gridRows;
+
+  // Maximum jitter is half cell size minus half minDist to ensure spacing
+  const jitterX = max(1, cellWidth / 2 - minDist / 2);
+  const jitterY = max(1, cellHeight / 2 - minDist / 2);
+
   let numStars: i32 = 0;
-  const minD2 = minDist * minDist;
-  const maxAttempts = count * 200;
-  let attempts = 0;
 
-  while (numStars < count && attempts < maxAttempts) {
-    attempts++;
+  // Place one star per grid cell with random jitter
+  for (let row: i32 = 0; row < gridRows && numStars < count; row++) {
+    for (let col: i32 = 0; col < gridCols && numStars < count; col++) {
+      // Calculate cell center
+      const centerX = col * cellWidth + cellWidth / 2;
+      const centerY = row * cellHeight + cellHeight / 2;
 
-    const x = 10 + randomRange(MAP_WIDTH - 20);
-    const y = 10 + randomRange(MAP_HEIGHT - 20);
-    logi("Placed star at ({}, {})", x, y);
+      // Add random jitter around center
+      const x = centerX + randomRange(jitterX * 2) - jitterX;
+      const y = centerY + randomRange(jitterY * 2) - jitterY;
 
-    let ok = true;
-    for (let i: i32 = 0; i < numStars; i++) {
-      const s = stars.get(i);
-      if (dist2(x, y, s.x, s.y) < minD2) {
-        ok = false;
-        break;
-      }
-    }
+      // Clamp to map bounds with margin
+      const finalX = clamp(x, 10, MAP_WIDTH - 10);
+      const finalY = clamp(y, 10, MAP_HEIGHT - 10);
 
-    if (ok) {
-      logi("Placed star at ({}, {})", x, y);
-      stars[numStars] = new Star(x, y);
+      stars[numStars] = new Star(finalX, finalY);
       numStars++;
     }
   }
