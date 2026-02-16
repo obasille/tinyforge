@@ -1,44 +1,45 @@
 // Starline Pursuit - Random Starmap Generation
-// Based on game design documents and StarMap.md Step 7 pseudocode
+// Based on 9B. NewMapGeneration.md specification
 
 import {
   c,
   clearFramebuffer,
   drawLine,
-  fillCircle,
-  drawString,
   drawNumber,
+  drawString,
+  fillCircle,
   FixedArray,
-  RAM_START,
-  random,
-  randomRange,
+  getU8,
   log,
   logi,
-  logf,
-  getU8,
+  RAM_START,
+  randomRange,
+  SCREEN_HEIGHT,
+  SCREEN_WIDTH,
   setU8,
 } from "../sdk";
 
 // === Constants ===
 
-const NUM_CLUSTERS: i32 = 5;
-const STARS_PER_CLUSTER: i32 = 6;
-const TOTAL_STARS: i32 = NUM_CLUSTERS * STARS_PER_CLUSTER; // 30 stars
-const CLUSTER_SPREAD: i32 = 45; // pixels for cluster distribution
-const MAX_EDGES: i32 = 40; // MST has 29, plus extra for loops
-const EXTRA_EDGES: i32 = 8; // Additional edges beyond MST
+const TOTAL_STARS: i32 = 25;
+const MAX_EDGES: i32 = 80; // Generous capacity for edges
+const MIN_STAR_DISTANCE: i32 = 20; // Minimum pixels between stars
+const NUM_CLUSTERS: i32 = 3;
+const CLUSTER_STRENGTH: f32 = 0.25;
+const K_NEIGHBORS: i32 = 3; // k-nearest neighbors to connect
+const MAX_LANE_DISTANCE: i32 = 55; // Max lane length
+const EXTRA_LOOPS: i32 = 6;
+const HUB_COUNT: i32 = 4;
+const EXIT_COUNT: i32 = 5;
 
 // Visual constants
 const STAR_RADIUS: i32 = 2;
-const HUB_RADIUS: i32 = 3;
-const MIN_HUB_CONNECTIONS: i32 = 4;
-const MIN_STAR_DISTANCE: i32 = 15; // Minimum pixels between any two stars
+const HUB_RADIUS: i32 = 4;
+const EXIT_RADIUS: i32 = 3;
 
-// Screen bounds for cluster centers
-const CLUSTER_MIN_X: i32 = 40;
-const CLUSTER_MAX_X: i32 = 280;
-const CLUSTER_MIN_Y: i32 = 40;
-const CLUSTER_MAX_Y: i32 = 200;
+// Screen bounds
+const MAP_WIDTH: i32 = SCREEN_WIDTH;
+const MAP_HEIGHT: i32 = SCREEN_HEIGHT;
 
 // === @unmanaged Structures ===
 
@@ -50,12 +51,16 @@ const CLUSTER_MAX_Y: i32 = 200;
 class Star {
   x: i32;
   y: i32;
-  connections: i32; // Track number of connections for hub detection
+  degree: i32; // Number of connections (edges)
+  isHub: u8; // 1 if hub, 0 otherwise
+  isExit: u8; // 1 if exit, 0 otherwise
 
   constructor(x: i32 = 0, y: i32 = 0) {
     this.x = x;
     this.y = y;
-    this.connections = 0;
+    this.degree = 0;
+    this.isHub = 0;
+    this.isExit = 0;
   }
 }
 
@@ -65,12 +70,12 @@ class Star {
  */
 @unmanaged
 class Edge {
-  from: u8;
-  to: u8;
+  a: i32;
+  b: i32;
 
-  constructor(from: u8 = 0, to: u8 = 0) {
-    this.from = from;
-    this.to = to;
+  constructor(a: i32 = 0, b: i32 = 0) {
+    this.a = a;
+    this.b = b;
   }
 }
 
@@ -81,42 +86,23 @@ enum Var {
   NUM_STARS = 1, // u8 (1 byte)
   NUM_EDGES = 2, // u8 (1 byte)
   // padding to align to 4-byte boundary
-  STARS_START = 4, // Star array: 30 stars × 12 bytes = 360 bytes
-  // Stars end at 4 + 360 = 364
-  EDGES_START = 368, // Edge array: 40 edges × 4 bytes = 160 bytes
-  // Edges end at 368 + 160 = 528
-  // Total memory: 528 bytes
+  STARS_START = 4, // Star array: 25 stars × 20 bytes = 500 bytes
+  // Stars end at 4 + 500 = 504
+  EDGES_START = 512, // Edge array: 80 edges × 8 bytes = 640 bytes
+  // Edges end at 512 + 640 = 1152
+  TEMP_WORK_START = 1152, // Working memory for algorithms (1024 bytes)
+  // Total memory: ~2200 bytes
 }
 
 // === Helper Functions ===
 
 /**
- * Simple approximation of Gaussian distribution using Box-Muller transform
- * Returns a value centered around 'mean' with standard deviation 'stddev'
- * Uses f32 for precision in distribution
+ * Calculate distance squared (fast, no sqrt needed)
  */
-function gaussian(mean: f32, stddev: f32): f32 {
-  // Generate two uniform random values [0, 1)
-  const u1 = (random() as f32) / 4294967296.0; // random() returns u32 [0, 2^32 - 1]
-  const u2 = (random() as f32) / 4294967296.0;
-
-  // Box-Muller transform
-  const z0 = Mathf.sqrt(-2.0 * Mathf.log(u1)) * Mathf.cos(2.0 * Mathf.PI * u2);
-
-  return mean + z0 * stddev;
-}
-
-/**
- * Calculate Manhattan distance between two stars
- * Used for MST edge selection (faster than Euclidean)
- */
-function distance(stars: FixedArray<Star>, a: i32, b: i32): i32 {
-  const starA = stars.get(a);
-  const starB = stars.get(b);
-  const dx = starA.x - starB.x;
-  const dy = starA.y - starB.y;
-  // Use absolute values for Manhattan distance
-  return (dx >= 0 ? dx : -dx) + (dy >= 0 ? dy : -dy);
+function dist2(ax: i32, ay: i32, bx: i32, by: i32): i32 {
+  const dx = ax - bx;
+  const dy = ay - by;
+  return dx * dx + dy * dy;
 }
 
 /**
@@ -125,12 +111,12 @@ function distance(stars: FixedArray<Star>, a: i32, b: i32): i32 {
 function edgeExists(
   edges: FixedArray<Edge>,
   numEdges: i32,
-  a: u8,
-  b: u8,
+  a: i32,
+  b: i32,
 ): bool {
   for (let i: i32 = 0; i < numEdges; i++) {
     const edge = edges.get(i);
-    if ((edge.from == a && edge.to == b) || (edge.from == b && edge.to == a)) {
+    if ((edge.a == a && edge.b == b) || (edge.a == b && edge.b == a)) {
       return true;
     }
   }
@@ -138,203 +124,464 @@ function edgeExists(
 }
 
 /**
- * Check if a position is too close to any existing star
- * Returns true if position is valid (not too close to others)
+ * Add edge and update degree counts
  */
-function isValidStarPosition(
+function addEdge(
   stars: FixedArray<Star>,
-  numStars: i32,
-  x: i32,
-  y: i32,
-): bool {
-  for (let i: i32 = 0; i < numStars; i++) {
-    const existing = stars.get(i);
-    const dx = existing.x - x;
-    const dy = existing.y - y;
-    const distSquared = dx * dx + dy * dy;
-    const minDistSquared = MIN_STAR_DISTANCE * MIN_STAR_DISTANCE;
+  edges: FixedArray<Edge>,
+  numEdges: i32,
+  a: i32,
+  b: i32,
+): i32 {
+  if (a == b) return numEdges;
+  if (edgeExists(edges, numEdges, a, b)) return numEdges;
 
-    if (distSquared < minDistSquared) {
-      return false; // Too close to existing star
-    }
-  }
-  return true; // Position is valid
+  edges[numEdges] = new Edge(a, b);
+  stars[a].degree++;
+  stars[b].degree++;
+  return numEdges + 1;
 }
 
 /**
- * Generate random starmap with clusters and lanes
- * Implements algorithm from StarMap.md Step 7
+ * Step 1: Generate evenly spaced stars using Poisson-like rejection sampling
+ */
+function generateStars(stars: FixedArray<Star>, count: i32, minDist: i32): i32 {
+  let numStars: i32 = 0;
+  const minD2 = minDist * minDist;
+  const maxAttempts = count * 200;
+  let attempts = 0;
+
+  while (numStars < count && attempts < maxAttempts) {
+    attempts++;
+
+    const x = 10 + randomRange(MAP_WIDTH - 20);
+    const y = 10 + randomRange(MAP_HEIGHT - 20);
+    logi("Placed star at ({}, {})", x, y);
+
+    let ok = true;
+    for (let i: i32 = 0; i < numStars; i++) {
+      const s = stars.get(i);
+      if (dist2(x, y, s.x, s.y) < minD2) {
+        ok = false;
+        break;
+      }
+    }
+
+    if (ok) {
+      logi("Placed star at ({}, {})", x, y);
+      stars[numStars] = new Star(x, y);
+      numStars++;
+    }
+  }
+
+  return numStars;
+}
+
+/**
+ * Step 2: Apply cluster bias to create visible clusters
+ */
+function applyClusterBias(
+  stars: FixedArray<Star>,
+  numStars: i32,
+  clusterCount: i32,
+  strength: f32,
+): void {
+  // Generate cluster centers
+  const centersX = FixedArray.fromAddress<i32>(RAM_START + Var.TEMP_WORK_START);
+  const centersY = FixedArray.fromAddress<i32>(
+    RAM_START + Var.TEMP_WORK_START + 16,
+  );
+
+  for (let i: i32 = 0; i < clusterCount; i++) {
+    centersX[i] = 20 + randomRange(MAP_WIDTH - 40);
+    centersY[i] = 20 + randomRange(MAP_HEIGHT - 40);
+  }
+
+  // Pull each star toward a random cluster center
+  for (let i: i32 = 0; i < numStars; i++) {
+    const s = stars.get(i);
+    const c = randomRange(clusterCount);
+
+    const dx = (centersX[c] - s.x) as f32;
+    const dy = (centersY[c] - s.y) as f32;
+
+    s.x += (dx * strength) as i32;
+    s.y += (dy * strength) as i32;
+
+    stars[i] = s;
+  }
+}
+
+/**
+ * Step 3: Connect local k-nearest neighbors
+ */
+function connectLocalNeighbors(
+  stars: FixedArray<Star>,
+  edges: FixedArray<Edge>,
+  numStars: i32,
+  numEdges: i32,
+  k: i32,
+  maxLane: i32,
+): i32 {
+  const maxD2 = maxLane * maxLane;
+  let edgeCount = numEdges;
+
+  // For each star, find k nearest neighbors and connect
+  for (let i: i32 = 0; i < numStars; i++) {
+    // Store nearest neighbors (index, distance squared)
+    const nearestIdx = FixedArray.fromAddress<i32>(
+      RAM_START + Var.TEMP_WORK_START + 32,
+    );
+    const nearestDist = FixedArray.fromAddress<i32>(
+      RAM_START + Var.TEMP_WORK_START + 128,
+    );
+    let nearestCount: i32 = 0;
+
+    // Find k nearest neighbors
+    for (let j: i32 = 0; j < numStars; j++) {
+      if (i == j) continue;
+
+      const d = dist2(stars[i].x, stars[i].y, stars[j].x, stars[j].y);
+      if (d > maxD2) continue;
+
+      // Insert sorted by distance
+      let inserted = false;
+      for (let t: i32 = 0; t < nearestCount; t++) {
+        if (d < nearestDist[t]) {
+          // Shift everything right
+          for (let s: i32 = nearestCount - 1; s >= t; s--) {
+            if (s + 1 < k) {
+              nearestIdx[s + 1] = nearestIdx[s];
+              nearestDist[s + 1] = nearestDist[s];
+            }
+          }
+          nearestIdx[t] = j;
+          nearestDist[t] = d;
+          inserted = true;
+          if (nearestCount < k) nearestCount++;
+          break;
+        }
+      }
+
+      if (!inserted && nearestCount < k) {
+        nearestIdx[nearestCount] = j;
+        nearestDist[nearestCount] = d;
+        nearestCount++;
+      }
+    }
+
+    // Connect to nearest neighbors
+    for (let t: i32 = 0; t < nearestCount; t++) {
+      edgeCount = addEdge(stars, edges, edgeCount, i, nearestIdx[t]);
+    }
+  }
+
+  return edgeCount;
+}
+
+/**
+ * Step 4: Flood fill to find connected components
+ */
+function floodFillComponent(
+  stars: FixedArray<Star>,
+  edges: FixedArray<Edge>,
+  numEdges: i32,
+  start: i32,
+  component: FixedArray<i32>,
+  visited: FixedArray<u8>,
+): i32 {
+  const stack = FixedArray.fromAddress<i32>(
+    RAM_START + Var.TEMP_WORK_START + 256,
+  );
+  let stackSize: i32 = 0;
+  let compSize: i32 = 0;
+
+  stack[stackSize++] = start;
+  visited[start] = 1;
+
+  while (stackSize > 0) {
+    const v = stack[--stackSize];
+    component[compSize++] = v;
+
+    // Find all connected neighbors
+    for (let i: i32 = 0; i < numEdges; i++) {
+      const e = edges.get(i);
+      let next: i32 = -1;
+
+      if (e.a == v) next = e.b;
+      else if (e.b == v) next = e.a;
+
+      if (next >= 0 && visited[next] == 0) {
+        visited[next] = 1;
+        stack[stackSize++] = next;
+      }
+    }
+  }
+
+  return compSize;
+}
+
+/**
+ * Step 4: Ensure full connectivity by bridging disconnected components
+ */
+function connectComponents(
+  stars: FixedArray<Star>,
+  edges: FixedArray<Edge>,
+  numStars: i32,
+  numEdges: i32,
+): i32 {
+  let edgeCount = numEdges;
+  let continueLoop = true;
+
+  while (continueLoop) {
+    // Reset visited array
+    const visited = FixedArray.fromAddress<u8>(
+      RAM_START + Var.TEMP_WORK_START + 512,
+    );
+    for (let i: i32 = 0; i < numStars; i++) {
+      visited[i] = 0;
+    }
+
+    // Find all components
+    const comp1 = FixedArray.fromAddress<i32>(
+      RAM_START + Var.TEMP_WORK_START + 600,
+    );
+    const comp2 = FixedArray.fromAddress<i32>(
+      RAM_START + Var.TEMP_WORK_START + 700,
+    );
+    let comp1Size: i32 = 0;
+    let comp2Size: i32 = 0;
+    let foundSecondComponent = false;
+
+    // Find first component
+    for (let i: i32 = 0; i < numStars; i++) {
+      if (visited[i] == 0) {
+        comp1Size = floodFillComponent(
+          stars,
+          edges,
+          edgeCount,
+          i,
+          comp1,
+          visited,
+        );
+        break;
+      }
+    }
+
+    // Find second component (if exists)
+    for (let i: i32 = 0; i < numStars; i++) {
+      if (visited[i] == 0) {
+        comp2Size = floodFillComponent(
+          stars,
+          edges,
+          edgeCount,
+          i,
+          comp2,
+          visited,
+        );
+        foundSecondComponent = true;
+        break;
+      }
+    }
+
+    if (!foundSecondComponent) {
+      // Only one component, we're done
+      continueLoop = false;
+      break;
+    }
+
+    // Find closest pair between components
+    let bestA: i32 = -1;
+    let bestB: i32 = -1;
+    let bestD: i32 = 999999999;
+
+    for (let i: i32 = 0; i < comp1Size; i++) {
+      for (let j: i32 = 0; j < comp2Size; j++) {
+        const a = comp1[i];
+        const b = comp2[j];
+        const d = dist2(stars[a].x, stars[a].y, stars[b].x, stars[b].y);
+
+        if (d < bestD) {
+          bestD = d;
+          bestA = a;
+          bestB = b;
+        }
+      }
+    }
+
+    // Connect closest pair
+    if (bestA >= 0 && bestB >= 0) {
+      edgeCount = addEdge(stars, edges, edgeCount, bestA, bestB);
+    } else {
+      break;
+    }
+  }
+
+  return edgeCount;
+}
+
+/**
+ * Step 5: Reduce dead ends by connecting them to second-nearest neighbor
+ */
+function reduceDeadEnds(
+  stars: FixedArray<Star>,
+  edges: FixedArray<Edge>,
+  numStars: i32,
+  numEdges: i32,
+): i32 {
+  let edgeCount = numEdges;
+
+  for (let i: i32 = 0; i < numStars; i++) {
+    if (stars[i].degree == 1) {
+      // Find nearest non-connected neighbor
+      let best: i32 = -1;
+      let bestD: i32 = 999999999;
+
+      for (let j: i32 = 0; j < numStars; j++) {
+        if (i == j) continue;
+        if (edgeExists(edges, edgeCount, i, j)) continue;
+
+        const d = dist2(stars[i].x, stars[i].y, stars[j].x, stars[j].y);
+        if (d < bestD) {
+          bestD = d;
+          best = j;
+        }
+      }
+
+      if (best >= 0) {
+        edgeCount = addEdge(stars, edges, edgeCount, i, best);
+      }
+    }
+  }
+
+  return edgeCount;
+}
+
+/**
+ * Step 6: Add extra loop edges for multiple routes
+ */
+function addLoops(
+  stars: FixedArray<Star>,
+  edges: FixedArray<Edge>,
+  numStars: i32,
+  numEdges: i32,
+  extra: i32,
+): i32 {
+  let edgeCount = numEdges;
+  const maxLoopD2 = 55 * 55;
+
+  for (let i: i32 = 0; i < extra; i++) {
+    const a = randomRange(numStars);
+    const b = randomRange(numStars);
+
+    if (a == b) continue;
+
+    const d = dist2(stars[a].x, stars[a].y, stars[b].x, stars[b].y);
+    if (d < maxLoopD2) {
+      edgeCount = addEdge(stars, edges, edgeCount, a, b);
+    }
+  }
+
+  return edgeCount;
+}
+
+/**
+ * Step 7: Mark hub stars (highest degree nodes)
+ */
+function markHubs(stars: FixedArray<Star>, numStars: i32, hubCount: i32): void {
+  for (let h: i32 = 0; h < hubCount; h++) {
+    let best: i32 = -1;
+    let bestDeg: i32 = -1;
+
+    for (let i: i32 = 0; i < numStars; i++) {
+      if (stars[i].isHub != 0) continue;
+      if (stars[i].degree > bestDeg) {
+        bestDeg = stars[i].degree;
+        best = i;
+      }
+    }
+
+    if (best >= 0) {
+      stars[best].isHub = 1;
+    }
+  }
+}
+
+/**
+ * Step 8: Mark exit stars (nodes near map edges)
+ */
+function markExits(
+  stars: FixedArray<Star>,
+  numStars: i32,
+  exitCount: i32,
+): void {
+  for (let e: i32 = 0; e < exitCount; e++) {
+    let best: i32 = -1;
+    let bestScore: i32 = -1;
+
+    for (let i: i32 = 0; i < numStars; i++) {
+      if (stars[i].isExit != 0) continue;
+
+      const s = stars.get(i);
+      let score: i32 = 0;
+      if (s.x < 40) score++;
+      if (s.x > 280) score++;
+      if (s.y < 40) score++;
+      if (s.y > 200) score++;
+
+      if (score > bestScore) {
+        bestScore = score;
+        best = i;
+      }
+    }
+
+    if (best >= 0) {
+      stars[best].isExit = 1;
+    }
+  }
+}
+
+/**
+ * Main starmap generation function following 9B specification
  */
 function generateStarmap(): void {
   const stars = FixedArray.fromAddress<Star>(RAM_START + Var.STARS_START);
   const edges = FixedArray.fromAddress<Edge>(RAM_START + Var.EDGES_START);
 
-  let starIndex: i32 = 0;
+  // Step 1: Place stars evenly using Poisson-like rejection
+  const numStars = generateStars(stars, TOTAL_STARS, MIN_STAR_DISTANCE);
+  setU8(Var.NUM_STARS, numStars as u8);
 
-  // Step 1: Place stars in clusters using grid-based placement for better coverage
-  // Divide screen into a grid and place one cluster per grid cell
-  const gridCols: i32 = 3;
-  const gridRows: i32 = 2;
-  const cellWidth: i32 = (CLUSTER_MAX_X - CLUSTER_MIN_X) / gridCols;
-  const cellHeight: i32 = (CLUSTER_MAX_Y - CLUSTER_MIN_Y) / gridRows;
+  // Step 2: Apply cluster bias for visible clusters
+  applyClusterBias(stars, numStars, NUM_CLUSTERS, CLUSTER_STRENGTH);
 
-  for (let cluster: i32 = 0; cluster < NUM_CLUSTERS; cluster++) {
-    // Calculate grid cell for this cluster (distribute evenly with wraparound)
-    const gridX: i32 = cluster % gridCols;
-    const gridY: i32 = (cluster / gridCols) % gridRows;
-
-    // Pick cluster center within this grid cell with some randomness
-    const cellMinX: i32 = CLUSTER_MIN_X + gridX * cellWidth;
-    const cellMaxX: i32 = CLUSTER_MIN_X + (gridX + 1) * cellWidth;
-    const cellMinY: i32 = CLUSTER_MIN_Y + gridY * cellHeight;
-    const cellMaxY: i32 = CLUSTER_MIN_Y + (gridY + 1) * cellHeight;
-
-    const cx = (randomRange(cellMaxX - cellMinX) + cellMinX) as f32;
-    const cy = (randomRange(cellMaxY - cellMinY) + cellMinY) as f32;
-
-    // Place stars around cluster center using Gaussian distribution
-    // With collision detection to prevent stars from overlapping
-    for (let i: i32 = 0; i < STARS_PER_CLUSTER; i++) {
-      let placed = false;
-      let attempts = 0;
-      const maxAttempts = 50;
-
-      while (!placed && attempts < maxAttempts) {
-        const x = gaussian(cx, CLUSTER_SPREAD as f32);
-        const y = gaussian(cy, CLUSTER_SPREAD as f32);
-
-        // Clamp to screen bounds (with margins)
-        let finalX = x as i32;
-        let finalY = y as i32;
-        if (finalX < 10) finalX = 10;
-        if (finalX > 310) finalX = 310;
-        if (finalY < 10) finalY = 10;
-        if (finalY > 230) finalY = 230;
-
-        // Check if position is valid (not too close to other stars)
-        if (isValidStarPosition(stars, starIndex, finalX, finalY)) {
-          stars[starIndex] = new Star(finalX, finalY);
-          starIndex++;
-          placed = true;
-        }
-
-        attempts++;
-      }
-
-      // If we couldn't place the star after max attempts, place it anyway
-      // This ensures we always get the expected number of stars
-      if (!placed) {
-        const x = gaussian(cx, CLUSTER_SPREAD as f32);
-        const y = gaussian(cy, CLUSTER_SPREAD as f32);
-        let finalX = x as i32;
-        let finalY = y as i32;
-        if (finalX < 10) finalX = 10;
-        if (finalX > 310) finalX = 310;
-        if (finalY < 10) finalY = 10;
-        if (finalY > 230) finalY = 230;
-        stars[starIndex] = new Star(finalX, finalY);
-        starIndex++;
-      }
-    }
-  }
-
-  setU8(Var.NUM_STARS, TOTAL_STARS as u8);
-
-  // Step 2: Connect stars using Minimum Spanning Tree (Prim's algorithm)
-  let edgeCount: i32 = 0;
-
-  // Track which stars are connected
-  const connected = FixedArray.fromAddress<u8>(
-    RAM_START + Var.EDGES_START + 160,
-  );
-  const unconnected = FixedArray.fromAddress<u8>(
-    RAM_START + Var.EDGES_START + 160 + 40,
+  // Step 3: Connect local k-nearest neighbors
+  let numEdges: i32 = 0;
+  numEdges = connectLocalNeighbors(
+    stars,
+    edges,
+    numStars,
+    numEdges,
+    K_NEIGHBORS,
+    MAX_LANE_DISTANCE,
   );
 
-  // Initialize: first star is connected, rest are unconnected
-  connected[0] = 0;
-  let connectedCount: i32 = 1;
-  let unconnectedCount: i32 = TOTAL_STARS - 1;
+  // Step 4: Ensure full connectivity
+  numEdges = connectComponents(stars, edges, numStars, numEdges);
 
-  for (let i: i32 = 1; i < TOTAL_STARS; i++) {
-    unconnected[i - 1] = i as u8;
-  }
+  // Step 5: Reduce dead ends
+  numEdges = reduceDeadEnds(stars, edges, numStars, numEdges);
 
-  // Build MST
-  while (unconnectedCount > 0) {
-    let minDist: i32 = 999999;
-    let bestConnected: i32 = -1;
-    let bestUnconnected: i32 = -1;
-    let bestUnconnectedIndex: i32 = -1;
+  // Step 6: Add extra loops for multiple routes
+  numEdges = addLoops(stars, edges, numStars, numEdges, EXTRA_LOOPS);
 
-    // Find shortest edge from connected to unconnected
-    for (let c: i32 = 0; c < connectedCount; c++) {
-      const connectedStar = connected[c] as i32;
-      for (let u: i32 = 0; u < unconnectedCount; u++) {
-        const unconnectedStar = unconnected[u] as i32;
-        const dist = distance(stars, connectedStar, unconnectedStar);
+  setU8(Var.NUM_EDGES, numEdges as u8);
 
-        if (dist < minDist) {
-          minDist = dist;
-          bestConnected = connectedStar;
-          bestUnconnected = unconnectedStar;
-          bestUnconnectedIndex = u;
-        }
-      }
-    }
+  // Step 7: Mark hubs and exits
+  markHubs(stars, numStars, HUB_COUNT);
+  markExits(stars, numStars, EXIT_COUNT);
 
-    // Add edge
-    if (bestConnected >= 0 && bestUnconnected >= 0) {
-      edges[edgeCount] = new Edge(bestConnected as u8, bestUnconnected as u8);
-      edgeCount++;
-
-      // Update connection counts
-      stars[bestConnected].connections++;
-      stars[bestUnconnected].connections++;
-
-      // Move star from unconnected to connected
-      connected[connectedCount] = bestUnconnected as u8;
-      connectedCount++;
-
-      // Remove from unconnected (shift remaining elements)
-      for (let i: i32 = bestUnconnectedIndex; i < unconnectedCount - 1; i++) {
-        unconnected[i] = unconnected[i + 1];
-      }
-      unconnectedCount--;
-    } else {
-      break; // Safety exit
-    }
-  }
-
-  // Step 3: Add extra random edges for loops and alternate paths
-  let extraAdded: i32 = 0;
-  let attempts: i32 = 0;
-  const maxAttempts: i32 = 50;
-
-  while (extraAdded < EXTRA_EDGES && attempts < maxAttempts) {
-    const a = randomRange(TOTAL_STARS) as u8;
-    const b = randomRange(TOTAL_STARS) as u8;
-    attempts++;
-
-    // Don't connect star to itself, and don't add duplicate edges
-    if (a == b) continue;
-    if (edgeExists(edges, edgeCount, a, b)) continue;
-
-    // Check distance isn't too large (keeps map readable)
-    const dist = distance(stars, a as i32, b as i32);
-    if (dist < 100) {
-      // Max lane distance to prevent clutter
-      edges[edgeCount] = new Edge(a, b);
-      edgeCount++;
-      stars[a as i32].connections++;
-      stars[b as i32].connections++;
-      extraAdded++;
-    }
-  }
-
-  setU8(Var.NUM_EDGES, edgeCount as u8);
-
-  logi("Starmap generated: {} stars, {} lanes", TOTAL_STARS, edgeCount);
+  logi("Starmap generated: {} stars, {} lanes", numStars, numEdges);
 }
 
 /**
@@ -343,27 +590,32 @@ function generateStarmap(): void {
 function drawStarmap(): void {
   const stars = FixedArray.fromAddress<Star>(RAM_START + Var.STARS_START);
   const edges = FixedArray.fromAddress<Edge>(RAM_START + Var.EDGES_START);
+  const numStars = getU8(Var.NUM_STARS) as i32;
   const numEdges = getU8(Var.NUM_EDGES) as i32;
 
   // Draw lanes (edges) first so stars appear on top
   for (let i: i32 = 0; i < numEdges; i++) {
     const edge = edges.get(i);
-    const starA = stars.get(edge.from as i32);
-    const starB = stars.get(edge.to as i32);
+    const starA = stars.get(edge.a);
+    const starB = stars.get(edge.b);
 
     // Draw lane as a line
     drawLine(starA.x, starA.y, starB.x, starB.y, c(0x444444));
   }
 
-  // Draw stars
-  for (let i: i32 = 0; i < TOTAL_STARS; i++) {
+  // Draw stars with different colors/sizes based on type
+  for (let i: i32 = 0; i < numStars; i++) {
     const star = stars.get(i);
 
-    // Hub stars (4+ connections) are larger and colored differently
-    if (star.connections >= MIN_HUB_CONNECTIONS) {
-      fillCircle(star.x, star.y, HUB_RADIUS, c(0xffaa00)); // Orange hubs
+    if (star.isExit != 0) {
+      // Exit nodes: green
+      fillCircle(star.x, star.y, EXIT_RADIUS, c(0x00ff00));
+    } else if (star.isHub != 0) {
+      // Hub nodes: orange
+      fillCircle(star.x, star.y, HUB_RADIUS, c(0xffaa00));
     } else {
-      fillCircle(star.x, star.y, STAR_RADIUS, c(0xaaccff)); // Blue normal stars
+      // Normal stars: light blue
+      fillCircle(star.x, star.y, STAR_RADIUS, c(0xaaccff));
     }
   }
 }
