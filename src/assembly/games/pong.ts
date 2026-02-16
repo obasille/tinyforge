@@ -11,11 +11,11 @@ import {
   drawStartMessageBox,
   drawString,
   fillRect,
-  HEIGHT,
+  SCREEN_HEIGHT,
   log,
   playSfx,
   RAM_START,
-  WIDTH,
+  SCREEN_WIDTH,
 } from "../sdk";
 
 // === Constants ===
@@ -63,8 +63,8 @@ const vars = changetype<Vars>(RAM_START);
 // === Helper Functions ===
 function resetBall(servingPlayer: i32): void {
   // Center the ball
-  vars.ballX = (WIDTH / 2 - BALL_SIZE / 2) as f32;
-  vars.ballY = (HEIGHT / 2 - BALL_SIZE / 2) as f32;
+  vars.ballX = (SCREEN_WIDTH / 2 - BALL_SIZE / 2) as f32;
+  vars.ballY = (SCREEN_HEIGHT / 2 - BALL_SIZE / 2) as f32;
 
   // Stop ball and start countdown
   vars.ballVX = 0.0;
@@ -85,8 +85,8 @@ function checkCollision(): void {
     ballVX = -ballVX;
     vars.ballVX = ballVX;
     playSfx("tap", 0.3);
-  } else if (ballX >= ((WIDTH - BALL_SIZE) as f32)) {
-    vars.ballX = (WIDTH - BALL_SIZE) as f32;
+  } else if (ballX >= ((SCREEN_WIDTH - BALL_SIZE) as f32)) {
+    vars.ballX = (SCREEN_WIDTH - BALL_SIZE) as f32;
     ballVX = -ballVX;
     vars.ballVX = ballVX;
     playSfx("tap", 0.2);
@@ -119,7 +119,7 @@ function checkCollision(): void {
 
   // Bottom paddle collision (player 2)
   const p2X = vars.p2X;
-  const bottomPaddleY = HEIGHT - PADDLE_HEIGHT;
+  const bottomPaddleY = SCREEN_HEIGHT - PADDLE_HEIGHT;
   if (
     ballY + (BALL_SIZE as f32) >= (bottomPaddleY as f32) &&
     ballX + (BALL_SIZE as f32) >= p2X &&
@@ -159,7 +159,7 @@ function checkCollision(): void {
   }
 
   // Bottom edge (player 1 scores)
-  if (ballY > (HEIGHT as f32)) {
+  if (ballY > (SCREEN_HEIGHT as f32)) {
     vars.p1Score++;
     log("Player 1 scores!");
     playSfx("explosion", 0.5);
@@ -177,8 +177,8 @@ function checkCollision(): void {
 // === Lifecycle ===
 export function init(): void {
   // Initialize paddles (centered)
-  vars.p1X = (WIDTH / 2 - PADDLE_WIDTH / 2) as f32;
-  vars.p2X = (WIDTH / 2 - PADDLE_WIDTH / 2) as f32;
+  vars.p1X = (SCREEN_WIDTH / 2 - PADDLE_WIDTH / 2) as f32;
+  vars.p2X = (SCREEN_WIDTH / 2 - PADDLE_WIDTH / 2) as f32;
 
   // Initialize scores
   vars.p1Score = 0;
@@ -232,8 +232,8 @@ export function update(): void {
   }
   if (buttonDown(Button.B)) {
     p1X += PADDLE_SPEED;
-    if (p1X > ((WIDTH - PADDLE_WIDTH) as f32))
-      p1X = (WIDTH - PADDLE_WIDTH) as f32;
+    if (p1X > ((SCREEN_WIDTH - PADDLE_WIDTH) as f32))
+      p1X = (SCREEN_WIDTH - PADDLE_WIDTH) as f32;
   }
   vars.p1X = p1X;
 
@@ -245,8 +245,8 @@ export function update(): void {
   }
   if (buttonDown(Button.RIGHT)) {
     p2X += PADDLE_SPEED;
-    if (p2X > ((WIDTH - PADDLE_WIDTH) as f32))
-      p2X = (WIDTH - PADDLE_WIDTH) as f32;
+    if (p2X > ((SCREEN_WIDTH - PADDLE_WIDTH) as f32))
+      p2X = (SCREEN_WIDTH - PADDLE_WIDTH) as f32;
   }
   vars.p2X = p2X;
 
@@ -271,15 +271,15 @@ export function draw(): void {
 
   // Draw center line
   const colorCenterLine = c(0x333333);
-  for (let x: i32 = 0; x < WIDTH; x += 8) {
-    fillRect(x, HEIGHT / 2 - 1, 4, 2, colorCenterLine);
+  for (let x: i32 = 0; x < SCREEN_WIDTH; x += 8) {
+    fillRect(x, SCREEN_HEIGHT / 2 - 1, 4, 2, colorCenterLine);
   }
 
   // Draw paddles
   fillRect(p1X, 0, PADDLE_WIDTH, PADDLE_HEIGHT, c(0x00aaff)); // Player 1 (top) - blue
   fillRect(
     p2X,
-    HEIGHT - PADDLE_HEIGHT,
+    SCREEN_HEIGHT - PADDLE_HEIGHT,
     PADDLE_WIDTH,
     PADDLE_HEIGHT,
     c(0xff5500),
@@ -290,7 +290,7 @@ export function draw(): void {
 
   // Draw scores
   drawNumber(10, 10, vars.p1Score, c(0x00aaff));
-  drawNumber(10, HEIGHT - 20, vars.p2Score, c(0xff5500));
+  drawNumber(10, SCREEN_HEIGHT - 20, vars.p2Score, c(0xff5500));
 
   // Draw countdown
   if (state == GameState.PLAYING && vars.countdown > 0) {
@@ -308,9 +308,16 @@ export function draw(): void {
     }
 
     // Draw centered countdown text
-    fillRect(WIDTH / 2 - 12, HEIGHT / 2 - 10, 24, 20, c(0x303030)); // Clear area
-    const textX = secondsLeft > 0 ? WIDTH / 2 - 2 : WIDTH / 2 - 10;
-    drawString(textX, HEIGHT / 2 - 4, countdownText, c(0xffff00));
+    fillRect(
+      SCREEN_WIDTH / 2 - 12,
+      SCREEN_HEIGHT / 2 - 10,
+      24,
+      20,
+      c(0x303030),
+    ); // Clear area
+    const textX =
+      secondsLeft > 0 ? SCREEN_WIDTH / 2 - 2 : SCREEN_WIDTH / 2 - 10;
+    drawString(textX, SCREEN_HEIGHT / 2 - 4, countdownText, c(0xffff00));
   }
 
   // Game messages

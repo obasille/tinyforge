@@ -13,20 +13,20 @@ import {
   fillRect,
   getU16,
   getU8,
-  HEIGHT,
+  SCREEN_HEIGHT,
   log,
   playSfx,
   RAM_START,
   randomRange,
   setU16,
   setU8,
-  WIDTH,
+  SCREEN_WIDTH,
 } from "../sdk";
 
 // === Constants ===
 const PLAYER_WIDTH: i32 = 24;
 const PLAYER_HEIGHT: i32 = 14;
-const PLAYER_Y: i32 = HEIGHT - 30;
+const PLAYER_Y: i32 = SCREEN_HEIGHT - 30;
 const PLAYER_SPEED: f32 = 3.0;
 
 const ALIEN_COLS: i32 = 11;
@@ -259,7 +259,7 @@ function drawShield(x: i32, y: i32, shieldIndex: i32): void {
 
 // === Lifecycle ===
 export function init(): void {
-  vars.playerX = (WIDTH / 2 - PLAYER_WIDTH / 2) as f32;
+  vars.playerX = (SCREEN_WIDTH / 2 - PLAYER_WIDTH / 2) as f32;
   vars.state = GameState.START_SCREEN as u8;
   vars.lives = STARTING_LIVES;
   vars.score = 0;
@@ -321,8 +321,8 @@ export function update(): void {
   }
   if (buttonDown(Button.RIGHT)) {
     playerX += PLAYER_SPEED;
-    if (playerX > ((WIDTH - PLAYER_WIDTH) as f32)) {
-      playerX = (WIDTH - PLAYER_WIDTH) as f32;
+    if (playerX > ((SCREEN_WIDTH - PLAYER_WIDTH) as f32)) {
+      playerX = (SCREEN_WIDTH - PLAYER_WIDTH) as f32;
     }
   }
   vars.playerX = playerX;
@@ -430,7 +430,7 @@ export function update(): void {
   let shouldDrop = false;
   if (
     vars.alienDirection > 0 &&
-    vars.alienGridX > ((WIDTH - ALIEN_COLS * ALIEN_SPACING_X - 5) as f32)
+    vars.alienGridX > ((SCREEN_WIDTH - ALIEN_COLS * ALIEN_SPACING_X - 5) as f32)
   ) {
     shouldDrop = true;
     vars.alienDirection = -1;
@@ -483,7 +483,7 @@ export function update(): void {
       let by = getAlienBulletY(i);
       by += ALIEN_BULLET_SPEED as i32;
 
-      if (by > HEIGHT) {
+      if (by > SCREEN_HEIGHT) {
         setAlienBullet(i, 0, 0, 0);
       } else {
         const bx = getAlienBulletX(i);
@@ -595,13 +595,13 @@ export function draw(): void {
   drawString(4, 4, "SCORE:", c(0xffffff));
   drawNumber(50, 4, vars.score, c(0xffffff));
 
-  drawString(WIDTH - 85, 4, "LIVES:", c(0xffffff));
+  drawString(SCREEN_WIDTH - 85, 4, "LIVES:", c(0xffffff));
   for (let i: i32 = 0; i < vars.lives; i++) {
-    fillRect(WIDTH - 35 + i * 10, 6, 8, 6, c(0x00ff00));
+    fillRect(SCREEN_WIDTH - 35 + i * 10, 6, 8, 6, c(0x00ff00));
   }
 
-  drawString(WIDTH / 2 - 25, 4, "LEVEL:", c(0xffffff));
-  drawNumber(WIDTH / 2 + 20, 4, vars.level, c(0xffffff));
+  drawString(SCREEN_WIDTH / 2 - 25, 4, "LEVEL:", c(0xffffff));
+  drawNumber(SCREEN_WIDTH / 2 + 20, 4, vars.level, c(0xffffff));
 
   // Game messages
   if (state == GameState.START_SCREEN) {

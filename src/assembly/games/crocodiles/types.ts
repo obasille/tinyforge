@@ -2,16 +2,16 @@
 import {
   FixedArray,
   FixedArrayWithCount,
-  HEIGHT,
+  SCREEN_HEIGHT,
   RAM_START,
-  WIDTH,
+  SCREEN_WIDTH,
   c,
 } from "../../sdk";
 
 // === Constantes ===
 export const TAILLE_CASE: i32 = 16;
-export const LARGEUR_GRILLE: i32 = WIDTH / TAILLE_CASE;
-export const HAUTEUR_GRILLE: i32 = HEIGHT / TAILLE_CASE;
+export const LARGEUR_GRILLE: i32 = SCREEN_WIDTH / TAILLE_CASE;
+export const HAUTEUR_GRILLE: i32 = SCREEN_HEIGHT / TAILLE_CASE;
 
 export const JOUEUR_DEPL_DELAI: u8 = 6;
 export const CROCO_DEPL_DELAI: u8 = 30;

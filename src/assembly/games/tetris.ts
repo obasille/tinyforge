@@ -13,20 +13,20 @@ import {
   drawString,
   fillRect,
   getU8,
-  HEIGHT,
+  SCREEN_HEIGHT,
   log,
   RAM_START,
   randomRange,
   setU8,
-  WIDTH,
+  SCREEN_WIDTH,
 } from "../sdk";
 
 // === Constants ===
 const BOARD_WIDTH: i32 = 10;
 const BOARD_HEIGHT: i32 = 20;
 const CELL_SIZE: i32 = 12;
-const BOARD_X: i32 = (WIDTH - BOARD_WIDTH * CELL_SIZE) / 2;
-const BOARD_Y: i32 = (HEIGHT - BOARD_HEIGHT * CELL_SIZE) / 2;
+const BOARD_X: i32 = (SCREEN_WIDTH - BOARD_WIDTH * CELL_SIZE) / 2;
+const BOARD_Y: i32 = (SCREEN_HEIGHT - BOARD_HEIGHT * CELL_SIZE) / 2;
 
 const INITIAL_FALL_DELAY: u8 = 60;
 const MIN_FALL_DELAY: u8 = 2;

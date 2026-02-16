@@ -3,9 +3,9 @@
 // Import console SDK
 import {
   Button,
-  HEIGHT,
+  SCREEN_HEIGHT,
   RAM_START,
-  WIDTH,
+  SCREEN_WIDTH,
   buttonDown,
   buttonPressed,
   c,
@@ -63,7 +63,7 @@ class Coin {
 
 // Define platforms (x, y, width, height)
 const platforms: Platform[] = [
-  { x: 0, y: GROUND_Y, w: WIDTH, h: 40 }, // Ground
+  { x: 0, y: GROUND_Y, w: SCREEN_WIDTH, h: 40 }, // Ground
   { x: 50, y: 160, w: 60, h: 8 }, // Platform 1
   { x: 150, y: 130, w: 70, h: 8 }, // Platform 2
   { x: 240, y: 100, w: 60, h: 8 }, // Platform 3
@@ -216,7 +216,7 @@ export function update(): void {
   if (vars.playerX < <f32>-tailOffset) {
     vars.playerX = <f32>-tailOffset;
   }
-  const maxX = <f32>(WIDTH - PLAYER_WIDTH + tailOffset);
+  const maxX = <f32>(SCREEN_WIDTH - PLAYER_WIDTH + tailOffset);
   if (vars.playerX > maxX) {
     vars.playerX = maxX;
   }
@@ -300,7 +300,7 @@ export function update(): void {
       spike.y += spike.speed;
 
       // Reset spike if it goes off screen
-      if (spike.y > <f32>HEIGHT) {
+      if (spike.y > <f32>SCREEN_HEIGHT) {
         spike.active = false;
       }
 
@@ -416,9 +416,9 @@ export function draw(): void {
   }
 
   // Draw coins collected in top-right
-  drawSprite(s("coin", 4), WIDTH - 70, 2);
+  drawSprite(s("coin", 4), SCREEN_WIDTH - 70, 2);
   // Number of coins
-  drawNumber(WIDTH - 40, 8, vars.coinsCollected, c(0xffffff));
+  drawNumber(SCREEN_WIDTH - 40, 8, vars.coinsCollected, c(0xffffff));
 
   // Draw messages
   if (state == GameState.START_SCREEN) {

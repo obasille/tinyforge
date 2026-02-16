@@ -2,8 +2,8 @@
 // Low-level and high-level drawing functions for rendering graphics
 
 import {
-  HEIGHT,
-  WIDTH,
+  SCREEN_HEIGHT,
+  SCREEN_WIDTH,
 } from "./memory";
 
 /**
@@ -25,8 +25,8 @@ export declare function clearFramebuffer(color: u32): void;
 // @ts-expect-error AssemblyScript decorator
 @inline
 export function pset(x: i32, y: i32, color: u32): void {
-  if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) return;
-  const i = (y * WIDTH + x) << 2;
+  if (x < 0 || x >= SCREEN_WIDTH || y < 0 || y >= SCREEN_HEIGHT) return;
+  const i = (y * SCREEN_WIDTH + x) << 2;
   store<u32>(i, color | 0xff000000);
 }
 
@@ -48,13 +48,13 @@ export function fillRect(x: i32, y: i32, w: i32, h: i32, color: u32): void {
 
   if (x0 < 0) x0 = 0;
   if (y0 < 0) y0 = 0;
-  if (x1 > WIDTH) x1 = WIDTH;
-  if (y1 > HEIGHT) y1 = HEIGHT;
+  if (x1 > SCREEN_WIDTH) x1 = SCREEN_WIDTH;
+  if (y1 > SCREEN_HEIGHT) y1 = SCREEN_HEIGHT;
 
   if (x0 >= x1 || y0 >= y1) return;
 
   const colorValue = color | 0xff000000;
-  const rowWidth = WIDTH;
+  const rowWidth = SCREEN_WIDTH;
   const xCount = x1 - x0;
 
   for (let yy: i32 = y0; yy < y1; yy++) {
@@ -84,13 +84,13 @@ export function drawRect(x: i32, y: i32, w: i32, h: i32, color: u32): void {
 
   if (x0 < 0) x0 = 0;
   if (y0 < 0) y0 = 0;
-  if (x1 > WIDTH) x1 = WIDTH;
-  if (y1 > HEIGHT) y1 = HEIGHT;
+  if (x1 > SCREEN_WIDTH) x1 = SCREEN_WIDTH;
+  if (y1 > SCREEN_HEIGHT) y1 = SCREEN_HEIGHT;
 
   if (x0 >= x1 || y0 >= y1) return;
 
   const colorValue = color | 0xff000000;
-  const rowWidth = WIDTH;
+  const rowWidth = SCREEN_WIDTH;
   const top = y0;
   const bottom = y1 - 1;
   const left = x0;
@@ -142,8 +142,8 @@ export function drawLine(x0: i32, y0: i32, x1: i32, y1: i32, color: u32): void {
   const RIGHT: i32 = 2;
   const TOP: i32 = 4;
   const BOTTOM: i32 = 8;
-  const maxX = WIDTH - 1;
-  const maxY = HEIGHT - 1;
+  const maxX = SCREEN_WIDTH - 1;
+  const maxY = SCREEN_HEIGHT - 1;
 
   function outCode(x: i32, y: i32): i32 {
     let code: i32 = 0;
@@ -208,7 +208,7 @@ export function drawLine(x0: i32, y0: i32, x1: i32, y1: i32, color: u32): void {
 
   let err = (dx > dy ? dx : -dy) >> 1;
   while (true) {
-    const addr = ((y0 * WIDTH + x0) << 2) as usize;
+    const addr = ((y0 * SCREEN_WIDTH + x0) << 2) as usize;
     store<u32>(addr, colorValue);
     if (x0 == x1 && y0 == y1) break;
     const e2 = err;
@@ -236,20 +236,20 @@ export function fillCircle(cx: i32, cy: i32, r: i32, color: u32): void {
   const colorValue = color | 0xff000000;
 
   if (r == 0) {
-    if (cx < 0 || cx >= WIDTH || cy < 0 || cy >= HEIGHT) return;
-    const addr = ((cy * WIDTH + cx) << 2) as usize;
+    if (cx < 0 || cx >= SCREEN_WIDTH || cy < 0 || cy >= SCREEN_HEIGHT) return;
+    const addr = ((cy * SCREEN_WIDTH + cx) << 2) as usize;
     store<u32>(addr, colorValue);
     return;
   }
 
-  const rowWidth = WIDTH;
+  const rowWidth = SCREEN_WIDTH;
 
   function drawSpan(y: i32, xStart: i32, xEnd: i32, colorValue: u32): void {
-    if (y < 0 || y >= HEIGHT) return;
+    if (y < 0 || y >= SCREEN_HEIGHT) return;
     let xs = xStart;
     let xe = xEnd;
     if (xs < 0) xs = 0;
-    if (xe >= WIDTH) xe = WIDTH - 1;
+    if (xe >= SCREEN_WIDTH) xe = SCREEN_WIDTH - 1;
     if (xs > xe) return;
 
     let addr = ((y * rowWidth + xs) << 2) as usize;
@@ -294,7 +294,7 @@ export function drawCircle(cx: i32, cy: i32, r: i32, color: u32): void {
   if (r < 0) return;
 
   const colorValue = color | 0xff000000;
-  const rowWidth = WIDTH;
+  const rowWidth = SCREEN_WIDTH;
 
   let x: i32 = r;
   let y: i32 = 0;
@@ -306,37 +306,37 @@ export function drawCircle(cx: i32, cy: i32, r: i32, color: u32): void {
     const yRight = cy + x;
     const yLeft = cy - x;
 
-    if (yTop >= 0 && yTop < HEIGHT) {
+    if (yTop >= 0 && yTop < SCREEN_HEIGHT) {
       const rowBase = (yTop * rowWidth) as usize;
       const x1 = cx + x;
       const x2 = cx - x;
-      if (x1 >= 0 && x1 < WIDTH) store<u32>(((rowBase + x1) << 2) as usize, colorValue);
-      if (x2 >= 0 && x2 < WIDTH) store<u32>(((rowBase + x2) << 2) as usize, colorValue);
+      if (x1 >= 0 && x1 < SCREEN_WIDTH) store<u32>(((rowBase + x1) << 2) as usize, colorValue);
+      if (x2 >= 0 && x2 < SCREEN_WIDTH) store<u32>(((rowBase + x2) << 2) as usize, colorValue);
     }
 
-    if (yBottom != yTop && yBottom >= 0 && yBottom < HEIGHT) {
+    if (yBottom != yTop && yBottom >= 0 && yBottom < SCREEN_HEIGHT) {
       const rowBase = (yBottom * rowWidth) as usize;
       const x1 = cx + x;
       const x2 = cx - x;
-      if (x1 >= 0 && x1 < WIDTH) store<u32>(((rowBase + x1) << 2) as usize, colorValue);
-      if (x2 >= 0 && x2 < WIDTH) store<u32>(((rowBase + x2) << 2) as usize, colorValue);
+      if (x1 >= 0 && x1 < SCREEN_WIDTH) store<u32>(((rowBase + x1) << 2) as usize, colorValue);
+      if (x2 >= 0 && x2 < SCREEN_WIDTH) store<u32>(((rowBase + x2) << 2) as usize, colorValue);
     }
 
     if (x != y) {
-      if (yRight >= 0 && yRight < HEIGHT) {
+      if (yRight >= 0 && yRight < SCREEN_HEIGHT) {
         const rowBase = (yRight * rowWidth) as usize;
         const x1 = cx + y;
         const x2 = cx - y;
-        if (x1 >= 0 && x1 < WIDTH) store<u32>(((rowBase + x1) << 2) as usize, colorValue);
-        if (x2 >= 0 && x2 < WIDTH) store<u32>(((rowBase + x2) << 2) as usize, colorValue);
+        if (x1 >= 0 && x1 < SCREEN_WIDTH) store<u32>(((rowBase + x1) << 2) as usize, colorValue);
+        if (x2 >= 0 && x2 < SCREEN_WIDTH) store<u32>(((rowBase + x2) << 2) as usize, colorValue);
       }
 
-      if (yLeft >= 0 && yLeft < HEIGHT) {
+      if (yLeft >= 0 && yLeft < SCREEN_HEIGHT) {
         const rowBase = (yLeft * rowWidth) as usize;
         const x1 = cx + y;
         const x2 = cx - y;
-        if (x1 >= 0 && x1 < WIDTH) store<u32>(((rowBase + x1) << 2) as usize, colorValue);
-        if (x2 >= 0 && x2 < WIDTH) store<u32>(((rowBase + x2) << 2) as usize, colorValue);
+        if (x1 >= 0 && x1 < SCREEN_WIDTH) store<u32>(((rowBase + x1) << 2) as usize, colorValue);
+        if (x2 >= 0 && x2 < SCREEN_WIDTH) store<u32>(((rowBase + x2) << 2) as usize, colorValue);
       }
     }
 

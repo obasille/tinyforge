@@ -13,19 +13,19 @@ import {
   drawString,
   fillRect,
   getU8,
-  HEIGHT,
+  SCREEN_HEIGHT,
   log,
   playSfx,
   RAM_START,
   setU8,
-  WIDTH,
+  SCREEN_WIDTH,
 } from "../sdk";
 
 // === Constants ===
 const PADDLE_WIDTH: i32 = 50;
 const PADDLE_HEIGHT: i32 = 8;
 const PADDLE_SPEED: f32 = 4.0;
-const PADDLE_Y: i32 = HEIGHT - 20;
+const PADDLE_Y: i32 = SCREEN_HEIGHT - 20;
 
 const BALL_SIZE: i32 = 6;
 const BALL_SPEED_INITIAL: f32 = 3.0;
@@ -123,8 +123,8 @@ function checkCollisions(): void {
     ballVX = -ballVX;
     vars.ballVX = ballVX;
     playSfx("tap", 0.3);
-  } else if (ballX >= ((WIDTH - BALL_SIZE) as f32)) {
-    vars.ballX = (WIDTH - BALL_SIZE) as f32;
+  } else if (ballX >= ((SCREEN_WIDTH - BALL_SIZE) as f32)) {
+    vars.ballX = (SCREEN_WIDTH - BALL_SIZE) as f32;
     ballVX = -ballVX;
     vars.ballVX = ballVX;
     playSfx("tap", 0.3);
@@ -167,7 +167,7 @@ function checkCollisions(): void {
   }
 
   // Bottom edge (lose life)
-  if (ballY > (HEIGHT as f32)) {
+  if (ballY > (SCREEN_HEIGHT as f32)) {
     vars.lives--;
     playSfx("explosion", 0.2);
 
@@ -231,7 +231,7 @@ function checkCollisions(): void {
 // === Lifecycle ===
 export function init(): void {
   // Initialize paddle
-  vars.paddleX = (WIDTH / 2 - PADDLE_WIDTH / 2) as f32;
+  vars.paddleX = (SCREEN_WIDTH / 2 - PADDLE_WIDTH / 2) as f32;
 
   // Initialize ball
   resetBall();
@@ -278,8 +278,8 @@ export function update(): void {
   }
   if (buttonDown(Button.RIGHT)) {
     paddleX += PADDLE_SPEED;
-    if (paddleX > ((WIDTH - PADDLE_WIDTH) as f32)) {
-      paddleX = (WIDTH - PADDLE_WIDTH) as f32;
+    if (paddleX > ((SCREEN_WIDTH - PADDLE_WIDTH) as f32)) {
+      paddleX = (SCREEN_WIDTH - PADDLE_WIDTH) as f32;
     }
   }
   vars.paddleX = paddleX;
@@ -338,8 +338,8 @@ export function draw(): void {
   drawString(4, 4, "SCORE:", c(0xaaaaaa));
   drawNumber(50, 4, vars.score, c(0xffffff));
 
-  drawString(WIDTH - 60, 4, "LIVES:", c(0xaaaaaa));
-  drawNumber(WIDTH - 15, 4, vars.lives, c(0xff0000));
+  drawString(SCREEN_WIDTH - 60, 4, "LIVES:", c(0xaaaaaa));
+  drawNumber(SCREEN_WIDTH - 15, 4, vars.lives, c(0xff0000));
 
   // Game messages
   if (state == GameState.START_SCREEN) {
@@ -350,6 +350,11 @@ export function draw(): void {
     drawStartMessageBox("LEVEL COMPLETE!", c(0x1a1a1a), c(0x00ff00));
   } else if (vars.ballLaunched == 0) {
     // Show launch instruction
-    drawString(WIDTH / 2 - 40, HEIGHT - 40, "PRESS A TO LAUNCH", c(0xffff00));
+    drawString(
+      SCREEN_WIDTH / 2 - 40,
+      SCREEN_HEIGHT - 40,
+      "PRESS A TO LAUNCH",
+      c(0xffff00),
+    );
   }
 }

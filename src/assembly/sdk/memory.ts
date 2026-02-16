@@ -19,10 +19,10 @@ export declare const memory: WebAssembly.Memory;
 import * as memoryMap from '../../memory-map';
 
 /** Display width in pixels */
-export const WIDTH = memoryMap.WIDTH as i32;
+export const SCREEN_WIDTH = memoryMap.SCREEN_WIDTH as i32;
 
 /** Display height in pixels */
-export const HEIGHT = memoryMap.HEIGHT as i32;
+export const SCREEN_HEIGHT = memoryMap.SCREEN_HEIGHT as i32;
 
 /** Framebuffer start address (0x000000) */
 export const FB_START = memoryMap.FB_START as usize;

@@ -13,7 +13,7 @@ import {
   fillRect,
   s,
   warn,
-  WIDTH,
+  SCREEN_WIDTH,
 } from "../sdk";
 
 // Imports des modules
@@ -300,7 +300,7 @@ export function draw(): void {
   }
 
   // Affiche les vies en haut à droite avec un petit bounce
-  const coeurX = WIDTH - TAILLE_CASE;
+  const coeurX = SCREEN_WIDTH - TAILLE_CASE;
   const bounce = ((joueur.invincible >> 4) & 1) == 0 ? 0 : -2;
   const pasCoeur = TAILLE_CASE + 2;
   for (let i: i32 = 0; i < (jeu.vies as i32); i++) {

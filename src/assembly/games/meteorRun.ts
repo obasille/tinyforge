@@ -13,13 +13,13 @@ import {
   fillRect,
   getU16,
   getU8,
-  HEIGHT,
+  SCREEN_HEIGHT,
   log,
   RAM_START,
   randomRange,
   setU16,
   setU8,
-  WIDTH,
+  SCREEN_WIDTH,
 } from "../sdk";
 
 // === Constants ===
@@ -107,7 +107,7 @@ function rollSpeed(): u8 {
 }
 
 function spawnMeteor(i: i32, y: u16): void {
-  const maxX = WIDTH - METEOR_SIZE;
+  const maxX = SCREEN_WIDTH - METEOR_SIZE;
   const x = randomRange(maxX) as u16;
   setMeteor(i, x, y, rollSpeed());
 }
@@ -135,13 +135,13 @@ export function init(): void {
   vars.difficulty = 0;
   vars.bulletActive = 0;
   vars.fireCooldown = 0;
-  vars.playerX = WIDTH / 2 - PLAYER_WIDTH / 2;
-  vars.playerY = HEIGHT - PLAYER_HEIGHT - PLAYER_MARGIN;
+  vars.playerX = SCREEN_WIDTH / 2 - PLAYER_WIDTH / 2;
+  vars.playerY = SCREEN_HEIGHT - PLAYER_HEIGHT - PLAYER_MARGIN;
   vars.bulletX = 0;
   vars.bulletY = 0;
 
   for (let i: i32 = 0; i < METEOR_COUNT; i++) {
-    const startY = randomRange(HEIGHT) as u16;
+    const startY = randomRange(SCREEN_HEIGHT) as u16;
     spawnMeteor(i, startY);
   }
 
@@ -168,7 +168,8 @@ export function update(): void {
   if (buttonDown(Button.LEFT)) playerX -= PLAYER_SPEED;
   if (buttonDown(Button.RIGHT)) playerX += PLAYER_SPEED;
   if (playerX < 0) playerX = 0;
-  if (playerX > WIDTH - PLAYER_WIDTH) playerX = WIDTH - PLAYER_WIDTH;
+  if (playerX > SCREEN_WIDTH - PLAYER_WIDTH)
+    playerX = SCREEN_WIDTH - PLAYER_WIDTH;
   vars.playerX = playerX;
 
   // Weapon handling
@@ -200,7 +201,7 @@ export function update(): void {
     const speed = getMeteorSpeed(i) as i32;
     my += speed;
 
-    if (my >= HEIGHT) {
+    if (my >= SCREEN_HEIGHT) {
       vars.score++;
       if (vars.score % 15 == 0 && (vars.difficulty as i32) < MAX_DIFFICULTY) {
         vars.difficulty++;

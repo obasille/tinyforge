@@ -2,16 +2,16 @@
 // Shared memory layout constants between host and SDK
 
 /** Display width in pixels */
-export const WIDTH = 320;
+export const SCREEN_WIDTH = 320;
 
 /** Display height in pixels */
-export const HEIGHT = 240;
+export const SCREEN_HEIGHT = 240;
 
 /** Framebuffer start address */
 export const FB_START = 0x000000;
 
 /** Framebuffer size in bytes (320 * 240 * 4 = 307200) */
-export const FB_SIZE = WIDTH * HEIGHT * 4; // 0x04B000
+export const FB_SIZE = SCREEN_WIDTH * SCREEN_HEIGHT * 4; // 0x04B000
 
 // === Input Memory Map ===
 

@@ -5,9 +5,9 @@ import {
   Button,
   FixedArray,
   FixedArrayWithCount,
-  HEIGHT,
+  SCREEN_HEIGHT,
   RAM_START,
-  WIDTH,
+  SCREEN_WIDTH,
   buttonDown,
   c,
   clearFramebuffer,
@@ -114,8 +114,8 @@ export function draw(): void {
   const py = vars.playerY;
 
   // test pattern
-  for (let y = 0; y < HEIGHT; y++) {
-    for (let x = 0; x < WIDTH; x++) {
+  for (let y = 0; y < SCREEN_HEIGHT; y++) {
+    for (let x = 0; x < SCREEN_WIDTH; x++) {
       const r = x & 255;
       const g = y & 255;
       const b = 128;

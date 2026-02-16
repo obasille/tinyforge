@@ -3,12 +3,12 @@
 
 import { pset } from "./drawing";
 import {
-  HEIGHT,
+  SCREEN_HEIGHT,
   SPRITE_ID_ENTRY_SIZE,
   SPRITE_ID_MAX_CHARS,
   SPRITE_INFO_ENTRY_SIZE,
   SPRITE_TABLE_ADDR,
-  WIDTH
+  SCREEN_WIDTH
 } from "./memory";
   
 @unmanaged
@@ -188,8 +188,8 @@ export function drawSprite(
   // Calculate visible region (clip to screen bounds)
   const startX = max(0, -x);
   const startY = max(0, -y);
-  const endX = min(width, WIDTH - x);
-  const endY = min(height, HEIGHT - y);
+  const endX = min(width, SCREEN_WIDTH - x);
+  const endY = min(height, SCREEN_HEIGHT - y);
 
   // Early exit if sprite is completely off-screen
   if (startX >= endX || startY >= endY) return;
@@ -198,7 +198,7 @@ export function drawSprite(
   const spriteDataAddr = frameOffset as usize;
 
   let rowOffset = startY * width;
-  let fbRowBase = ((y + startY) * WIDTH) as usize;
+  let fbRowBase = ((y + startY) * SCREEN_WIDTH) as usize;
 
   for (let dy: i32 = startY; dy < endY; dy++) {
     // Calculate source row offset (use incremental for non-flipped, multiply for flipped)
@@ -253,7 +253,7 @@ export function drawSprite(
     }
     
     rowOffset += width;
-    fbRowBase += WIDTH as usize;
+    fbRowBase += SCREEN_WIDTH as usize;
   }
 }
 
@@ -287,13 +287,13 @@ export function drawSpriteScaled(
 
   const startX = max(0, -x);
   const startY = max(0, -y);
-  const endX = min(scaledWidth, WIDTH - x);
-  const endY = min(scaledHeight, HEIGHT - y);
+  const endX = min(scaledWidth, SCREEN_WIDTH - x);
+  const endY = min(scaledHeight, SCREEN_HEIGHT - y);
 
   if (startX >= endX || startY >= endY) return;
 
   const spriteDataAddr = frameOffset as usize;
-  let fbRowBase = ((y + startY) * WIDTH) as usize;
+  let fbRowBase = ((y + startY) * SCREEN_WIDTH) as usize;
 
   for (let dy: i32 = startY; dy < endY; dy++) {
     const srcY = dy / scaleY;
@@ -330,7 +330,7 @@ export function drawSpriteScaled(
       }
     }
 
-    fbRowBase += WIDTH as usize;
+    fbRowBase += SCREEN_WIDTH as usize;
   }
 }
 
@@ -370,13 +370,13 @@ export function drawSpriteFrame(
 
   const startX = max(0, -x);
   const startY = max(0, -y);
-  const endX = min(frameWidth, WIDTH - x);
-  const endY = min(frameHeight, HEIGHT - y);
+  const endX = min(frameWidth, SCREEN_WIDTH - x);
+  const endY = min(frameHeight, SCREEN_HEIGHT - y);
 
   if (startX >= endX || startY >= endY) return;
 
   const spriteDataAddr = frameOffset as usize;
-  let fbRowBase = ((y + startY) * WIDTH) as usize;
+  let fbRowBase = ((y + startY) * SCREEN_WIDTH) as usize;
 
   for (let dy: i32 = startY; dy < endY; dy++) {
     const srcY = flipY ? (frameHeight - 1 - dy) : dy;
@@ -412,7 +412,7 @@ export function drawSpriteFrame(
       }
     }
 
-    fbRowBase += WIDTH as usize;
+    fbRowBase += SCREEN_WIDTH as usize;
   }
 }
 

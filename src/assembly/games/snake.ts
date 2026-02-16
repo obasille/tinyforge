@@ -11,19 +11,19 @@ import {
   drawString,
   fillRect,
   getU8,
-  HEIGHT,
+  SCREEN_HEIGHT,
   log,
   pset,
   RAM_START,
   randomRange,
   setU8,
-  WIDTH,
+  SCREEN_WIDTH,
 } from "../sdk";
 
 // === Constants ===
 const GRID_SIZE: i32 = 16; // Size of each grid cell in pixels
-const GRID_WIDTH: i32 = WIDTH / GRID_SIZE; // 20 cells wide
-const GRID_HEIGHT: i32 = HEIGHT / GRID_SIZE; // 15 cells tall
+const GRID_WIDTH: i32 = SCREEN_WIDTH / GRID_SIZE; // 20 cells wide
+const GRID_HEIGHT: i32 = SCREEN_HEIGHT / GRID_SIZE; // 15 cells tall
 const MAX_SNAKE_LENGTH: i32 = GRID_WIDTH * GRID_HEIGHT; // Maximum possible length
 
 const INITIAL_SPEED: u8 = 15; // Frames between moves (lower = faster)
@@ -261,13 +261,13 @@ export function draw(): void {
 
   // Draw grid lines (subtle)
   const colorGrid = c(0x1a1a1a);
-  for (let x: i32 = 0; x < WIDTH; x += GRID_SIZE) {
-    for (let y: i32 = 0; y < HEIGHT; y++) {
+  for (let x: i32 = 0; x < SCREEN_WIDTH; x += GRID_SIZE) {
+    for (let y: i32 = 0; y < SCREEN_HEIGHT; y++) {
       pset(x, y, colorGrid);
     }
   }
-  for (let y: i32 = 0; y < HEIGHT; y += GRID_SIZE) {
-    for (let x: i32 = 0; x < WIDTH; x++) {
+  for (let y: i32 = 0; y < SCREEN_HEIGHT; y += GRID_SIZE) {
+    for (let x: i32 = 0; x < SCREEN_WIDTH; x++) {
       pset(x, y, colorGrid);
     }
   }

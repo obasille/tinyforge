@@ -1,6 +1,12 @@
 // @ts-expect-error - No type definitions available for @assemblyscript/loader
 import * as loader from '@assemblyscript/loader';
-import { INPUT_ADDR, MOUSE_ADDR, SDK_RNG_SEED_ADDR } from '../memory-map.js';
+import {
+  INPUT_ADDR,
+  MOUSE_ADDR,
+  SCREEN_HEIGHT,
+  SCREEN_WIDTH,
+  SDK_RNG_SEED_ADDR,
+} from '../memory-map.js';
 import { audioManager } from './audio-manager.js';
 import { addConsoleEntry } from './console-panel.js';
 import { spriteManager } from './sprite-manager.js';
@@ -53,9 +59,6 @@ if (!ctx) {
   throw new Error('Failed to acquire 2D rendering context.');
 }
 const ctx2d = ctx;
-
-const WIDTH = 320;
-const HEIGHT = 240;
 
 let hasAborted = false;
 let animationFrameId: number | null = null;
@@ -113,9 +116,13 @@ spriteManager.init(memory);
 initializeRngSeed();
 
 // Create framebuffer views (persistent across game loads)
-const fb = new Uint8ClampedArray(memory.buffer, 0, WIDTH * HEIGHT * 4);
-const fb32 = new Uint32Array(memory.buffer, 0, WIDTH * HEIGHT);
-const image = new ImageData(fb, WIDTH, HEIGHT);
+const fb = new Uint8ClampedArray(
+  memory.buffer,
+  0,
+  SCREEN_WIDTH * SCREEN_HEIGHT * 4,
+);
+const fb32 = new Uint32Array(memory.buffer, 0, SCREEN_WIDTH * SCREEN_HEIGHT);
+const image = new ImageData(fb, SCREEN_WIDTH, SCREEN_HEIGHT);
 
 // Allow external access to memory for tools
 (window as Window & { getMemory?: () => WebAssembly.Memory }).getMemory = () =>
@@ -1116,8 +1123,13 @@ function frame(now: number): void {
   mouseButtonsEl.textContent =
     '0x' + mouseButtons.toString(16).padStart(2, '0').toUpperCase();
   if (colorArgbEl && colorRgbEl) {
-    if (mouseX >= 0 && mouseX < WIDTH && mouseY >= 0 && mouseY < HEIGHT) {
-      const pixel = fb32[mouseY * WIDTH + mouseX] >>> 0;
+    if (
+      mouseX >= 0 &&
+      mouseX < SCREEN_WIDTH &&
+      mouseY >= 0 &&
+      mouseY < SCREEN_HEIGHT
+    ) {
+      const pixel = fb32[mouseY * SCREEN_WIDTH + mouseX] >>> 0;
       const r = pixel & 0xff;
       const g = (pixel >> 8) & 0xff;
       const b = (pixel >> 16) & 0xff;
@@ -1129,13 +1141,21 @@ function frame(now: number): void {
       colorRgbEl.textContent = rgb;
       if (colorSwatchEl) {
         const bgColor = `rgba(${r}, ${g}, ${b}, ${a / 255})`;
-        colorSwatchEl.style.setProperty('background-color', bgColor, 'important');
+        colorSwatchEl.style.setProperty(
+          'background-color',
+          bgColor,
+          'important',
+        );
       }
     } else {
       colorArgbEl.textContent = '--';
       colorRgbEl.textContent = '--';
       if (colorSwatchEl) {
-        colorSwatchEl.style.setProperty('background-color', 'transparent', 'important');
+        colorSwatchEl.style.setProperty(
+          'background-color',
+          'transparent',
+          'important',
+        );
       }
     }
   }
