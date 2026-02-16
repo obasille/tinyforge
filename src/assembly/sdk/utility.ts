@@ -151,6 +151,25 @@ export function randomRange(max: i32): i32 {
 }
 
 /**
+ * Clamp a value between a minimum and maximum
+ * @param value The value to clamp
+ * @param min Minimum bound (inclusive)
+ * @param max Maximum bound (inclusive)
+ * @returns Clamped value in [min, max]
+ * 
+ * @example
+ * ```ts
+ * const x = clamp(playerX, 0, SCREEN_WIDTH);  // Keep player in bounds
+ * const health = clamp(damage, 0, 100);       // Cap health at 0-100
+ * ```
+ */
+export function clamp(value: i32, min: i32, max: i32): i32 {
+  if (value < min) return min;
+  if (value > max) return max;
+  return value;
+}
+
+/**
  * Draw a styled message box with title and optional subtitle
  * @param posX Box X position
  * @param posY Box Y position
