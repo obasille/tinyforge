@@ -9,6 +9,7 @@
     "build:games": "node scripts/build-games.js",
     "build:debug": "node scripts/build-games.js debug",
     "check:alloc": "node scripts/check-alloc.js",
+    "test": "node scripts/test-utility.js",
     "watch:host": "tsc -p src/web/tsconfig.json --watch",
     "watch:games": "node scripts/watch-games.js",
     "upload": "node scripts/upload.js",
