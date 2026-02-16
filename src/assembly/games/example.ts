@@ -59,9 +59,9 @@ export function init(): void {
 
   // Initialize arrays - zero allocation!
   grid.fill(0, 100); // Clear 100 u8 values
-  scores[0] = 1000; // High score (bracket notation supported!)
-  scores[1] = 500;
-  grid[10] = 42; // Set grid cell (bracket notation supported!)
+  scores.set(0, 1000); // High score (bracket notation supported!)
+  scores.set(1, 500);
+  grid.set(10, 42); // Set grid cell (bracket notation supported!)
 
   // Initialize dynamic array with capacity
   items.capacity = 20;
