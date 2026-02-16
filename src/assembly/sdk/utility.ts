@@ -83,14 +83,14 @@ export class Vec2i {
 }
 
 /**
- * Generate a pseudo-random integer using PCG (RXS-M-XS, 32-bit state)
+ * Generate a pseudo-random unsigned 32-bit integer using PCG (RXS-M-XS, 32-bit state)
  * This variant keeps a 32-bit state so it works with the current RNG_SEED layout.
  * Properly separates state advancement from output permutation.
- * @returns Random i32 value in range [0, 0x7fffffff]
+ * @returns Random u32 value in full range [0, 0xffffffff]
  */
 // @ts-expect-error AssemblyScript decorator
 @inline
-export function random(): i32 {
+export function random(): u32 {
   // Load current state
   let state = load<u32>(RNG_SEED);
   
@@ -104,8 +104,8 @@ export function random(): i32 {
   let word = ((state >> ((state >> 28) + 4)) ^ state) * 277803737;
   word = (word >> 22) ^ word;
   
-  // Return as positive i32
-  return (word & 0x7fffffff) as i32;
+  // Return full 32-bit output (required for Lemire's algorithm in randomRange)
+  return word;
 }
 
 /**
@@ -129,7 +129,7 @@ export function randomRange(max: i32): i32 {
   if (max <= 0) return 0;
   
   // Generate random value and compute 64-bit product: random() * max
-  let x = random() as u32;
+  let x = random();  // Already u32, no cast needed
   let m = (x as u64) * (max as u64);
   let l = m as u32;  // Low 32 bits
   
@@ -140,7 +140,7 @@ export function randomRange(max: i32): i32 {
     
     // Reject and resample if l < t (rare: happens only when biased)
     while (l < t) {
-      x = random() as u32;
+      x = random();  // Already u32, no cast needed
       m = (x as u64) * (max as u64);
       l = m as u32;
     }

@@ -381,11 +381,20 @@ function getCellData(x: i32, y: i32): u8 {
 
 **Random number generation:**
 
+**CRITICAL: NEVER use modulo (%) to cap random values - ALWAYS use randomRange():**
+
 ```ts
-// Use the SDK RNG seed in shared memory.
-const roll = random() % 10;
-const index = randomRange(7); // [0, 7)
+// ❌ WRONG - Modulo introduces bias
+const roll = random() % 10;        // Numbers 0-5 appear more often than 6-9
+const x = random() % WIDTH;        // Biased distribution
+
+// ✅ CORRECT - Use randomRange for unbiased random values
+const roll = randomRange(10);      // Uniform distribution [0, 10)
+const x = randomRange(WIDTH);      // Uniform distribution [0, WIDTH)
+const index = randomRange(7);      // Uniform distribution [0, 7)
 ```
+
+**Why modulo causes bias:** When the random number space (e.g., 0 to 2^32-1) doesn't evenly divide by your range, some values appear more frequently. The `randomRange()` function uses rejection sampling to ensure truly uniform distribution by discarding values that would cause bias.
 
 #### 11. Build Configuration
 

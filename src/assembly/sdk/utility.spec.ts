@@ -136,12 +136,22 @@ function testRandomBasic(): void {
   // Reset RNG seed
   store<u32>(RNG_SEED, 99999);
 
-  // Generate some random numbers and verify they're non-negative
+  // Generate random numbers and verify they're valid u32 values
+  // Since random() returns u32, all values [0, 0xffffffff] are valid
+  let hasLowValues = false;
+  let hasHighValues = false;
+  
   for (let i = 0; i < 100; i++) {
     const val = random();
-    assert(val >= 0, "random() returned negative value");
-    assert(val <= 0x7fffffff, "random() returned value > max i32");
+    // u32 is always >= 0 by definition
+    // Check we're getting values across the full range
+    if (val < 0x40000000) hasLowValues = true;
+    if (val > 0xc0000000) hasHighValues = true;
   }
+
+  // With 100 samples, we should see values in both low and high ranges
+  assert(hasLowValues, "random() should produce some low values");
+  assert(hasHighValues, "random() should produce some high values");
 
   testEnd();
 }
