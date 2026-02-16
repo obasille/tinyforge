@@ -12,12 +12,26 @@ import { drawString } from "./strings";
 /**
  * 2D integer vector class for coordinate pairs and offsets
  * Uses @unmanaged to work with stub runtime (no heap allocation)
+ * 
+ * **WARNING:** Even though marked @unmanaged, using `new Vec2i()` still allocates memory
+ * and will cause __alloc symbol to appear. For zero-allocation usage, pre-allocate memory
+ * in your RAM layout and use `Vec2i.fromAddress()` to reinterpret that memory as a Vec2i.
+ * 
+ * Only use `new Vec2i()` in temporary contexts where allocation is acceptable,
+ * or use `fromAddress()` for zero-allocation access to pre-allocated memory.
  *
  * @example
  * ```ts
+ * // ❌ WRONG - This allocates memory!
  * const pos = new Vec2i(10, 20);
- * const offset = new Vec2i(5, 5);
- * pos.x += offset.x;  // Now at (15, 25)
+ * 
+ * // ✅ CORRECT - Zero allocation with fromAddress
+ * enum Var {
+ *   PLAYER_POS = 0,  // 8 bytes (x: i32, y: i32)
+ * }
+ * const pos = Vec2i.fromAddress(RAM_START + Var.PLAYER_POS);
+ * pos.x = 10;
+ * pos.y = 20;
  * ```
  */
 @unmanaged
@@ -36,6 +50,17 @@ export class Vec2i {
   constructor(x: i32 = 0, y: i32 = 0) {
     this.x = x;
     this.y = y;
+  }
+
+  /**
+   * Create a Vec2i instance from a raw memory address
+   * Useful for treating pre-allocated memory as a Vec2i without allocation
+   * @param address Memory address of the Vec2i data (8 bytes: x, y as i32)
+   * @returns Vec2i instance
+   */
+  @inline
+  static fromAddress(address: usize): Vec2i {
+    return changetype<Vec2i>(address);
   }
 
   /**
@@ -127,14 +152,16 @@ export function randomRange(max: i32): i32 {
 
 /**
  * Draw a styled message box with title and optional subtitle
- * All text positions are specified as offsets relative to the box corner
- *
- * @param pos Top-left corner of the box
- * @param size Width and height of the box
- * @param title Main text to display
- * @param titleOffset Position of title relative to box corner
- * @param subtitle Secondary text (use empty string "" to skip)
- * @param subtitleOffset Position of subtitle relative to box corner
+ * @param posX Box X position
+ * @param posY Box Y position
+ * @param sizeX Box width
+ * @param sizeY Box height
+ * @param title Main message text
+ * @param titleOffsetX Title X offset from box position
+ * @param titleOffsetY Title Y offset from box position
+ * @param subtitle Secondary message text (e.g., "PRESS START")
+ * @param subtitleOffsetX Subtitle X offset from box position
+ * @param subtitleOffsetY Subtitle Y offset from box position
  * @param bgColor Background fill color (ABGR format)
  * @param fgColor Border and text color (ABGR format)
  *
@@ -142,30 +169,34 @@ export function randomRange(max: i32): i32 {
  * ```ts
  * // Draw a centered game over message:
  * drawMessageBox(
- *   new Vec2i(60, 90), new Vec2i(200, 60),
- *   "GAME OVER", new Vec2i(70, 15),
- *   "PRESS START", new Vec2i(50, 35),
+ *   60, 90, 200, 60,
+ *   "GAME OVER", 70, 15,
+ *   "PRESS START", 50, 35,
  *   c(0x000000), c(0xff0000)
  * );
  * ```
  */
 export function drawMessageBox(
-  pos: Vec2i,
-  size: Vec2i,
+  posX: i32,
+  posY: i32,
+  sizeX: i32,
+  sizeY: i32,
   title: string,
-  titleOffset: Vec2i,
+  titleOffsetX: i32,
+  titleOffsetY: i32,
   subtitle: string,
-  subtitleOffset: Vec2i,
+  subtitleOffsetX: i32,
+  subtitleOffsetY: i32,
   bgColor: u32,
   fgColor: u32,
 ): void {
-  fillRect(pos.x, pos.y, size.x, size.y, bgColor);
-  drawRect(pos.x, pos.y, size.x, size.y, fgColor);
-  drawString(pos.x + titleOffset.x, pos.y + titleOffset.y, title, fgColor);
+  fillRect(posX, posY, sizeX, sizeY, bgColor);
+  drawRect(posX, posY, sizeX, sizeY, fgColor);
+  drawString(posX + titleOffsetX, posY + titleOffsetY, title, fgColor);
   if (subtitle.length > 0) {
     drawString(
-      pos.x + subtitleOffset.x,
-      pos.y + subtitleOffset.y,
+      posX + subtitleOffsetX,
+      posY + subtitleOffsetY,
       subtitle,
       c(0xaaaaaa),
     );
@@ -191,12 +222,12 @@ export function drawStartMessageBox(
   fgColor: u32,
 ): void {
   drawMessageBox(
-    new Vec2i(75, 95),
-    new Vec2i(170, 50),
+    75, 95,
+    170, 50,
     message,
-    new Vec2i(50, 12),
+    50, 12,
     "PRESS START",
-    new Vec2i(40, 27),
+    40, 27,
     bgColor,
     fgColor,
   );
@@ -401,6 +432,7 @@ export class FixedArrayWithCount<T, U = u16> {
   /**
    * Set current length (number of elements in use)
    */
+  // @ts-expect-error AssemblyScript decorator
   @inline
   set length(value: U) {
     const baseAddr = changetype<usize>(this);
@@ -419,6 +451,7 @@ export class FixedArrayWithCount<T, U = u16> {
   /**
    * Set maximum capacity (should be set once during initialization)
    */
+  // @ts-expect-error AssemblyScript decorator
   @inline
   set capacity(value: U) {
     const baseAddr = changetype<usize>(this);

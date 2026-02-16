@@ -579,6 +579,38 @@ const x = items[0];
 - Memory must be pre-allocated in your game's RAM layout.
 - Use `U = u8` for small arrays (max 255 elements), `U = u16` for larger (max 65535).
 
+**4. Use Vec2i.fromAddress() for coordinate pairs (NEVER use new Vec2i()):**
+
+```ts
+import { Vec2i, RAM_START } from "./console";
+
+// Vec2i is @unmanaged but 'new' STILL ALLOCATES!
+// ❌ WRONG - Triggers __alloc even with @unmanaged
+const playerPos = new Vec2i(10, 20);
+const enemyPos = new Vec2i(50, 100);
+
+// ✅ CORRECT - Zero allocation with fromAddress
+enum Var {
+  GAME_STATE = 0,    // u8 (1 byte)
+  SCORE = 1,         // i32 (4 bytes)
+  PLAYER_POS = 8,    // Vec2i (8 bytes: x, y as i32)
+  ENEMY_POS = 16,    // Vec2i (8 bytes)
+}
+
+const playerPos = Vec2i.fromAddress(RAM_START + Var.PLAYER_POS);
+playerPos.x = 10;
+playerPos.y = 20;
+
+const enemyPos = Vec2i.fromAddress(RAM_START + Var.ENEMY_POS);
+enemyPos.set(50, 100);  // Set both at once
+
+// Access in game logic
+if (playerPos.x < 0) playerPos.x = 0;
+if (playerPos.y > HEIGHT) playerPos.y = HEIGHT;
+```
+
+**CRITICAL:** The `@unmanaged` decorator prevents garbage collection tracking but does NOT prevent allocation from the `new` keyword. Always use `fromAddress()` to reinterpret pre-allocated memory as a Vec2i.
+
 **Memory allocation strategy:**
 
 ```ts

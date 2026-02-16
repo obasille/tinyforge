@@ -983,6 +983,36 @@ const x = items[0];
 - Memory must be pre-allocated in your game's RAM layout.
 - Use `U = u8` for small arrays (max 255 elements), `U = u16` for larger (max 65535).
 
+#### Vec2i Helper Class
+
+**`Vec2i`** - 2D integer vector for coordinate pairs:
+
+```ts
+import { Vec2i, RAM_START } from "./console";
+
+// WARNING: Using 'new Vec2i()' allocates memory!
+// For zero allocation, pre-allocate in RAM and use fromAddress()
+
+// Define RAM layout (Vec2i needs 8 bytes: x and y as i32)
+enum Var {
+  PLAYER_POS = 0,  // 8 bytes
+  ENEMY_POS = 8,   // 8 bytes
+}
+
+// ❌ WRONG - This allocates memory!
+const pos = new Vec2i(10, 20);
+
+// ✅ CORRECT - Zero allocation
+const playerPos = Vec2i.fromAddress(RAM_START + Var.PLAYER_POS);
+playerPos.x = 10;
+playerPos.y = 20;
+
+const enemyPos = Vec2i.fromAddress(RAM_START + Var.ENEMY_POS);
+enemyPos.set(50, 100);  // Set both coordinates at once
+```
+
+**Important:** Even though `Vec2i` is marked `@unmanaged`, the `new` keyword still triggers allocation. Always use `fromAddress()` for zero-allocation access to pre-allocated memory.
+
 ### Other Guidelines
 
 - No floating‑point math in hot paths
