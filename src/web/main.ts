@@ -329,6 +329,9 @@ async function loadGame(
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     addConsoleEntry('ERROR', `Failed to load ${displayName}: ${message}`);
+    if (e instanceof Error && e.stack) {
+      console.error('Stack trace:', e.stack);
+    }
     hasAborted = true;
   }
 }

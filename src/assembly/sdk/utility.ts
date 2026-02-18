@@ -455,7 +455,7 @@ export class FixedArrayWithCount<T, U = u16> {
   @inline
   set length(value: U) {
     const baseAddr = changetype<usize>(this);
-    store<U>(baseAddr, value);
+    store<U>(baseAddr, value); // Math.max(0, Mathf.min(value, this.capacity)));
   }
   
   /**
@@ -580,5 +580,155 @@ export class FixedArrayWithCount<T, U = u16> {
       if (this.get(i) == value) return i;
     }
     return -1;
+  }
+}
+
+/**
+ * Zero-allocation fixed-size array for @unmanaged objects with explicit element size
+ * Uses @unmanaged pattern - no heap allocation, just address reinterpretation
+ * 
+ * Memory layout (at base address):
+ *   [0 to 3]:  u32 elementSize (size of each element in bytes)
+ *   [4+]:      array data (elements of type T)
+ * 
+ * This class solves the problem where sizeof<T>() returns 4 (pointer size) for @unmanaged classes
+ * instead of the actual class size. The element size is stored in memory and used for indexing.
+ * 
+ * Supports bracket notation: arr[index] = value and val = arr[index]
+ * 
+ * @example
+ * ```ts
+ * @unmanaged
+ * class Enemy {
+ *   x: i32;      // offset 0
+ *   y: i32;      // offset 4
+ *   health: i32; // offset 8
+ * }
+ * 
+ * // Calculate element size using offsetof on the last field
+ * const enemySize = offsetof<Enemy>("health") + sizeof<i32>();  // 12 bytes
+ * 
+ * // Optional: align to 4-byte boundary
+ * const enemySizeAligned = (enemySize + 3) & ~3;  // 12 bytes (already aligned)
+ * 
+ * // Calculate memory requirements:
+ * const size = FixedArrayOfObj.sizeInMemory(50, enemySizeAligned);  // 4 + 600 = 604 bytes
+ * 
+ * // In your game's RAM layout:
+ * enum Var {
+ *   ENEMIES_START = 100,  // Reserve 604 bytes for 50 enemies
+ * }
+ * 
+ * // Create array and initialize element size:
+ * const enemies = FixedArrayOfObj.fromAddress<Enemy>(RAM_START + Var.ENEMIES_START);
+ * enemies.elementSize = enemySizeAligned;
+ * 
+ * // Or use the convenience method with automatic alignment:
+ * const enemies = FixedArrayOfObj.fromAddressWithSize<Enemy>(RAM_START + Var.ENEMIES_START, enemySize, true);
+ * 
+ * // Access elements:
+ * const enemy0 = enemies.get(0);
+ * enemy0.x = 10;
+ * enemy0.y = 20;
+ * 
+ * // Bracket notation:
+ * enemies[1].health = 100;
+ * ```
+ */
+@unmanaged
+export class FixedArrayOfObj<T> {
+  // No fields - this class is just a type marker for the memory region
+  
+  /**
+   * Create a FixedArrayOfObj instance and initialize element size
+   * @param address Memory address of the pre-allocated array
+   * @param elementSize Optional, size of each element in bytes (otherwise must be set manually in memory)
+   * @param align Optional, if true, aligns elementSize to 4-byte boundary
+   * @returns FixedArrayOfObj instance
+   */
+  @inline
+  static fromAddress<T>(address: usize, elementSize: u32 = 0, align: bool = false): FixedArrayOfObj<T> {
+    const arr = changetype<FixedArrayOfObj<T>>(address);
+    if (elementSize) {
+      const size = align ? ((elementSize + 3) & ~3) : elementSize;
+      store<u32>(address, size);
+    }
+    return arr;
+  }
+  
+  /**
+   * Calculate memory size required for array with given capacity
+   * @param capacity Number of elements
+   * @param elementSize Size of each element in bytes
+   * @returns Size in bytes (4 bytes for metadata + capacity * elementSize)
+   */
+  @inline
+  static sizeInMemory(capacity: i32, elementSize: u32): usize {
+    return 4 + capacity * elementSize;
+  }
+  
+  /**
+   * Calculate memory size with automatic 4-byte alignment
+   * @param capacity Number of elements
+   * @param elementSize Size of each element in bytes (will be aligned)
+   * @returns Size in bytes
+   */
+  @inline
+  static sizeInMemoryAligned(capacity: i32, elementSize: u32): usize {
+    const alignedSize = (elementSize + 3) & ~3;
+    return 4 + capacity * alignedSize;
+  }
+  
+  /**
+   * Get element size stored in first 4 bytes
+   */
+  @inline
+  get elementSize(): u32 {
+    const baseAddr = changetype<usize>(this);
+    return load<u32>(baseAddr);
+  }
+  
+  /**
+   * Set element size (should be set once during initialization)
+   */
+  // @ts-expect-error AssemblyScript decorator
+  @inline
+  set elementSize(value: u32) {
+    const baseAddr = changetype<usize>(this);
+    store<u32>(baseAddr, value);
+  }
+  
+  /**
+   * Get element at index (zero overhead with @inline)
+   * @param index Array index
+   * @returns Element reference at index
+   */
+  @inline
+  get(index: i32): T {
+    const baseAddr = changetype<usize>(this);
+    const elemSize = load<u32>(baseAddr);
+    return changetype<T>(baseAddr + 4 + index * elemSize);
+  }
+  
+  /**
+   * Set element at index by copying object data into array memory
+   * @param index Array index
+   * @param value Object to copy into the array
+   */
+  set(index: i32, value: T): void {
+    const baseAddr = changetype<usize>(this);
+    const elemSize = load<u32>(baseAddr);
+    const destAddr = baseAddr + 4 + index * elemSize;
+    const srcAddr = changetype<usize>(value);
+    memory.copy(destAddr, srcAddr, elemSize);
+  }
+  
+  /**
+   * Index operator for reading: arr[index]
+   */
+  @inline
+  @operator("[]")
+  private __get(index: i32): T {
+    return this.get(index);
   }
 }

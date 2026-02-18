@@ -20,6 +20,8 @@ import {
   log,
   pset,
   s,
+  FixedArrayOfObj,
+  Vec2i,
 } from "../sdk";
 
 // === RAM Variable System ===
@@ -48,6 +50,8 @@ const items = FixedArrayWithCount.fromAddress<u16>(RAM_START + 152); // max 20 u
 // Zero-allocation array with u8 counters (only 2 bytes metadata for small arrays!)
 const tags = changetype<FixedArrayWithCount<u8, u8>>(RAM_START + 196); // max 10 u8 values
 
+const arrOfVec = FixedArrayOfObj.fromAddress<Vec2i>(RAM_START + 208, 8); // Array of Vec2 objects (x,y as f32)
+
 // === lifecycle ===
 
 export function init(): void {
@@ -75,6 +79,11 @@ export function init(): void {
   tags.clear();
   tags.push(1);
   tags.push(2);
+
+  // Initialize array of objects
+  arrOfVec.set(0, new Vec2i(1, 2));
+  arrOfVec.set(1, new Vec2i(3, 4));
+  // store<u32>(RAM_START + 208 + 4, 123);
 
   log("Starting!");
 }
@@ -153,4 +162,11 @@ export function draw(): void {
 
   drawSprite(s("crocodile"), 200, 200);
   drawSprite(s("crocodile_bloody"), 150, 200);
+
+  const v0 = arrOfVec.get(0);
+  const v1 = arrOfVec.get(1);
+  drawNumber(300, 10, v0.x, c(0xff0000));
+  drawNumber(300, 30, v0.y, c(0x00ff00));
+  drawNumber(300, 50, v1.x, c(0x0000ff));
+  drawNumber(300, 70, v1.y, c(0xffff00));
 }
