@@ -2,6 +2,7 @@
 // Low-level and high-level drawing functions for rendering graphics
 
 import {
+  FB_START,
   SCREEN_HEIGHT,
   SCREEN_WIDTH,
 } from "./memory";
@@ -136,17 +137,21 @@ export function drawRect(x: i32, y: i32, w: i32, h: i32, color: u32): void {
  * @param y1 Ending Y coordinate
  * @param color ABGR color value
  */
-export function drawLine(x0: i32, y0: i32, x1: i32, y1: i32, color: u32): void {
-  // Cohen–Sutherland clip to screen bounds first.
-  const LEFT: i32 = 1;
-  const RIGHT: i32 = 2;
-  const TOP: i32 = 4;
-  const BOTTOM: i32 = 8;
+export function drawLine(
+  x0: i32, y0: i32,
+  x1: i32, y1: i32,
+  color: u32
+): void {
+  const LEFT = 1;
+  const RIGHT = 2;
+  const TOP = 4;
+  const BOTTOM = 8;
+
   const maxX = SCREEN_WIDTH - 1;
   const maxY = SCREEN_HEIGHT - 1;
 
   function outCode(x: i32, y: i32): i32 {
-    let code: i32 = 0;
+    let code = 0;
     if (x < 0) code |= LEFT;
     else if (x > maxX) code |= RIGHT;
     if (y < 0) code |= TOP;
@@ -158,16 +163,17 @@ export function drawLine(x0: i32, y0: i32, x1: i32, y1: i32, color: u32): void {
   let code1 = outCode(x1, y1);
 
   while (true) {
+
     if ((code0 | code1) == 0) {
-      break;
+      break; // fully inside
     }
     if ((code0 & code1) != 0) {
-      return;
+      return; // fully outside
     }
 
     const out = code0 != 0 ? code0 : code1;
-    let x: i32 = 0;
-    let y: i32 = 0;
+    let x = 0;
+    let y = 0;
 
     if (out & TOP) {
       if (y1 == y0) return;
@@ -186,7 +192,6 @@ export function drawLine(x0: i32, y0: i32, x1: i32, y1: i32, color: u32): void {
       y = y0 + ((y1 - y0) * (0 - x0)) / (x1 - x0);
       x = 0;
     }
-
     if (out == code0) {
       x0 = x;
       y0 = y;
@@ -199,26 +204,37 @@ export function drawLine(x0: i32, y0: i32, x1: i32, y1: i32, color: u32): void {
   }
 
   const colorValue = color | 0xff000000;
+
   let dx = x1 - x0;
   let dy = y1 - y0;
-  const sx: i32 = dx >= 0 ? 1 : -1;
-  const sy: i32 = dy >= 0 ? 1 : -1;
+
+  const sx = dx >= 0 ? 1 : -1;
+  const sy = dy >= 0 ? 1 : -1;
+
   dx = dx >= 0 ? dx : -dx;
   dy = dy >= 0 ? dy : -dy;
 
-  let err = (dx > dy ? dx : -dy) >> 1;
+  let err = (dx > dy ? dx : -dy) / 2;
+  let index = FB_START + y0 * SCREEN_WIDTH + x0;
+  const indexIncX = sx;
+  const indexIncY = sy * SCREEN_WIDTH;
   while (true) {
-    const addr = ((y0 * SCREEN_WIDTH + x0) << 2) as usize;
-    store<u32>(addr, colorValue);
-    if (x0 == x1 && y0 == y1) break;
+    store<u32>((index << 2) as usize, colorValue);
+
+    if (x0 == x1 && y0 == y1) {
+      break;
+    }
+
     const e2 = err;
     if (e2 > -dx) {
       err -= dy;
       x0 += sx;
+      index += indexIncX;
     }
     if (e2 < dy) {
       err += dx;
       y0 += sy;
+      index += indexIncY;
     }
   }
 }
