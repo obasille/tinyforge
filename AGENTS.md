@@ -343,7 +343,45 @@ const half: f32 = (WIDTH as f32) / 2.0; // f32
 
 These errors mean you need to cast one side to match the other type.
 
-#### 10. Common Patterns
+#### 10. Arithmetic Right-Shift vs Integer Division - CRITICAL
+
+**NEVER use arithmetic right-shift (`>>`) as a substitute for integer division when working with potentially negative numbers:**
+
+Arithmetic right-shift performs **sign extension**, not division. For negative numbers, this produces incorrect results:
+
+```ts
+// ❌ WRONG - Sign extension gives wrong result
+let err = -1 >> 1; // Result: -1 (binary: ...11111111 >> 1 = ...11111111)
+
+// ✅ CORRECT - Integer division gives correct result
+let err = -1 / 2; // Result: 0 (proper truncation toward zero)
+```
+
+**Real-world example from Bresenham's line algorithm:**
+
+```ts
+// ❌ WRONG - Breaks diagonal lines when dx or dy is negative
+let err = (dx > dy ? dx : -dy) >> 1;
+// For a diagonal where dx=1, dy=1: err = -1 >> 1 = -1 ❌
+
+// ✅ CORRECT - Works correctly for all line directions
+let err = (dx > dy ? dx : -dy) / 2;
+// For a diagonal where dx=1, dy=1: err = -1 / 2 = 0 ✅
+```
+
+**Why this matters:**
+
+- The `>> 1` operator is faster for positive numbers, but mathematically wrong for negative ones
+- Algorithms like Bresenham rely on proper integer division behavior
+- Using `>>` with negative numbers causes subtle bugs like lines skipping pixels or going off-screen
+
+**Best practice:**
+
+- Use `/` for division when negative numbers are possible
+- Only use `>>` when you're certain the value is non-negative
+- When in doubt, use division (`/`)
+
+#### 11. Common Patterns
 
 **Cursor/player movement with bounds:**
 
@@ -385,18 +423,75 @@ function getCellData(x: i32, y: i32): u8 {
 
 ```ts
 // ❌ WRONG - Modulo introduces bias
-const roll = random() % 10;        // Numbers 0-5 appear more often than 6-9
-const x = random() % WIDTH;        // Biased distribution
+const roll = random() % 10; // Numbers 0-5 appear more often than 6-9
+const x = random() % WIDTH; // Biased distribution
 
 // ✅ CORRECT - Use randomRange for unbiased random values
-const roll = randomRange(10);      // Uniform distribution [0, 10)
-const x = randomRange(WIDTH);      // Uniform distribution [0, WIDTH)
-const index = randomRange(7);      // Uniform distribution [0, 7)
+const roll = randomRange(10); // Uniform distribution [0, 10)
+const x = randomRange(WIDTH); // Uniform distribution [0, WIDTH)
+const index = randomRange(7); // Uniform distribution [0, 7)
 ```
 
 **Why modulo causes bias:** When the random number space (e.g., 0 to 2^32-1) doesn't evenly divide by your range, some values appear more frequently. The `randomRange()` function uses rejection sampling to ensure truly uniform distribution by discarding values that would cause bias.
 
-#### 11. Build Configuration
+**Safety checks and validation:**
+
+**CRITICAL: ALWAYS log a warning when safety checks fail:**
+
+Safety checks that silently fail make debugging extremely difficult. When bounds checks, validation, or sanity checks don't pass, always log a warning with relevant context.
+
+```ts
+// ❌ WRONG - Silent failure, impossible to debug
+function getEnemy(index: i32): Enemy {
+  if (index < 0 || index >= MAX_ENEMIES) {
+    return Enemy.NONE; // What went wrong? Which index? Why?
+  }
+  return enemies[index];
+}
+
+// ✅ CORRECT - Log warnings for failed checks
+function getEnemy(index: i32): Enemy {
+  if (index < 0 || index >= MAX_ENEMIES) {
+    warni("Invalid enemy index: {}, max: {}", index, MAX_ENEMIES);
+    return Enemy.NONE;
+  }
+  return enemies[index];
+}
+
+// Another example - bounds checking
+function updatePlayer(x: i32, y: i32): void {
+  if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) {
+    warni("Player out of bounds: ({}, {}), max: ({}, {})", x, y, WIDTH, HEIGHT);
+    return;
+  }
+  // ... update logic
+}
+
+// Data validation example
+function spawnItem(itemType: i32): void {
+  if (itemType < 0 || itemType >= ITEM_TYPE_COUNT) {
+    warni("Unknown item type: {}", itemType);
+    return;
+  }
+  // ... spawn logic
+}
+```
+
+**Benefits of logging failed checks:**
+
+- Reveals logic bugs during development
+- Shows when assumptions are violated
+- Provides context for unexpected behavior
+- Helps trace the source of invalid state
+- Makes debugging orders of magnitude easier
+
+**Use the appropriate logging function:**
+
+- `warni()` for integer values (indices, counts, types)
+- `warnf()` for floating-point values (positions, velocities)
+- `warn()` for simple messages without dynamic values
+
+#### 12. Build Configuration
 
 **Update package.json when creating new games:**
 
@@ -427,7 +522,7 @@ const index = randomRange(7);      // Uniform distribution [0, 7)
   ```
 - This saves time by avoiding unnecessary recompilation of unchanged games.
 
-#### 12. Compilation Error Patterns
+#### 13. Compilation Error Patterns
 
 **Decorator errors (`@inline`):**
 
@@ -456,7 +551,7 @@ const index = randomRange(7);      // Uniform distribution [0, 7)
 - Some TS tooling doesn't include AssemblyScript's WebAssembly types
 - Add a minimal local `WebAssembly` namespace with a `Memory` class in `src/assembly/sdk/memory.ts`
 
-#### 13. Logging and Debugging
+#### 14. Logging and Debugging
 
 **Basic logging (string literals only):**
 
@@ -491,7 +586,7 @@ logf("Position: ({}, {})", playerX, playerY);
 - Use interpolation functions to log dynamic values without allocation
 - All messages are timestamped in the console panel
 
-#### 14. Zero-Allocation Utilities
+#### 15. Zero-Allocation Utilities
 
 **CRITICAL: Never use dynamic allocation** - the runtime uses `--runtime stub` with zero heap.
 
@@ -600,10 +695,10 @@ const enemyPos = new Vec2i(50, 100);
 
 // ✅ CORRECT - Zero allocation with fromAddress
 enum Var {
-  GAME_STATE = 0,    // u8 (1 byte)
-  SCORE = 1,         // i32 (4 bytes)
-  PLAYER_POS = 8,    // Vec2i (8 bytes: x, y as i32)
-  ENEMY_POS = 16,    // Vec2i (8 bytes)
+  GAME_STATE = 0, // u8 (1 byte)
+  SCORE = 1, // i32 (4 bytes)
+  PLAYER_POS = 8, // Vec2i (8 bytes: x, y as i32)
+  ENEMY_POS = 16, // Vec2i (8 bytes)
 }
 
 const playerPos = Vec2i.fromAddress(RAM_START + Var.PLAYER_POS);
@@ -611,7 +706,7 @@ playerPos.x = 10;
 playerPos.y = 20;
 
 const enemyPos = Vec2i.fromAddress(RAM_START + Var.ENEMY_POS);
-enemyPos.set(50, 100);  // Set both at once
+enemyPos.set(50, 100); // Set both at once
 
 // Access in game logic
 if (playerPos.x < 0) playerPos.x = 0;
