@@ -314,6 +314,7 @@ async function loadGame(
 
     // Initialize the game (skip if hot reloading to preserve state)
     if (!skipInit) {
+      addConsoleEntry('LOG', `RNG Seed: ${formatSeedHex(getRngSeed())}`);
       init?.();
       addConsoleEntry('LOG', `${displayName} loaded successfully`);
     } else {
@@ -322,7 +323,7 @@ async function loadGame(
 
     // Start game loop
     last = performance.now();
-    acc = 0;
+    acc = DT; // Start with one frame of accumulated time to ensure first frame runs update()
     inputMask = 0;
     prevInputMask = 0;
     requestAnimationFrame(frame);
@@ -510,12 +511,38 @@ gameSelect.addEventListener('change', () => {
 
 // Restart button - resets game state
 const restartBtn = requireElement<HTMLButtonElement>('restart-game');
-restartBtn.addEventListener('click', () => {
-  if (init) {
-    init();
-    addConsoleEntry('LOG', 'Game restarted');
+
+// Safe restart that resets timing state
+function restartGame(): void {
+  if (!init) return;
+
+  // Cancel next scheduled frame
+  if (animationFrameId !== null) {
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
   }
-});
+
+  // Reset game state
+  addConsoleEntry('LOG', `RNG Seed: ${formatSeedHex(getRngSeed())}`);
+  init();
+  const displayName = formatGameDisplayName(currentGame);
+  addConsoleEntry('LOG', `${displayName} reloaded successfully`);
+
+  // Reset timing variables
+  last = performance.now();
+  acc = DT; // Start with one frame of accumulated time to ensure first frame runs update()
+  lastFpsUpdate = last;
+  frameCount = 0;
+  prevInputMask = inputMask;
+  prevMouseButtons = mouseButtons;
+
+  // Restart loop if not paused and not aborted
+  if (!isPaused && !hasAborted) {
+    animationFrameId = requestAnimationFrame(frame);
+  }
+}
+
+restartBtn.addEventListener('click', restartGame);
 
 // Toggle pause state
 const pauseBtn = requireElement<HTMLButtonElement>('pause-game');
@@ -537,7 +564,7 @@ function togglePause(): void {
     if (!animationFrameId && !hasAborted) {
       const now = performance.now();
       last = now;
-      acc = 0;
+      acc = DT; // Start with one frame of accumulated time to ensure first frame runs update()
       lastFpsUpdate = now;
       frameCount = 0;
       animationFrameId = requestAnimationFrame(frame);
@@ -617,10 +644,7 @@ screenshotBtn?.addEventListener('click', takeScreenshot);
 // Keyboard shortcuts: R to restart, P to pause, F for fullscreen, C to copy color
 window.addEventListener('keydown', (e: KeyboardEvent) => {
   if ((e.key === 'r' || e.key === 'R') && !e.repeat) {
-    if (init) {
-      init();
-      addConsoleEntry('LOG', 'Game restarted');
-    }
+    restartGame();
     e.preventDefault();
   } else if ((e.key === 'p' || e.key === 'P') && !e.repeat) {
     togglePause();
@@ -958,10 +982,13 @@ const rngSeedRandom = document.getElementById(
 
 const applyRngSeedInput = (): void => {
   if (!rngSeedInput) return;
+  // Capture the value immediately before any other operations
+  const inputValue = rngSeedInput.value;
   try {
-    const nextSeed = parseSeedValue(rngSeedInput.value);
+    const nextSeed = parseSeedValue(inputValue);
     setRngSeed(nextSeed);
     rngSeedInput.value = formatSeedHex(nextSeed);
+    restartGame();
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     addConsoleEntry('ERROR', `Invalid RNG seed: ${message}`);
@@ -975,6 +1002,7 @@ const randomizeRngSeed = (): void => {
   if (rngSeedInput) {
     rngSeedInput.value = formatSeedHex(nextSeed);
   }
+  restartGame();
 };
 
 if (rngSeedApply) {
@@ -1007,7 +1035,7 @@ document.addEventListener('visibilitychange', () => {
     // Tab visible - restart animation loop
     if (!animationFrameId && !hasAborted) {
       last = performance.now(); // Reset reference time on resume
-      acc = 0; // Clear accumulated time
+      acc = DT; // Start with one frame to ensure first frame runs update()
       animationFrameId = requestAnimationFrame(frame);
     }
   }
@@ -1069,6 +1097,9 @@ function frame(now: number): void {
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       addConsoleEntry('ERROR', `Error in update(): ${message}`);
+      if (e instanceof Error && e.stack) {
+        console.error('Stack trace:', e.stack);
+      }
       hasAborted = true;
       break;
     }
@@ -1092,6 +1123,9 @@ function frame(now: number): void {
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       addConsoleEntry('ERROR', `Error in draw(): ${message}`);
+      if (e instanceof Error && e.stack) {
+        console.error('Stack trace:', e.stack);
+      }
       hasAborted = true;
     }
   }
@@ -1162,7 +1196,12 @@ function frame(now: number): void {
       }
     }
   }
-  if (rngSeedInput && document.activeElement !== rngSeedInput) {
+  if (
+    rngSeedInput &&
+    document.activeElement !== rngSeedInput &&
+    document.activeElement !== rngSeedApply &&
+    document.activeElement !== rngSeedRandom
+  ) {
     rngSeedInput.value = formatSeedHex(getRngSeed());
   }
 
