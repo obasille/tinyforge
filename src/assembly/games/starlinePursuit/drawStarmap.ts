@@ -1,9 +1,11 @@
 import {
   c,
+  drawCircle,
   drawLine,
   drawRect,
   fillCircle,
   fillRect,
+  getI32,
   getU16,
   getU8,
   warni,
@@ -11,12 +13,14 @@ import {
 
 import {
   EXIT_RADIUS,
-  getCaptureShip,
   getTargetShip,
   HUB_RADIUS,
   MAX_EDGES,
+  MAX_PLAYER_SHIPS,
   MemLayout,
   NUM_CLUSTERS,
+  playerShips,
+  ShipType,
   STAR_RADIUS,
   TOTAL_STARS,
   clusters,
@@ -96,27 +100,97 @@ export function drawStarmap(): void {
     }
   }
 
-  // Draw capture ship (player ship - bright blue filled square)
-  const captureShip = getCaptureShip();
-  const captureStarIndex = captureShip.currentStarIndex;
-  if (captureStarIndex >= 0 && captureStarIndex < numStars) {
-    const captureStar = stars.get(captureStarIndex);
-    const shipSize: i32 = 6;
-    fillRect(
-      captureStar.x - shipSize / 2,
-      captureStar.y - shipSize / 2,
-      shipSize,
-      shipSize,
-      c(0x00aaff),
-    );
-    // White outline for visibility
-    drawRect(
-      captureStar.x - shipSize / 2,
-      captureStar.y - shipSize / 2,
-      shipSize,
-      shipSize,
-      c(0xffffff),
-    );
+  // Draw player ships with distinct visuals
+  const activeIndex = getI32(MemLayout.ACTIVE_SHIP_INDEX);
+  const turnCounter = getI32(MemLayout.TURN_COUNTER);
+
+  for (let i: i32 = 0; i < MAX_PLAYER_SHIPS; i++) {
+    const ship = playerShips.get(i);
+    const shipStarIndex = ship.currentStarIndex;
+
+    if (shipStarIndex >= 0 && shipStarIndex < numStars) {
+      const shipStar = stars.get(shipStarIndex);
+      const isActive = i == activeIndex;
+
+      // Draw ship based on type
+      if (ship.shipType == ShipType.INTERCEPTOR) {
+        // Interceptor: Blue filled square
+        const size: i32 = 6;
+        fillRect(
+          shipStar.x - size / 2,
+          shipStar.y - size / 2,
+          size,
+          size,
+          c(0x00aaff),
+        );
+        drawRect(
+          shipStar.x - size / 2,
+          shipStar.y - size / 2,
+          size,
+          size,
+          c(0xffffff),
+        );
+      } else if (ship.shipType == ShipType.SURVEY_CRUISER) {
+        // Survey Cruiser: Green hollow circle
+        drawCircle(shipStar.x, shipStar.y, 4, c(0x00ff00));
+        drawCircle(shipStar.x, shipStar.y, 3, c(0x00ff00));
+      } else if (ship.shipType == ShipType.BEACON_TENDER) {
+        // Beacon Tender: Yellow filled triangle (approximated with lines)
+        const size: i32 = 5;
+        // Draw filled triangle by drawing multiple horizontal lines
+        for (let dy: i32 = 0; dy < size; dy++) {
+          const width = ((((dy * 2) as f32) / (size as f32)) *
+            (size as f32)) as i32;
+          drawLine(
+            shipStar.x - width / 2,
+            shipStar.y - size / 2 + dy,
+            shipStar.x + width / 2,
+            shipStar.y - size / 2 + dy,
+            c(0xffaa00),
+          );
+        }
+        // Draw triangle outline
+        drawLine(
+          shipStar.x,
+          shipStar.y - size,
+          shipStar.x - size,
+          shipStar.y + size / 2,
+          c(0xffaa00),
+        );
+        drawLine(
+          shipStar.x,
+          shipStar.y - size,
+          shipStar.x + size,
+          shipStar.y + size / 2,
+          c(0xffaa00),
+        );
+        drawLine(
+          shipStar.x - size,
+          shipStar.y + size / 2,
+          shipStar.x + size,
+          shipStar.y + size / 2,
+          c(0xffaa00),
+        );
+      }
+
+      // Draw pulsing outline for active ship
+      if (isActive) {
+        // Pulse between frames 0-30
+        const pulsePhase = turnCounter % 30;
+        const shouldDraw = pulsePhase < 15; // Draw for first half of cycle
+
+        if (shouldDraw) {
+          const outlineSize: i32 = 10;
+          drawRect(
+            shipStar.x - outlineSize / 2,
+            shipStar.y - outlineSize / 2,
+            outlineSize,
+            outlineSize,
+            c(0xffffff),
+          );
+        }
+      }
+    }
   }
 
   // Draw target ship (enemy ship - red hollow square)

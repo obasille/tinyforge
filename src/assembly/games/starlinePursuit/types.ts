@@ -17,17 +17,23 @@ export const EXTRA_LOOPS: i32 = 6;
 export const HUB_COUNT: i32 = 4;
 export const EXIT_COUNT: i32 = 3;
 
-// Game constants
-export const STARTING_FUEL: i32 = 10;
-export const JUMPS_PER_TURN: i32 = 3;
-export const FUEL_PER_JUMP: i32 = 1;
+// Game constants - Resources
+export const STARTING_SENSOR_ENERGY: i32 = 10;
+export const MAX_SENSOR_ENERGY: i32 = 10;
+export const SE_REGEN_PER_TURN: i32 = 3;
+export const STARTING_COMMAND_POINTS: i32 = 3;
+export const MAX_COMMAND_POINTS: i32 = 3;
+export const STARTING_DEPLOYMENT_KITS: i32 = 3;
+
+// Fleet constants
+export const MAX_PLAYER_SHIPS: i32 = 3;
 
 // Element sizes for @unmanaged classes (aligned to 4 bytes)
 const STAR_SIZE: u32 = 16; // x(4) + y(4) + degree(4) + isHub(1) + isExit(1) + padding(2) = 16
 const EDGE_SIZE: u32 = 8; // a(4) + b(4) = 8
 const CLUSTER_SIZE: u32 = 8; // x(4) + y(4) = 8
 const TARGET_SHIP_SIZE: u32 = 8; // currentStarIndex(4) + isActive(1) + padding(3) = 8
-const CAPTURE_SHIP_SIZE: u32 = 12; // currentStarIndex(4) + fuel(4) + jumpsThisTurn(4) = 12
+const PLAYER_SHIP_SIZE: u32 = 12; // shipType(4) + currentStarIndex(4) + movesThisTurn(4) = 12
 
 // Visual constants
 export const STAR_RADIUS: i32 = 2;
@@ -46,6 +52,13 @@ export enum GameState {
   PLAYING = 0,
   WON = 1,
   LOST = 2,
+}
+
+export enum ShipType {
+  INTERCEPTOR = 0,
+  SCOUT = 1,
+  SURVEY_CRUISER = 2,
+  BEACON_TENDER = 3,
 }
 
 // === @unmanaged Structures ===
@@ -117,19 +130,22 @@ export class TargetShip {
 }
 
 /**
- * Capture ship (Interceptor Frigate)
- * Player-controlled ship that wins the game on contact with target
+ * Player ship (fleet unit)
+ * Different types have different capabilities
  */
 @unmanaged
-export class CaptureShip {
+export class PlayerShip {
+  shipType: i32; // ShipType enum value
   currentStarIndex: i32; // Current star location
-  fuel: i32; // Remaining fuel for jumps
-  jumpsThisTurn: i32; // Number of jumps used this turn (0-3)
+  movesThisTurn: i32; // Number of jumps used this turn
 
-  constructor(starIndex: i32 = 0, fuel: i32 = STARTING_FUEL) {
+  constructor(
+    type: i32 = ShipType.INTERCEPTOR,
+    starIndex: i32 = 0,
+  ) {
+    this.shipType = type;
     this.currentStarIndex = starIndex;
-    this.fuel = fuel;
-    this.jumpsThisTurn = 0;
+    this.movesThisTurn = 0;
   }
 }
 
@@ -148,10 +164,16 @@ export enum MemLayout {
   // Clusters end at 2412 + 24 = 2436
   TARGET_SHIP = 2436, // TargetShip: 8 bytes
   // Target ship ends at 2436 + 8 = 2444
-  CAPTURE_SHIP = 2444, // CaptureShip: 12 bytes
-  // Capture ship ends at 2444 + 12 = 2456
-  TEMP_WORK_START = 2456, // Working memory for algorithms (1024 bytes)
-  // Total memory: ~3520 bytes
+  PLAYER_SHIPS_START = 2444, // PlayerShipArray: 4 bytes (elementSize) + 3 ships × 12 bytes = 40 bytes
+  // Player ships end at 2444 + 40 = 2484
+  ACTIVE_SHIP_INDEX = 2484, // i32 (4 bytes)
+  SENSOR_ENERGY = 2488, // i32 (4 bytes)
+  COMMAND_POINTS = 2492, // i32 (4 bytes)
+  DEPLOYMENT_KITS = 2496, // i32 (4 bytes)
+  TURN_COUNTER = 2500, // i32 (4 bytes) - for animation/pulsing
+  // End at 2504
+  TEMP_WORK_START = 2504, // Working memory for algorithms (1024 bytes)
+  // Total memory: ~3528 bytes
 }
 
 export type StarArray = FixedArrayOfObj<Star>;
@@ -175,12 +197,15 @@ export const clusters: ClusterArray = FixedArrayOfObj.fromAddress<Cluster>(
   true,
 );
 
+export type PlayerShipArray = FixedArrayOfObj<PlayerShip>;
+export const playerShips: PlayerShipArray =
+  FixedArrayOfObj.fromAddress<PlayerShip>(
+    RAM_START + MemLayout.PLAYER_SHIPS_START,
+    PLAYER_SHIP_SIZE,
+    true,
+  );
+
 // Target ship instance (reinterprets memory at TARGET_SHIP address)
 export function getTargetShip(): TargetShip {
   return changetype<TargetShip>(RAM_START + MemLayout.TARGET_SHIP);
-}
-
-// Capture ship instance (reinterprets memory at CAPTURE_SHIP address)
-export function getCaptureShip(): CaptureShip {
-  return changetype<CaptureShip>(RAM_START + MemLayout.CAPTURE_SHIP);
 }

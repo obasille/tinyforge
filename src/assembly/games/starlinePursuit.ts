@@ -8,12 +8,15 @@ import {
   clearFramebuffer,
   drawNumber,
   drawString,
+  FixedArray,
+  getI32,
   getU16,
   getU8,
   log,
   logi,
-  pset,
+  RAM_START,
   randomRange,
+  setI32,
   setU8,
 } from "../sdk";
 
@@ -21,19 +24,46 @@ import { drawStarmap } from "./starlinePursuit/drawStarmap";
 import { generateStarmap } from "./starlinePursuit/generateStarmap";
 import {
   edges,
-  FUEL_PER_JUMP,
   GameState,
-  getCaptureShip,
   getTargetShip,
-  JUMPS_PER_TURN,
+  MAX_COMMAND_POINTS,
   MAX_EDGES,
+  MAX_PLAYER_SHIPS,
+  MAX_SENSOR_ENERGY,
   MemLayout,
+  playerShips,
+  SE_REGEN_PER_TURN,
+  ShipType,
   stars,
-  STARTING_FUEL,
+  STARTING_COMMAND_POINTS,
+  STARTING_DEPLOYMENT_KITS,
+  STARTING_SENSOR_ENERGY,
   TOTAL_STARS,
 } from "./starlinePursuit/types";
 
 // === Helper Functions ===
+
+/**
+ * Get the maximum moves per turn for a ship type
+ */
+function getShipMoveLimit(shipType: i32): i32 {
+  if (shipType == ShipType.INTERCEPTOR) return 3;
+  if (shipType == ShipType.SCOUT) return 2;
+  if (shipType == ShipType.SURVEY_CRUISER) return 1;
+  if (shipType == ShipType.BEACON_TENDER) return 1;
+  return 1;
+}
+
+/**
+ * Get ship type name for display
+ */
+function getShipTypeName(shipType: i32): string {
+  if (shipType == ShipType.INTERCEPTOR) return "INTERCEPTOR";
+  if (shipType == ShipType.SCOUT) return "SCOUT";
+  if (shipType == ShipType.SURVEY_CRUISER) return "SURVEY";
+  if (shipType == ShipType.BEACON_TENDER) return "BEACON";
+  return "UNKNOWN";
+}
 
 /**
  * Find the neighbor star visually closest to a given direction
@@ -94,7 +124,7 @@ function findNeighborInDirection(starIndex: i32, direction: i32): i32 {
 // === Lifecycle Functions ===
 
 export function init(): void {
-  log("Starline Pursuit: Initializing");
+  log("Starline Pursuit: Initializing fleet");
 
   // Set initial game state
   setU8(MemLayout.GAME_STATE, GameState.PLAYING as u8);
@@ -109,28 +139,84 @@ export function init(): void {
   targetShip.currentStarIndex = randomRange(numStars);
   targetShip.isActive = 1;
 
-  // Initialize capture ship at a different random position
-  const captureShip = getCaptureShip();
-  let captureStart: i32;
-  do {
-    captureStart = randomRange(numStars);
-  } while (captureStart == targetShip.currentStarIndex);
-
-  captureShip.currentStarIndex = captureStart;
-  captureShip.fuel = STARTING_FUEL;
-  captureShip.jumpsThisTurn = 0;
-
-  logi(
-    "Target at star {}, Capture ship at star {}",
-    targetShip.currentStarIndex,
-    captureStart,
+  // Initialize player fleet (3 ships at random different positions)
+  // Use temporary memory for tracking used stars during initialization
+  const usedStars = FixedArray.fromAddress<i32>(
+    RAM_START + MemLayout.TEMP_WORK_START,
   );
+  usedStars[0] = targetShip.currentStarIndex;
+  let usedCount: i32 = 1;
+
+  // Ship 0: Interceptor
+  let starIndex: i32;
+  do {
+    starIndex = randomRange(numStars);
+    let valid = true;
+    for (let i: i32 = 0; i < usedCount; i++) {
+      if (usedStars[i] == starIndex) {
+        valid = false;
+        break;
+      }
+    }
+    if (valid) break;
+  } while (true);
+  usedStars[usedCount++] = starIndex;
+
+  const interceptor = playerShips.get(0);
+  interceptor.shipType = ShipType.INTERCEPTOR;
+  interceptor.currentStarIndex = starIndex;
+  interceptor.movesThisTurn = 0;
+
+  // Ship 1: Survey Cruiser
+  do {
+    starIndex = randomRange(numStars);
+    let valid = true;
+    for (let i: i32 = 0; i < usedCount; i++) {
+      if (usedStars[i] == starIndex) {
+        valid = false;
+        break;
+      }
+    }
+    if (valid) break;
+  } while (true);
+  usedStars[usedCount++] = starIndex;
+
+  const survey = playerShips.get(1);
+  survey.shipType = ShipType.SURVEY_CRUISER;
+  survey.currentStarIndex = starIndex;
+  survey.movesThisTurn = 0;
+
+  // Ship 2: Beacon Tender
+  do {
+    starIndex = randomRange(numStars);
+    let valid = true;
+    for (let i: i32 = 0; i < usedCount; i++) {
+      if (usedStars[i] == starIndex) {
+        valid = false;
+        break;
+      }
+    }
+    if (valid) break;
+  } while (true);
+
+  const beacon = playerShips.get(2);
+  beacon.shipType = ShipType.BEACON_TENDER;
+  beacon.currentStarIndex = starIndex;
+  beacon.movesThisTurn = 0;
+
+  // Initialize shared resources
+  setI32(MemLayout.SENSOR_ENERGY, STARTING_SENSOR_ENERGY);
+  setI32(MemLayout.COMMAND_POINTS, STARTING_COMMAND_POINTS);
+  setI32(MemLayout.DEPLOYMENT_KITS, STARTING_DEPLOYMENT_KITS);
+  setI32(MemLayout.ACTIVE_SHIP_INDEX, 0); // Start with interceptor
+  setI32(MemLayout.TURN_COUNTER, 0);
+
+  logi("Fleet deployed - Target at star {}", targetShip.currentStarIndex, 0, 0);
   log("Starmap ready");
 }
 
 export function update(): void {
   const state = getU8(MemLayout.GAME_STATE);
-  const captureShip = getCaptureShip();
   const targetShip = getTargetShip();
 
   // Restart game on START button if won/lost
@@ -142,63 +228,87 @@ export function update(): void {
   // Don't process game logic if not playing
   if (state != GameState.PLAYING) return;
 
-  // Check win condition
-  if (captureShip.currentStarIndex == targetShip.currentStarIndex) {
-    setU8(MemLayout.GAME_STATE, GameState.WON as u8);
-    log("Victory! Target intercepted!");
+  // Increment turn counter (for animation)
+  const turnCounter = getI32(MemLayout.TURN_COUNTER);
+  setI32(MemLayout.TURN_COUNTER, turnCounter + 1);
+
+  // Get active ship
+  let activeIndex = getI32(MemLayout.ACTIVE_SHIP_INDEX);
+  const activeShip = playerShips.get(activeIndex);
+
+  // B button: Switch active ship
+  if (buttonPressed(Button.B)) {
+    activeIndex = (activeIndex + 1) % MAX_PLAYER_SHIPS;
+    setI32(MemLayout.ACTIVE_SHIP_INDEX, activeIndex);
+    logi(
+      "Switched to {} at star {}",
+      activeIndex,
+      playerShips.get(activeIndex).currentStarIndex,
+    );
     return;
   }
 
-  // End turn on START button (resets jump counter, starts new turn)
+  // Check win condition (any ship reaches target)
+  for (let i: i32 = 0; i < MAX_PLAYER_SHIPS; i++) {
+    const ship = playerShips.get(i);
+    if (ship.currentStarIndex == targetShip.currentStarIndex) {
+      setU8(MemLayout.GAME_STATE, GameState.WON as u8);
+      log("Victory! Target intercepted!");
+      return;
+    }
+  }
+
+  // START button: End turn
   if (buttonPressed(Button.START)) {
-    captureShip.jumpsThisTurn = 0;
-    log("New turn started - jumps reset");
+    // Reset all ships' moves
+    for (let i: i32 = 0; i < MAX_PLAYER_SHIPS; i++) {
+      const ship = playerShips.get(i);
+      ship.movesThisTurn = 0;
+    }
+
+    // Regenerate Sensor Energy
+    const currentSE = getI32(MemLayout.SENSOR_ENERGY);
+    const newSE = currentSE + SE_REGEN_PER_TURN;
+    setI32(
+      MemLayout.SENSOR_ENERGY,
+      newSE > MAX_SENSOR_ENERGY ? MAX_SENSOR_ENERGY : newSE,
+    );
+
+    // Refresh Command Points
+    setI32(MemLayout.COMMAND_POINTS, MAX_COMMAND_POINTS);
+
+    log("Turn ended - resources refreshed");
     return;
   }
 
   // Handle movement input (D-pad for direction selection)
-  if (
-    captureShip.jumpsThisTurn < JUMPS_PER_TURN &&
-    captureShip.fuel >= FUEL_PER_JUMP
-  ) {
+  const moveLimit = getShipMoveLimit(activeShip.shipType);
+  if (activeShip.movesThisTurn < moveLimit) {
     let targetStarIndex: i32 = -1;
 
     if (buttonPressed(Button.UP)) {
-      targetStarIndex = findNeighborInDirection(
-        captureShip.currentStarIndex,
-        0,
-      );
+      targetStarIndex = findNeighborInDirection(activeShip.currentStarIndex, 0);
     } else if (buttonPressed(Button.RIGHT)) {
-      targetStarIndex = findNeighborInDirection(
-        captureShip.currentStarIndex,
-        1,
-      );
+      targetStarIndex = findNeighborInDirection(activeShip.currentStarIndex, 1);
     } else if (buttonPressed(Button.DOWN)) {
-      targetStarIndex = findNeighborInDirection(
-        captureShip.currentStarIndex,
-        2,
-      );
+      targetStarIndex = findNeighborInDirection(activeShip.currentStarIndex, 2);
     } else if (buttonPressed(Button.LEFT)) {
-      targetStarIndex = findNeighborInDirection(
-        captureShip.currentStarIndex,
-        3,
-      );
+      targetStarIndex = findNeighborInDirection(activeShip.currentStarIndex, 3);
     }
 
     // Execute jump if valid neighbor found
     if (targetStarIndex >= 0) {
-      captureShip.currentStarIndex = targetStarIndex;
-      captureShip.fuel -= FUEL_PER_JUMP;
-      captureShip.jumpsThisTurn++;
+      activeShip.currentStarIndex = targetStarIndex;
+      activeShip.movesThisTurn++;
       logi(
-        "Jumped to star {} (Fuel: {}, Jumps: {}/{})",
+        "{} jumped to star {} (Moves: {}/{})",
+        activeIndex,
         targetStarIndex,
-        captureShip.fuel,
-        captureShip.jumpsThisTurn,
+        activeShip.movesThisTurn,
       );
 
       // Check win condition after movement
-      if (captureShip.currentStarIndex == targetShip.currentStarIndex) {
+      if (activeShip.currentStarIndex == targetShip.currentStarIndex) {
         setU8(MemLayout.GAME_STATE, GameState.WON as u8);
         log("Victory! Target intercepted!");
         return;
@@ -214,26 +324,52 @@ export function draw(): void {
   drawStarmap();
 
   const state = getU8(MemLayout.GAME_STATE);
-  const captureShip = getCaptureShip();
-  const numStars = getU8(MemLayout.NUM_STARS);
-  const numEdges = getU16(MemLayout.NUM_EDGES);
+  const activeIndex = getI32(MemLayout.ACTIVE_SHIP_INDEX);
+  const activeShip = playerShips.get(activeIndex);
+  // const numStars = getU8(MemLayout.NUM_STARS);
+  // const numEdges = getU16(MemLayout.NUM_EDGES);
 
-  // Draw game stats (top left)
-  drawString(10, 1, "FUEL:", c(0xffffff));
-  drawNumber(48, 1, captureShip.fuel, c(0x00ff00));
+  // Draw shared resources (top left)
+  const sensorEnergy = getI32(MemLayout.SENSOR_ENERGY);
+  const commandPoints = getI32(MemLayout.COMMAND_POINTS);
+  const deploymentKits = getI32(MemLayout.DEPLOYMENT_KITS);
 
-  drawString(85, 1, "JUMPS:", c(0xffffff));
-  const jumpsRemaining = JUMPS_PER_TURN - captureShip.jumpsThisTurn;
-  drawNumber(132, 1, jumpsRemaining, c(0xaaccff));
-  drawString(142, 1, "/", c(0x666666));
-  drawNumber(152, 1, JUMPS_PER_TURN, c(0x666666));
+  drawString(10, 1, "SE:", c(0xffffff));
+  drawNumber(34, 1, sensorEnergy, c(0x00aaff));
+  drawString(52, 1, "/", c(0x666666));
+  drawNumber(60, 1, MAX_SENSOR_ENERGY, c(0x666666));
+
+  drawString(100, 1, "CP:", c(0xffffff));
+  drawNumber(122, 1, commandPoints, c(0x00ff00));
+
+  drawString(160, 1, "DK:", c(0xffffff));
+  drawNumber(182, 1, deploymentKits, c(0xffaa00));
+
+  // Draw active ship info (second row)
+  const shipTypeName = getShipTypeName(activeShip.shipType);
+  drawString(1, 229, shipTypeName, c(0xaaccff));
+  drawString(1 + shipTypeName.length * 8, 229, ":", c(0xffffff));
+
+  const moveLimit = getShipMoveLimit(activeShip.shipType);
+  const movesRemaining = moveLimit - activeShip.movesThisTurn;
+
+  drawString(100, 229, "MOVES:", c(0xffffff));
+  drawNumber(146, 229, movesRemaining, c(0xaaccff));
+  drawString(154, 229, "/", c(0x666666));
+  drawNumber(162, 229, moveLimit, c(0x666666));
 
   // Draw map info (bottom)
-  drawString(10, 229, "STARS:", c(0xaaaaaa));
-  drawNumber(56, 229, numStars as i32, c(0x666666));
+  // drawString(10, 229, "STARS:", c(0xaaaaaa));
+  // drawNumber(56, 229, numStars as i32, c(0x666666));
 
-  drawString(100, 229, "LANES:", c(0xaaaaaa));
-  drawNumber(146, 229, numEdges as i32, c(0x666666));
+  // drawString(100, 229, "LANES:", c(0xaaaaaa));
+  // drawNumber(146, 229, numEdges as i32, c(0x666666));
+
+  // Draw instructions (bottom right)
+  // if (state == GameState.PLAYING) {
+  //   drawString(180, 220, "B:SWITCH", c(0xaaaaaa));
+  //   drawString(180, 229, "START:END", c(0xaaaaaa));
+  // }
 
   // Draw win/lose message
   if (state == GameState.WON) {
