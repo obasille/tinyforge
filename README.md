@@ -1036,7 +1036,8 @@ drawNumber(60, 10, score, 0xffffffff);
 
 **Important limitations:**
 
-- `drawString()` only supports **UPPERCASE letters (A-Z)**, numbers (0-9), and basic punctuation
+- `drawString()` only supports **UPPERCASE letters (A-Z)**, numbers (0-9), and punctuation
+- Supported punctuation: `:!?.,-/\`'+\_\*[]()"`
 - Lowercase letters will not render correctly
 - Always use uppercase strings: `"GAME OVER"` not `"Game Over"`
 - Characters are 6×10 pixels, spaced 8 pixels apart horizontally

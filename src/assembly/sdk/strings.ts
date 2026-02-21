@@ -82,8 +82,9 @@ export function drawNumber(x: i32, y: i32, num: i32, color: u32): void {
 
 /**
  * Draw a single character using 3×5 bitmap patterns
- * Supports uppercase letters (A-Z), digits (0-9), and basic punctuation
+ * Supports uppercase letters (A-Z), digits (0-9), and punctuation
  * Each pixel is rendered as a 2×2 block, resulting in 6×10 pixel characters
+ * Supported punctuation: ! ? . , : - / \ ` ' + _ * [ ] ( ) "
  * @param x Top-left X coordinate
  * @param y Top-left Y coordinate
  * @param char ASCII character code
@@ -154,9 +155,33 @@ export function drawChar(x: i32, y: i32, char: i32, color: u32): void {
   else if (char == 44)
     pattern = 0b000_000_000_010_100 as u16; // ,
   else if (char == 58)
-    pattern = 0b000_010_000_010_000 as u16; // :
+    pattern = 0b000_100_000_100_000 as u16; // :
   else if (char == 45)
     pattern = 0b000_000_111_000_000 as u16; // -
+  else if (char == 47)
+    pattern = 0b001_001_010_100_100 as u16; // /
+  else if (char == 92)
+    pattern = 0b100_100_010_001_001 as u16; // \
+  else if (char == 96)
+    pattern = 0b010_001_000_000_000 as u16; // `
+  else if (char == 39)
+    pattern = 0b010_010_000_000_000 as u16; // '
+  else if (char == 43)
+    pattern = 0b000_010_111_010_000 as u16; // +
+  else if (char == 95)
+    pattern = 0b000_000_000_000_111 as u16; // _
+  else if (char == 42)
+    pattern = 0b101_010_111_010_101 as u16; // *
+  else if (char == 91)
+    pattern = 0b110_100_100_100_110 as u16; // [
+  else if (char == 93)
+    pattern = 0b011_001_001_001_011 as u16; // ]
+  else if (char == 40)
+    pattern = 0b010_100_100_100_010 as u16; // (
+  else if (char == 41)
+    pattern = 0b010_001_001_001_010 as u16; // )
+  else if (char == 34)
+    pattern = 0b101_101_000_000_000 as u16; // "
   else if (char == 32) pattern = 0b000_000_000_000_000 as u16; // space
 
   if (pattern != 0) {
@@ -195,9 +220,10 @@ function draw3x5Pattern(x: i32, y: i32, pattern: u16, color: u32): void {
  * Draw a string of text using bitmap font
  * Characters are spaced 8 pixels apart horizontally
  *
- * NOTE: Only uppercase letters (A-Z), numbers (0-9), and basic punctuation
+ * NOTE: Only uppercase letters (A-Z), numbers (0-9), and punctuation
  * are supported. Lowercase letters will not render correctly.
  * Always use uppercase strings with this function.
+ * Supported punctuation: ! ? . , : - / \ ` ' + _ * [ ] ( ) "
  *
  * @param x Starting X coordinate
  * @param y Starting Y coordinate

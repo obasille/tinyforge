@@ -156,6 +156,23 @@ pset(x, y, 0xff0000); // Red pixel
 fillRect(10, 10, 50, 50, 0x00ff00); // Green rectangle
 ```
 
+**Text rendering limitations:**
+
+```ts
+// ✅ CORRECT - drawString() only supports uppercase letters, numbers, and some punctuation
+drawString(10, 10, "SCORE: 1000", 0xffffff);
+drawString(10, 20, "PRESS START", 0xffaa00);
+drawString(10, 30, "LEVEL: 5", 0x00ff00);
+
+// ❌ WRONG - lowercase letters will not render correctly
+drawString(10, 10, "Score: 1000", 0xffffff); // "core" won't display properly
+drawString(10, 20, "Press Start", 0xffaa00); // "ress tart" won't display properly
+```
+
+**CRITICAL: Always use UPPERCASE for all text in drawString().**
+Supported characters: A-Z, 0-9, space, and punctuation: `:!?.,-/\`'+\_\*[]()"`
+Lowercase letters are not in the font and will render incorrectly or as blank spaces.
+
 **Frame clearing:**
 
 ```ts
