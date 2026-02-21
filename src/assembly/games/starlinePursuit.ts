@@ -40,6 +40,7 @@ const EXIT_COUNT: i32 = 5;
 // Element sizes for @unmanaged classes (aligned to 4 bytes)
 const STAR_SIZE: u32 = 16; // x(4) + y(4) + degree(4) + isHub(1) + isExit(1) + padding(2) = 16
 const EDGE_SIZE: u32 = 8; // a(4) + b(4) = 8
+const CLUSTER_SIZE: u32 = 8; // x(4) + y(4) = 8
 
 // Visual constants
 const STAR_RADIUS: i32 = 2;
@@ -88,6 +89,17 @@ class Edge {
   }
 }
 
+@unmanaged
+class Cluster {
+  x: i32;
+  y: i32;
+
+  constructor(x: i32 = 0, y: i32 = 0) {
+    this.x = x;
+    this.y = y;
+  }
+}
+
 // === Memory Layout ===
 
 enum Var {
@@ -99,9 +111,26 @@ enum Var {
   // Stars end at 4 + 804 = 808
   EDGES_START = 808, // FixedArrayOfObj<Edge>: 4 bytes (elementSize) + 200 edges × 8 bytes = 1604 bytes
   // Edges end at 808 + 1604 = 2412
-  TEMP_WORK_START = 2412, // Working memory for algorithms (1024 bytes)
+  CLUSTERS_START = 2412, // 3 clusters × 4 bytes = 12 bytes
+  TEMP_WORK_START = 2424, // Working memory for algorithms (1024 bytes)
   // Total memory: ~3500 bytes
 }
+
+const stars = FixedArrayOfObj.fromAddress<Star>(
+  RAM_START + Var.STARS_START,
+  STAR_SIZE,
+  true,
+);
+const edges = FixedArrayOfObj.fromAddress<Edge>(
+  RAM_START + Var.EDGES_START,
+  EDGE_SIZE,
+  true,
+);
+const clusters = FixedArrayOfObj.fromAddress<Cluster>(
+  RAM_START + Var.CLUSTERS_START,
+  CLUSTER_SIZE,
+  true,
+);
 
 // === Helper Functions ===
 
@@ -112,6 +141,42 @@ function dist2(ax: i32, ay: i32, bx: i32, by: i32): i32 {
   const dx = ax - bx;
   const dy = ay - by;
   return dx * dx + dy * dy;
+}
+
+/**
+ * Orientation test for segment intersection
+ * Returns the cross product to determine if three points are clockwise or counterclockwise
+ */
+function orient(ax: i32, ay: i32, bx: i32, by: i32, cx: i32, cy: i32): i32 {
+  return (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+}
+
+/**
+ * Check if two line segments intersect
+ * Based on 9B3. ImprovedLaneGeneration.md specification
+ * Uses orientation test to detect if segments cross
+ * Ignores collinear cases (extremely rare with grid+jitter)
+ */
+function segmentsIntersect(
+  a1x: i32,
+  a1y: i32,
+  a2x: i32,
+  a2y: i32,
+  b1x: i32,
+  b1y: i32,
+  b2x: i32,
+  b2y: i32,
+): bool {
+  const o1 = orient(a1x, a1y, a2x, a2y, b1x, b1y);
+  const o2 = orient(a1x, a1y, a2x, a2y, b2x, b2y);
+  const o3 = orient(b1x, b1y, b2x, b2y, a1x, a1y);
+  const o4 = orient(b1x, b1y, b2x, b2y, a2x, a2y);
+
+  // Ignore collinear edge cases (grid+jitter makes them extremely rare)
+  if (o1 == 0 || o2 == 0 || o3 == 0 || o4 == 0) return false;
+
+  // Segments intersect if orientations differ on both sides
+  return o1 > 0 != o2 > 0 && o3 > 0 != o4 > 0;
 }
 
 /**
@@ -131,6 +196,51 @@ function edgeExists(
       return true;
     }
   }
+  return false;
+}
+
+/**
+ * Check if a proposed edge would cross any existing edges
+ * Returns true if the edge (a, b) intersects any existing edge
+ */
+function wouldCrossEdges(
+  stars: FixedArrayOfObj<Star>,
+  edges: FixedArrayOfObj<Edge>,
+  numEdges: i32,
+  a: i32,
+  b: i32,
+): bool {
+  const starA = stars.get(a);
+  const starB = stars.get(b);
+
+  for (let e: i32 = 0; e < numEdges; e++) {
+    const edge = edges.get(e);
+
+    // Skip invalid edges
+    if (edge.a < 0 || edge.b < 0) continue;
+
+    // Ignore shared endpoints (edges sharing a vertex can't "cross")
+    if (edge.a == a || edge.a == b || edge.b == a || edge.b == b) {
+      continue;
+    }
+
+    // Test if new edge (a, b) intersects existing edge
+    if (
+      segmentsIntersect(
+        starA.x,
+        starA.y,
+        starB.x,
+        starB.y,
+        stars.get(edge.a).x,
+        stars.get(edge.a).y,
+        stars.get(edge.b).x,
+        stars.get(edge.b).y,
+      )
+    ) {
+      return true;
+    }
+  }
+
   return false;
 }
 
@@ -223,6 +333,7 @@ function generateStars(
 
 /**
  * Step 2: Apply cluster bias to create visible clusters
+ * Based on 9B2. ImprovedClusterPull.md specification
  */
 function applyClusterBias(
   stars: FixedArrayOfObj<Star>,
@@ -230,38 +341,166 @@ function applyClusterBias(
   clusterCount: i32,
   strength: f32,
 ): void {
-  // Generate cluster centers
-  const centersX = FixedArray.fromAddress<i32>(RAM_START + Var.TEMP_WORK_START);
-  const centersY = FixedArray.fromAddress<i32>(
-    RAM_START + Var.TEMP_WORK_START + 16,
-  );
+  const MARGIN: i32 = 40;
+  const MIN_CLUSTER_DIST: i32 = 80;
+  const INFLUENCE_RADIUS: i32 = 100;
+  const RELAXATION_ITERATIONS: i32 = 2;
 
-  for (let i: i32 = 0; i < clusterCount; i++) {
-    centersX.set(i, 20 + randomRange(MAP_WIDTH - 40));
-    centersY.set(i, 20 + randomRange(MAP_HEIGHT - 40));
+  // Step 2.1: Place cluster centers using grid-based distribution
+  // Divide map into 3x2 grid for 320x240
+  const gridCols: i32 = 3;
+  const gridRows: i32 = 2;
+  const cellWidth = (MAP_WIDTH - 2 * MARGIN) / gridCols;
+  const cellHeight = (MAP_HEIGHT - 2 * MARGIN) / gridRows;
+
+  let numClusters: i32 = 0;
+
+  // Place each cluster in a random grid cell with jitter
+  for (let c: i32 = 0; c < clusterCount; c++) {
+    let attempts: i32 = 0;
+    let placed = false;
+
+    while (!placed && attempts < 50) {
+      attempts++;
+
+      // Pick random cell
+      const cellX = randomRange(gridCols);
+      const cellY = randomRange(gridRows);
+
+      // Calculate cell center with margin
+      const centerX = MARGIN + cellX * cellWidth + cellWidth / 2;
+      const centerY = MARGIN + cellY * cellHeight + cellHeight / 2;
+
+      // Add jitter (up to 25% of cell size)
+      const jitterX = cellWidth / 4;
+      const jitterY = cellHeight / 4;
+      const cx = centerX + randomRange(jitterX * 2) - jitterX;
+      const cy = centerY + randomRange(jitterY * 2) - jitterY;
+
+      // Clamp to map bounds with margin
+      const finalX = clamp(cx, MARGIN, MAP_WIDTH - MARGIN);
+      const finalY = clamp(cy, MARGIN, MAP_HEIGHT - MARGIN);
+
+      // Check minimum distance from existing clusters
+      let tooClose = false;
+      for (let i: i32 = 0; i < numClusters; i++) {
+        const existing = clusters.get(i);
+        const d2 = dist2(finalX, finalY, existing.x, existing.y);
+        if (d2 < MIN_CLUSTER_DIST * MIN_CLUSTER_DIST) {
+          tooClose = true;
+          break;
+        }
+      }
+
+      if (!tooClose) {
+        const cluster = clusters.get(numClusters);
+        cluster.x = finalX;
+        cluster.y = finalY;
+        numClusters++;
+        placed = true;
+      }
+    }
   }
 
-  // Pull each star toward a random cluster center
+  // Step 2.2: Pull stars toward nearest cluster
+  const influenceR2 = INFLUENCE_RADIUS * INFLUENCE_RADIUS;
+
   for (let i: i32 = 0; i < numStars; i++) {
-    const s = stars.get(i);
-    const c = randomRange(clusterCount);
+    const star = stars.get(i);
 
-    const dx = (centersX.get(c) - s.x) as f32;
-    const dy = (centersY.get(c) - s.y) as f32;
+    // Find nearest cluster
+    let nearestCluster: i32 = -1;
+    let nearestDist2: i32 = 999999999;
 
-    s.x += (dx * strength) as i32;
-    s.y += (dy * strength) as i32;
+    for (let c: i32 = 0; c < numClusters; c++) {
+      const cluster = clusters.get(c);
+      const d2 = dist2(star.x, star.y, cluster.x, cluster.y);
+      if (d2 < nearestDist2) {
+        nearestDist2 = d2;
+        nearestCluster = c;
+      }
+    }
 
-    // Clamp to ensure we stay in bounds after clustering
-    s.x = clamp(s.x, 5, MAP_WIDTH - 5);
-    s.y = clamp(s.y, 5, MAP_HEIGHT - 5);
+    // Apply pull if within influence radius
+    if (nearestCluster >= 0 && nearestDist2 < influenceR2) {
+      const cluster = clusters.get(nearestCluster);
+      const dist = i32(Mathf.sqrt(nearestDist2 as f32));
+
+      // Calculate pull strength: (1 - d / influenceRadius) * randomFactor
+      const basePull = 1.0 - (dist as f32) / (INFLUENCE_RADIUS as f32);
+      const randomFactor = 0.8 + (randomRange(400) as f32) / 1000.0; // 0.8 to 1.2
+      const pullStrength = basePull * randomFactor * strength;
+
+      // Pull toward cluster center
+      const dx = cluster.x - star.x;
+      const dy = cluster.y - star.y;
+      const moveX = i32((dx as f32) * pullStrength);
+      const moveY = i32((dy as f32) * pullStrength);
+
+      star.x += moveX;
+      star.y += moveY;
+
+      // Clamp to map bounds
+      star.x = clamp(star.x, 10, MAP_WIDTH - 10);
+      star.y = clamp(star.y, 10, MAP_HEIGHT - 10);
+    }
+  }
+
+  // Step 2.3: Enforce minimum star spacing using relaxation
+  const minDist2 = MIN_STAR_DISTANCE * MIN_STAR_DISTANCE;
+
+  for (let iter: i32 = 0; iter < RELAXATION_ITERATIONS; iter++) {
+    for (let i: i32 = 0; i < numStars; i++) {
+      const starA = stars.get(i);
+
+      for (let j: i32 = i + 1; j < numStars; j++) {
+        const starB = stars.get(j);
+        const d2 = dist2(starA.x, starA.y, starB.x, starB.y);
+
+        if (d2 > 0 && d2 < minDist2) {
+          // Stars too close, push apart
+          const d = i32(Mathf.sqrt(d2 as f32));
+          const overlap = MIN_STAR_DISTANCE - d;
+          const pushDist = overlap / 2 + 1;
+
+          const dx = starB.x - starA.x;
+          const dy = starB.y - starA.y;
+
+          // Normalize direction and apply push
+          if (d > 0) {
+            const pushX = (dx * pushDist) / d;
+            const pushY = (dy * pushDist) / d;
+
+            starA.x -= pushX;
+            starA.y -= pushY;
+            starB.x += pushX;
+            starB.y += pushY;
+
+            // Clamp both stars to bounds
+            starA.x = clamp(starA.x, 10, MAP_WIDTH - 10);
+            starA.y = clamp(starA.y, 10, MAP_HEIGHT - 10);
+            starB.x = clamp(starB.x, 10, MAP_WIDTH - 10);
+            starB.y = clamp(starB.y, 10, MAP_HEIGHT - 10);
+          }
+        }
+      }
+    }
   }
 }
 
 /**
- * Step 3: Connect local k-nearest neighbors
+ * Step 3: Connect local k-nearest neighbors with edge-crossing rejection
+ * Based on 9B3. ImprovedLaneGeneration.md specification
+ *
+ * This creates clean, planar graphs by:
+ * - Connecting each star to its k nearest neighbors
+ * - Rejecting edges that would cross existing edges
+ * - Limiting maximum lane length for tactical clarity
+ *
  * OPTIMIZED: Uses simple min-finding instead of insertion sort
- * Complexity: O(n * n * k) instead of O(n * n * k^2)
+ * Complexity: O(n * n * k * e) where e is edge count
+ *
+ * Result: Clean lanes with no spaghetti intersections, stable for AI pathfinding
  */
 function connectLocalNeighbors(
   stars: FixedArrayOfObj<Star>,
@@ -287,17 +526,14 @@ function connectLocalNeighbors(
 
   // For each star, find k nearest neighbors and connect
   for (let i: i32 = 0; i < numStars; i++) {
+    const starI = stars.get(i);
+
     // Collect all candidates within max distance
     let candidateCount: i32 = 0;
     for (let j: i32 = 0; j < numStars; j++) {
       if (i == j) continue;
 
-      const d = dist2(
-        stars.get(i).x,
-        stars.get(i).y,
-        stars.get(j).x,
-        stars.get(j).y,
-      );
+      const d = dist2(starI.x, starI.y, stars.get(j).x, stars.get(j).y);
       if (d <= maxD2) {
         candidateIdx.set(candidateCount, j);
         candidateDist.set(candidateCount, d);
@@ -331,9 +567,50 @@ function connectLocalNeighbors(
       nearestIdx.set(t, candidateIdx.get(t));
     }
 
-    // Connect to k nearest neighbors
+    // Connect to k nearest neighbors with crossing rejection
     for (let t: i32 = 0; t < connectCount; t++) {
-      edgeCount = addEdge(stars, edges, edgeCount, i, nearestIdx.get(t));
+      const j = nearestIdx.get(t);
+
+      // Avoid duplicate edges (only add if i < j)
+      if (j <= i) continue;
+
+      // Check if edge already exists
+      if (edgeExists(edges, edgeCount, i, j)) continue;
+
+      const starJ = stars.get(j);
+      let valid = true;
+
+      // Check crossing against all existing edges
+      for (let e: i32 = 0; e < edgeCount; e++) {
+        const edge = edges.get(e);
+
+        // Ignore shared endpoints (edges sharing a vertex can't "cross")
+        if (edge.a == i || edge.a == j || edge.b == i || edge.b == j) {
+          continue;
+        }
+
+        // Test if new edge (i, j) intersects existing edge (edge.a, edge.b)
+        if (
+          segmentsIntersect(
+            starI.x,
+            starI.y,
+            starJ.x,
+            starJ.y,
+            stars.get(edge.a).x,
+            stars.get(edge.a).y,
+            stars.get(edge.b).x,
+            stars.get(edge.b).y,
+          )
+        ) {
+          valid = false;
+          break;
+        }
+      }
+
+      // Only add edge if it doesn't cross any existing edges
+      if (valid) {
+        edgeCount = addEdge(stars, edges, edgeCount, i, j);
+      }
     }
   }
 
@@ -384,6 +661,7 @@ function floodFillComponent(
 
 /**
  * Step 4: Ensure full connectivity by bridging disconnected components
+ * Now includes crossing rejection to maintain planar graph property
  */
 function connectComponents(
   stars: FixedArrayOfObj<Star>,
@@ -454,7 +732,7 @@ function connectComponents(
       break;
     }
 
-    // Find closest pair between components
+    // Find closest non-crossing pair between components
     let bestA: i32 = -1;
     let bestB: i32 = -1;
     let bestD: i32 = 999999999;
@@ -470,7 +748,8 @@ function connectComponents(
           stars.get(b).y,
         );
 
-        if (d < bestD) {
+        // Only consider this pair if it's closer AND doesn't cross existing edges
+        if (d < bestD && !wouldCrossEdges(stars, edges, edgeCount, a, b)) {
           bestD = d;
           bestA = a;
           bestB = b;
@@ -478,7 +757,7 @@ function connectComponents(
       }
     }
 
-    // Connect closest pair
+    // Connect closest non-crossing pair
     if (bestA >= 0 && bestB >= 0) {
       const prevCount = edgeCount;
       edgeCount = addEdge(stars, edges, edgeCount, bestA, bestB);
@@ -491,6 +770,8 @@ function connectComponents(
         break;
       }
     } else {
+      // No valid non-crossing connection found
+      warni("No non-crossing bridge found at iteration {}", iterations);
       break;
     }
   }
@@ -505,6 +786,7 @@ function connectComponents(
 /**
  * Step 5: Reduce dead ends by connecting them to second-nearest neighbor
  * OPTIMIZED: Limits the number of dead ends processed to avoid excessive iterations
+ * Now includes crossing rejection to maintain planar graph property
  */
 function reduceDeadEnds(
   stars: FixedArrayOfObj<Star>,
@@ -518,7 +800,7 @@ function reduceDeadEnds(
 
   for (let i: i32 = 0; i < numStars && processed < maxProcessed; i++) {
     if (stars.get(i).degree == 1) {
-      // Find nearest non-connected neighbor within reasonable distance
+      // Find nearest non-connected, non-crossing neighbor within reasonable distance
       let best: i32 = -1;
       let bestD: i32 = 999999999;
       const maxSearchD2 = MAX_LANE_DISTANCE * MAX_LANE_DISTANCE;
@@ -535,8 +817,11 @@ function reduceDeadEnds(
         if (d > maxSearchD2) continue; // Skip distant stars
         if (d >= bestD) continue; // Not better than current best
 
-        // Only check edgeExists if this would be our new best
-        if (!edgeExists(edges, edgeCount, i, j)) {
+        // Check if edge doesn't already exist AND doesn't cross existing edges
+        if (
+          !edgeExists(edges, edgeCount, i, j) &&
+          !wouldCrossEdges(stars, edges, edgeCount, i, j)
+        ) {
           bestD = d;
           best = j;
         }
@@ -554,6 +839,7 @@ function reduceDeadEnds(
 
 /**
  * Step 6: Add extra loop edges for multiple routes
+ * Now includes crossing rejection to maintain planar graph property
  */
 function addLoops(
   stars: FixedArrayOfObj<Star>,
@@ -564,8 +850,13 @@ function addLoops(
 ): i32 {
   let edgeCount = numEdges;
   const maxLoopD2 = 55 * 55;
+  let attempts: i32 = 0;
+  let added: i32 = 0;
+  const maxAttempts = extra * 10; // Try up to 10x the desired count
 
-  for (let i: i32 = 0; i < extra; i++) {
+  while (added < extra && attempts < maxAttempts) {
+    attempts++;
+
     const a = randomRange(numStars);
     const b = randomRange(numStars);
 
@@ -577,8 +868,14 @@ function addLoops(
       stars.get(b).x,
       stars.get(b).y,
     );
-    if (d < maxLoopD2) {
+
+    // Only add if within distance AND doesn't cross existing edges
+    if (d < maxLoopD2 && !wouldCrossEdges(stars, edges, edgeCount, a, b)) {
+      const prevCount = edgeCount;
       edgeCount = addEdge(stars, edges, edgeCount, a, b);
+      if (edgeCount > prevCount) {
+        added++;
+      }
     }
   }
 
@@ -651,17 +948,6 @@ function markExits(
  * Main starmap generation function following 9B specification
  */
 function generateStarmap(): void {
-  const stars = FixedArrayOfObj.fromAddress<Star>(
-    RAM_START + Var.STARS_START,
-    STAR_SIZE,
-    true,
-  );
-  const edges = FixedArrayOfObj.fromAddress<Edge>(
-    RAM_START + Var.EDGES_START,
-    EDGE_SIZE,
-    true,
-  );
-
   // Initialize ALL stars to invalid values first to prevent garbage data
   for (let i: i32 = 0; i < TOTAL_STARS; i++) {
     const star = stars.get(i);
@@ -716,19 +1002,26 @@ function generateStarmap(): void {
 }
 
 /**
+ * Draw cluster centers for debugging
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function drawClusterCenters(): void {
+  for (let i: i32 = 0; i < NUM_CLUSTERS; i++) {
+    const cluster = clusters.get(i);
+
+    // Draw large circle for cluster center
+    fillCircle(cluster.x, cluster.y, 8, c(0xff00ff)); // Magenta center
+
+    // Draw cross hairs
+    drawLine(cluster.x - 15, cluster.y, cluster.x + 15, cluster.y, c(0xff00ff));
+    drawLine(cluster.x, cluster.y - 15, cluster.x, cluster.y + 15, c(0xff00ff));
+  }
+}
+
+/**
  * Draw the complete starmap (stars and lanes)
  */
 function drawStarmap(): void {
-  const stars = FixedArrayOfObj.fromAddress<Star>(
-    RAM_START + Var.STARS_START,
-    STAR_SIZE,
-    true,
-  );
-  const edges = FixedArrayOfObj.fromAddress<Edge>(
-    RAM_START + Var.EDGES_START,
-    EDGE_SIZE,
-    true,
-  );
   const numStars = getU8(Var.NUM_STARS) as i32;
   const numEdges = getU16(Var.NUM_EDGES) as i32;
 
@@ -757,35 +1050,23 @@ function drawStarmap(): void {
     const starA = stars.get(edge.a);
     const starB = stars.get(edge.b);
 
-    // Aggressively clamp with MARGIN to avoid Bresenham edge cases
-    // drawLine's Bresenham can increment coords past max before loop terminates
-    // So we keep 1-pixel margin from the edge
-    const x0 = clamp(starA.x, 1, SCREEN_WIDTH - 2);
-    const y0 = clamp(starA.y, 1, SCREEN_HEIGHT - 2);
-    const x1 = clamp(starB.x, 1, SCREEN_WIDTH - 2);
-    const y1 = clamp(starB.y, 1, SCREEN_HEIGHT - 2);
-
-    // Draw lane as a line with guaranteed safe coordinates
-    drawLine(x0, y0, x1, y1, c(0x444444));
+    // Draw lane as a line
+    drawLine(starA.x, starA.y, starB.x, starB.y, c(0x444444));
   }
 
   // Draw stars with different colors/sizes based on type
   for (let i: i32 = 0; i < numStars; i++) {
     const star = stars.get(i);
 
-    // Clamp coordinates with margin for safety
-    const x = clamp(star.x, 1, SCREEN_WIDTH - 2);
-    const y = clamp(star.y, 1, SCREEN_HEIGHT - 2);
-
     if (star.isExit != 0) {
       // Exit nodes: green
-      fillCircle(x, y, EXIT_RADIUS, c(0x00ff00));
+      fillCircle(star.x, star.y, EXIT_RADIUS, c(0x00ff00));
     } else if (star.isHub != 0) {
       // Hub nodes: orange
-      fillCircle(x, y, HUB_RADIUS, c(0xffaa00));
+      fillCircle(star.x, star.y, HUB_RADIUS, c(0xffaa00));
     } else {
       // Normal stars: light blue
-      fillCircle(x, y, STAR_RADIUS, c(0xaaccff));
+      fillCircle(star.x, star.y, STAR_RADIUS, c(0xaaccff));
     }
   }
 }
@@ -808,6 +1089,9 @@ export function update(): void {
 
 export function draw(): void {
   clearFramebuffer(c(0x0a0a1a)); // Dark blue-black space background
+
+  // Draw cluster centers (for debugging)
+  // drawClusterCenters();
 
   // Draw the starmap
   drawStarmap();
