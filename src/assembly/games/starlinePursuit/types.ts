@@ -15,7 +15,7 @@ export const K_NEIGHBORS: i32 = 3; // k-nearest neighbors to connect
 export const MAX_LANE_DISTANCE: i32 = 55; // Max lane length
 export const EXTRA_LOOPS: i32 = 6;
 export const HUB_COUNT: i32 = 4;
-export const EXIT_COUNT: i32 = 5;
+export const EXIT_COUNT: i32 = 3;
 
 // Element sizes for @unmanaged classes (aligned to 4 bytes)
 const STAR_SIZE: u32 = 16; // x(4) + y(4) + degree(4) + isHub(1) + isExit(1) + padding(2) = 16

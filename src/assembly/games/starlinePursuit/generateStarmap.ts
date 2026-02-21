@@ -81,7 +81,7 @@ function segmentsIntersect(
  * Check if an edge already exists (in either direction)
  */
 function edgeExists(edges: EdgeArray, numEdges: i32, a: i32, b: i32): bool {
-  for (let i: i32 = 0; i < numEdges; i++) {
+  for (let i = 0; i < numEdges; i++) {
     const edge = edges.get(i);
     // Skip invalid edges
     if (edge.a < 0 || edge.b < 0) continue;
@@ -106,7 +106,7 @@ function wouldCrossEdges(
   const starA = stars.get(a);
   const starB = stars.get(b);
 
-  for (let e: i32 = 0; e < numEdges; e++) {
+  for (let e = 0; e < numEdges; e++) {
     const edge = edges.get(e);
 
     // Skip invalid edges
@@ -176,12 +176,12 @@ function addEdge(
  * Generates stars using stratified sampling for even distribution.
  * Divides the map into a grid and places one star per cell with jitter.
  */
-function generateStars(stars: StarArray, count: i32, minDist: i32): i32 {
-  // Calculate grid dimensions for stratified sampling
-  const gridCols = i32(
-    Mathf.sqrt(((count * MAP_WIDTH) as f32) / (MAP_HEIGHT as f32)),
-  );
-  const gridRows = i32((count as f32) / (gridCols as f32) + 0.5);
+function generateStars(
+  stars: StarArray,
+  gridCols: i32,
+  gridRows: i32,
+  minDist: i32,
+): void {
   const cellWidth = MAP_WIDTH / gridCols;
   const cellHeight = MAP_HEIGHT / gridRows;
 
@@ -189,11 +189,10 @@ function generateStars(stars: StarArray, count: i32, minDist: i32): i32 {
   const jitterX = max(1, cellWidth / 2 - minDist / 2);
   const jitterY = max(1, cellHeight / 2 - minDist / 2);
 
-  let numStars: i32 = 0;
-
   // Place one star per grid cell with random jitter
-  for (let row: i32 = 0; row < gridRows && numStars < count; row++) {
-    for (let col: i32 = 0; col < gridCols && numStars < count; col++) {
+  let numStars = 0;
+  for (let row = 0; row < gridRows; row++) {
+    for (let col = 0; col < gridCols; col++) {
       // Calculate cell center
       const centerX = col * cellWidth + cellWidth / 2;
       const centerY = row * cellHeight + cellHeight / 2;
@@ -216,8 +215,6 @@ function generateStars(stars: StarArray, count: i32, minDist: i32): i32 {
       numStars++;
     }
   }
-
-  return numStars;
 }
 
 /**
@@ -230,23 +227,23 @@ function applyClusterBias(
   clusterCount: i32,
   strength: f32,
 ): void {
-  const MARGIN: i32 = 40;
-  const MIN_CLUSTER_DIST: i32 = 80;
-  const INFLUENCE_RADIUS: i32 = 100;
-  const RELAXATION_ITERATIONS: i32 = 2;
+  const MARGIN = 40;
+  const MIN_CLUSTER_DIST = 80;
+  const INFLUENCE_RADIUS = 100;
+  const RELAXATION_ITERATIONS = 2;
 
   // Step 2.1: Place cluster centers using grid-based distribution
   // Divide map into 3x2 grid for 320x240
-  const gridCols: i32 = 3;
-  const gridRows: i32 = 2;
+  const gridCols = 3;
+  const gridRows = 2;
   const cellWidth = (MAP_WIDTH - 2 * MARGIN) / gridCols;
   const cellHeight = (MAP_HEIGHT - 2 * MARGIN) / gridRows;
 
-  let numClusters: i32 = 0;
+  let numClusters = 0;
 
   // Place each cluster in a random grid cell with jitter
-  for (let c: i32 = 0; c < clusterCount; c++) {
-    let attempts: i32 = 0;
+  for (let c = 0; c < clusterCount; c++) {
+    let attempts = 0;
     let placed = false;
 
     while (!placed && attempts < 50) {
@@ -272,7 +269,7 @@ function applyClusterBias(
 
       // Check minimum distance from existing clusters
       let tooClose = false;
-      for (let i: i32 = 0; i < numClusters; i++) {
+      for (let i = 0; i < numClusters; i++) {
         const existing = clusters.get(i);
         const d2 = dist2(finalX, finalY, existing.x, existing.y);
         if (d2 < MIN_CLUSTER_DIST * MIN_CLUSTER_DIST) {
@@ -294,14 +291,14 @@ function applyClusterBias(
   // Step 2.2: Pull stars toward nearest cluster
   const influenceR2 = INFLUENCE_RADIUS * INFLUENCE_RADIUS;
 
-  for (let i: i32 = 0; i < numStars; i++) {
+  for (let i = 0; i < numStars; i++) {
     const star = stars.get(i);
 
     // Find nearest cluster
-    let nearestCluster: i32 = -1;
-    let nearestDist2: i32 = 999999999;
+    let nearestCluster = -1;
+    let nearestDist2 = 999999999;
 
-    for (let c: i32 = 0; c < numClusters; c++) {
+    for (let c = 0; c < numClusters; c++) {
       const cluster = clusters.get(c);
       const d2 = dist2(star.x, star.y, cluster.x, cluster.y);
       if (d2 < nearestDist2) {
@@ -338,11 +335,11 @@ function applyClusterBias(
   // Step 2.3: Enforce minimum star spacing using relaxation
   const minDist2 = MIN_STAR_DISTANCE * MIN_STAR_DISTANCE;
 
-  for (let iter: i32 = 0; iter < RELAXATION_ITERATIONS; iter++) {
-    for (let i: i32 = 0; i < numStars; i++) {
+  for (let iter = 0; iter < RELAXATION_ITERATIONS; iter++) {
+    for (let i = 0; i < numStars; i++) {
       const starA = stars.get(i);
 
-      for (let j: i32 = i + 1; j < numStars; j++) {
+      for (let j = i + 1; j < numStars; j++) {
         const starB = stars.get(j);
         const d2 = dist2(starA.x, starA.y, starB.x, starB.y);
 
@@ -414,12 +411,12 @@ function connectLocalNeighbors(
   );
 
   // For each star, find k nearest neighbors and connect
-  for (let i: i32 = 0; i < numStars; i++) {
+  for (let i = 0; i < numStars; i++) {
     const starI = stars.get(i);
 
     // Collect all candidates within max distance
-    let candidateCount: i32 = 0;
-    for (let j: i32 = 0; j < numStars; j++) {
+    let candidateCount = 0;
+    for (let j = 0; j < numStars; j++) {
       if (i == j) continue;
 
       const d = dist2(starI.x, starI.y, stars.get(j).x, stars.get(j).y);
@@ -432,11 +429,11 @@ function connectLocalNeighbors(
 
     // Select k nearest using simple min-finding
     const connectCount = candidateCount < k ? candidateCount : k;
-    for (let t: i32 = 0; t < connectCount; t++) {
+    for (let t = 0; t < connectCount; t++) {
       // Find minimum distance in remaining candidates
-      let minIdx: i32 = t;
-      let minDist: i32 = candidateDist.get(t);
-      for (let c: i32 = t + 1; c < candidateCount; c++) {
+      let minIdx = t;
+      let minDist = candidateDist.get(t);
+      for (let c = t + 1; c < candidateCount; c++) {
         if (candidateDist.get(c) < minDist) {
           minDist = candidateDist.get(c);
           minIdx = c;
@@ -457,7 +454,7 @@ function connectLocalNeighbors(
     }
 
     // Connect to k nearest neighbors with crossing rejection
-    for (let t: i32 = 0; t < connectCount; t++) {
+    for (let t = 0; t < connectCount; t++) {
       const j = nearestIdx.get(t);
 
       // Avoid duplicate edges (only add if i < j)
@@ -470,7 +467,7 @@ function connectLocalNeighbors(
       let valid = true;
 
       // Check crossing against all existing edges
-      for (let e: i32 = 0; e < edgeCount; e++) {
+      for (let e = 0; e < edgeCount; e++) {
         const edge = edges.get(e);
 
         // Ignore shared endpoints (edges sharing a vertex can't "cross")
@@ -520,8 +517,8 @@ function floodFillComponent(
   const stack = FixedArray.fromAddress<i32>(
     RAM_START + MemLayout.TEMP_WORK_START + 256,
   );
-  let stackSize: i32 = 0;
-  let compSize: i32 = 0;
+  let stackSize = 0;
+  let compSize = 0;
 
   stack.set(stackSize++, start);
   visited.set(start, 1);
@@ -531,9 +528,9 @@ function floodFillComponent(
     component.set(compSize++, v);
 
     // Find all connected neighbors
-    for (let i: i32 = 0; i < numEdges; i++) {
+    for (let i = 0; i < numEdges; i++) {
       const e = edges.get(i);
-      let next: i32 = -1;
+      let next = -1;
 
       if (e.a == v) next = e.b;
       else if (e.b == v) next = e.a;
@@ -560,7 +557,7 @@ function connectComponents(
 ): i32 {
   let edgeCount = numEdges;
   let continueLoop = true;
-  let iterations: i32 = 0;
+  let iterations = 0;
   const maxIterations = numStars; // Safety limit to prevent infinite loops
 
   while (continueLoop && iterations < maxIterations) {
@@ -569,7 +566,7 @@ function connectComponents(
     const visited = FixedArray.fromAddress<u8>(
       RAM_START + MemLayout.TEMP_WORK_START + 512,
     );
-    for (let i: i32 = 0; i < numStars; i++) {
+    for (let i = 0; i < numStars; i++) {
       visited.set(i, 0);
     }
 
@@ -580,12 +577,12 @@ function connectComponents(
     const comp2 = FixedArray.fromAddress<i32>(
       RAM_START + MemLayout.TEMP_WORK_START + 700,
     );
-    let comp1Size: i32 = 0;
-    let comp2Size: i32 = 0;
+    let comp1Size = 0;
+    let comp2Size = 0;
     let foundSecondComponent = false;
 
     // Find first component
-    for (let i: i32 = 0; i < numStars; i++) {
+    for (let i = 0; i < numStars; i++) {
       if (visited.get(i) == 0) {
         comp1Size = floodFillComponent(
           stars,
@@ -600,7 +597,7 @@ function connectComponents(
     }
 
     // Find second component (if exists)
-    for (let i: i32 = 0; i < numStars; i++) {
+    for (let i = 0; i < numStars; i++) {
       if (visited.get(i) == 0) {
         comp2Size = floodFillComponent(
           stars,
@@ -622,12 +619,12 @@ function connectComponents(
     }
 
     // Find closest non-crossing pair between components
-    let bestA: i32 = -1;
-    let bestB: i32 = -1;
-    let bestD: i32 = 999999999;
+    let bestA = -1;
+    let bestB = -1;
+    let bestD = 999999999;
 
-    for (let i: i32 = 0; i < comp1Size; i++) {
-      for (let j: i32 = 0; j < comp2Size; j++) {
+    for (let i = 0; i < comp1Size; i++) {
+      for (let j = 0; j < comp2Size; j++) {
         const a = comp1.get(i);
         const b = comp2.get(j);
         const d = dist2(
@@ -684,17 +681,17 @@ function reduceDeadEnds(
   numEdges: i32,
 ): i32 {
   let edgeCount = numEdges;
-  let processed: i32 = 0;
+  let processed = 0;
   const maxProcessed = numStars / 2; // Process at most half the stars
 
-  for (let i: i32 = 0; i < numStars && processed < maxProcessed; i++) {
+  for (let i = 0; i < numStars && processed < maxProcessed; i++) {
     if (stars.get(i).degree == 1) {
       // Find nearest non-connected, non-crossing neighbor within reasonable distance
-      let best: i32 = -1;
-      let bestD: i32 = 999999999;
+      let best = -1;
+      let bestD = 999999999;
       const maxSearchD2 = MAX_LANE_DISTANCE * MAX_LANE_DISTANCE;
 
-      for (let j: i32 = 0; j < numStars; j++) {
+      for (let j = 0; j < numStars; j++) {
         if (i == j) continue;
 
         const d = dist2(
@@ -739,8 +736,8 @@ function addLoops(
 ): i32 {
   let edgeCount = numEdges;
   const maxLoopD2 = 55 * 55;
-  let attempts: i32 = 0;
-  let added: i32 = 0;
+  let attempts = 0;
+  let added = 0;
   const maxAttempts = extra * 10; // Try up to 10x the desired count
 
   while (added < extra && attempts < maxAttempts) {
@@ -775,11 +772,11 @@ function addLoops(
  * Step 7: Mark hub stars (highest degree nodes)
  */
 function markHubs(stars: StarArray, numStars: i32, hubCount: i32): void {
-  for (let h: i32 = 0; h < hubCount; h++) {
-    let best: i32 = -1;
-    let bestDeg: i32 = -1;
+  for (let h = 0; h < hubCount; h++) {
+    let best = -1;
+    let bestDeg = -1;
 
-    for (let i: i32 = 0; i < numStars; i++) {
+    for (let i = 0; i < numStars; i++) {
       if (stars.get(i).isHub != 0) continue;
       if (stars.get(i).degree > bestDeg) {
         bestDeg = stars.get(i).degree;
@@ -795,32 +792,136 @@ function markHubs(stars: StarArray, numStars: i32, hubCount: i32): void {
 }
 
 /**
- * Step 8: Mark exit stars (nodes near map edges)
+ * Map a perimeter position to a star index in the grid
+ * Perimeter goes: top (left→right), right (top→bottom), bottom (right→left), left (bottom→top)
  */
-function markExits(stars: StarArray, numStars: i32, exitCount: i32): void {
-  for (let e: i32 = 0; e < exitCount; e++) {
-    let best: i32 = -1;
-    let bestScore: i32 = -1;
+function getPerimeterStarIndex(
+  perimPos: i32,
+  gridCols: i32,
+  gridRows: i32,
+): i32 {
+  const topLen = gridCols; // All columns in row 0
+  const rightLen = gridRows - 1; // All rows except top, in last column
+  const bottomLen = gridCols - 1; // All columns except last, in last row
 
-    for (let i: i32 = 0; i < numStars; i++) {
-      if (stars.get(i).isExit != 0) continue;
+  let row: i32;
+  let col: i32;
 
-      const s = stars.get(i);
-      let score: i32 = 0;
-      if (s.x < 40) score++;
-      if (s.x > 280) score++;
-      if (s.y < 40) score++;
-      if (s.y > 200) score++;
+  if (perimPos < topLen) {
+    // Top edge: row=0, col=perimPos
+    row = 0;
+    col = perimPos;
+  } else if (perimPos < topLen + rightLen) {
+    // Right edge: rows 1 to gridRows-1 in last column
+    row = perimPos - topLen + 1;
+    col = gridCols - 1;
+  } else if (perimPos < topLen + rightLen + bottomLen) {
+    // Bottom edge: going right to left along last row
+    const bottomOffset = perimPos - topLen - rightLen;
+    row = gridRows - 1;
+    col = gridCols - 2 - bottomOffset;
+  } else {
+    // Left edge: going bottom to top along first column
+    const leftOffset = perimPos - topLen - rightLen - bottomLen;
+    row = gridRows - 2 - leftOffset;
+    col = 0;
+  }
 
-      if (score > bestScore) {
-        bestScore = score;
-        best = i;
+  return row * gridCols + col;
+}
+
+/**
+ * Check if two stars are directly connected by an edge
+ */
+function areStarsConnected(
+  edges: EdgeArray,
+  numEdges: i32,
+  starA: i32,
+  starB: i32,
+): bool {
+  for (let i = 0; i < numEdges; i++) {
+    const edge = edges.get(i);
+    if (
+      (edge.a == starA && edge.b == starB) ||
+      (edge.a == starB && edge.b == starA)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Check if a potential exit star is directly connected to any existing exit
+ */
+function isConnectedToAnyExit(
+  stars: StarArray,
+  edges: EdgeArray,
+  numStars: i32,
+  numEdges: i32,
+  candidateIdx: i32,
+): bool {
+  for (let i = 0; i < numStars; i++) {
+    if (i == candidateIdx) continue;
+    if (stars.get(i).isExit != 0) {
+      if (areStarsConnected(edges, numEdges, candidateIdx, i)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Step 8: Mark exit stars (nodes on the perimeter of the grid)
+ * Uses the grid placement pattern to directly select perimeter stars
+ * Ensures exits are not directly connected to each other by star lanes
+ */
+function markExits(
+  stars: StarArray,
+  edges: EdgeArray,
+  numStars: i32,
+  numEdges: i32,
+  gridCols: i32,
+  gridRows: i32,
+  exitCount: i32,
+): void {
+  // Calculate perimeter length: 2*cols + 2*rows - 4 (for the 4 corners counted once)
+  const perimeterLength = 2 * gridCols + 2 * gridRows - 4;
+
+  // Mark exits by sampling random positions along the perimeter
+  for (let e = 0; e < exitCount; e++) {
+    let attempts = 0;
+    let placed = false;
+
+    // Try to find an unmarked, non-connected perimeter star
+    while (!placed && attempts < 50) {
+      attempts++;
+
+      // Generate random position along perimeter
+      const perimPos = randomRange(perimeterLength);
+
+      // Map perimeter position to star index
+      const starIdx = getPerimeterStarIndex(perimPos, gridCols, gridRows);
+
+      // Check bounds and validate candidate
+      if (starIdx >= 0 && starIdx < numStars) {
+        const star = stars.get(starIdx);
+
+        // Check: not already an exit AND not directly connected to any existing exit
+        if (
+          star.isExit == 0 &&
+          !isConnectedToAnyExit(stars, edges, numStars, numEdges, starIdx)
+        ) {
+          star.isExit = 1;
+          placed = true;
+        }
       }
     }
 
-    if (best >= 0) {
-      const star = stars.get(best);
-      star.isExit = 1;
+    // If we couldn't find a valid exit after many attempts, warn but continue
+    if (!placed) {
+      warni("Could not place exit {} without lane conflicts", e);
     }
   }
 }
@@ -830,7 +931,7 @@ function markExits(stars: StarArray, numStars: i32, exitCount: i32): void {
  */
 export function generateStarmap(): void {
   // Initialize ALL stars to invalid values first to prevent garbage data
-  for (let i: i32 = 0; i < TOTAL_STARS; i++) {
+  for (let i = 0; i < TOTAL_STARS; i++) {
     const star = stars.get(i);
     star.x = -1;
     star.y = -1;
@@ -840,21 +941,28 @@ export function generateStarmap(): void {
   }
 
   // Initialize ALL edges to invalid values to prevent garbage data
-  for (let i: i32 = 0; i < MAX_EDGES; i++) {
+  for (let i = 0; i < MAX_EDGES; i++) {
     const edge = edges.get(i);
     edge.a = -1;
     edge.b = -1;
   }
 
+  // Calculate grid dimensions (same logic as generateStars)
+  const gridCols = i32(
+    Mathf.sqrt(((TOTAL_STARS * MAP_WIDTH) as f32) / (MAP_HEIGHT as f32)),
+  );
+  const gridRows = i32((TOTAL_STARS as f32) / (gridCols as f32) + 0.5);
+  const numStars = gridCols * gridRows; // Actual number of stars placed based on grid
+
   // Step 1: Place stars evenly using Poisson-like rejection
-  const numStars = generateStars(stars, TOTAL_STARS, MIN_STAR_DISTANCE);
+  generateStars(stars, gridCols, gridRows, MIN_STAR_DISTANCE);
   setU8(MemLayout.NUM_STARS, numStars as u8);
 
   // Step 2: Apply cluster bias for visible clusters
   applyClusterBias(stars, numStars, NUM_CLUSTERS, CLUSTER_STRENGTH);
 
   // Step 3: Connect local k-nearest neighbors
-  let numEdges: i32 = 0;
+  let numEdges = 0;
   numEdges = connectLocalNeighbors(
     stars,
     edges,
@@ -877,7 +985,7 @@ export function generateStarmap(): void {
 
   // Step 7: Mark hubs and exits
   markHubs(stars, numStars, HUB_COUNT);
-  markExits(stars, numStars, EXIT_COUNT);
+  markExits(stars, edges, numStars, numEdges, gridCols, gridRows, EXIT_COUNT);
 
   logi("Starmap generated: {} stars, {} lanes", numStars, numEdges);
 }
