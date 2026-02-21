@@ -1,7 +1,18 @@
-import { c, drawLine, fillCircle, getU16, getU8, warni } from "../../sdk";
+import {
+  c,
+  drawLine,
+  drawRect,
+  fillCircle,
+  fillRect,
+  getU16,
+  getU8,
+  warni,
+} from "../../sdk";
 
 import {
   EXIT_RADIUS,
+  getCaptureShip,
+  getTargetShip,
   HUB_RADIUS,
   MAX_EDGES,
   MemLayout,
@@ -82,6 +93,50 @@ export function drawStarmap(): void {
     } else {
       // Normal stars: light blue
       fillCircle(star.x, star.y, STAR_RADIUS, c(0xaaccff));
+    }
+  }
+
+  // Draw capture ship (player ship - bright blue filled square)
+  const captureShip = getCaptureShip();
+  const captureStarIndex = captureShip.currentStarIndex;
+  if (captureStarIndex >= 0 && captureStarIndex < numStars) {
+    const captureStar = stars.get(captureStarIndex);
+    const shipSize: i32 = 6;
+    fillRect(
+      captureStar.x - shipSize / 2,
+      captureStar.y - shipSize / 2,
+      shipSize,
+      shipSize,
+      c(0x00aaff),
+    );
+    // White outline for visibility
+    drawRect(
+      captureStar.x - shipSize / 2,
+      captureStar.y - shipSize / 2,
+      shipSize,
+      shipSize,
+      c(0xffffff),
+    );
+  }
+
+  // Draw target ship (enemy ship - red hollow square)
+  const targetShip = getTargetShip();
+  if (targetShip.isActive != 0) {
+    const targetStarIndex = targetShip.currentStarIndex;
+
+    // Bounds check
+    if (targetStarIndex >= 0 && targetStarIndex < numStars) {
+      const targetStar = stars.get(targetStarIndex);
+
+      // Draw target as a red square around the star
+      const boxSize: i32 = 8;
+      drawRect(
+        targetStar.x - boxSize / 2,
+        targetStar.y - boxSize / 2,
+        boxSize,
+        boxSize,
+        c(0xff0000),
+      );
     }
   }
 }

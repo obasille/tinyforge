@@ -19,6 +19,7 @@ import {
   HUB_COUNT,
   K_NEIGHBORS,
   MAP_HEIGHT,
+  MAP_OFFSET_Y,
   MAP_WIDTH,
   MAX_EDGES,
   MAX_LANE_DISTANCE,
@@ -203,7 +204,7 @@ function generateStars(
 
       // Clamp to map bounds with margin
       const finalX = clamp(x, 10, MAP_WIDTH - 10);
-      const finalY = clamp(y, 10, MAP_HEIGHT - 10);
+      const finalY = clamp(y, 10, MAP_HEIGHT - 10) + MAP_OFFSET_Y;
 
       // Zero allocation pattern - reinterpret existing memory
       const star = stars.get(numStars);
@@ -265,7 +266,7 @@ function applyClusterBias(
 
       // Clamp to map bounds with margin
       const finalX = clamp(cx, MARGIN, MAP_WIDTH - MARGIN);
-      const finalY = clamp(cy, MARGIN, MAP_HEIGHT - MARGIN);
+      const finalY = clamp(cy, MARGIN, MAP_HEIGHT - MARGIN) + MAP_OFFSET_Y;
 
       // Check minimum distance from existing clusters
       let tooClose = false;
@@ -328,7 +329,7 @@ function applyClusterBias(
 
       // Clamp to map bounds
       star.x = clamp(star.x, 10, MAP_WIDTH - 10);
-      star.y = clamp(star.y, 10, MAP_HEIGHT - 10);
+      star.y = clamp(star.y - MAP_OFFSET_Y, 10, MAP_HEIGHT - 10) + MAP_OFFSET_Y;
     }
   }
 
@@ -364,9 +365,11 @@ function applyClusterBias(
 
             // Clamp both stars to bounds
             starA.x = clamp(starA.x, 10, MAP_WIDTH - 10);
-            starA.y = clamp(starA.y, 10, MAP_HEIGHT - 10);
+            starA.y =
+              clamp(starA.y - MAP_OFFSET_Y, 10, MAP_HEIGHT - 10) + MAP_OFFSET_Y;
             starB.x = clamp(starB.x, 10, MAP_WIDTH - 10);
-            starB.y = clamp(starB.y, 10, MAP_HEIGHT - 10);
+            starB.y =
+              clamp(starB.y - MAP_OFFSET_Y, 10, MAP_HEIGHT - 10) + MAP_OFFSET_Y;
           }
         }
       }
