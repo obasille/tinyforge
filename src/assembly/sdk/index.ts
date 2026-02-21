@@ -13,5 +13,6 @@ export * from "./drawSprite";
 export * from "./input";
 export * from "./logging";
 export * from "./memory";
+export * from "./print";
 export * from "./strings";
 export * from "./utility";
