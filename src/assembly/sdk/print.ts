@@ -1,7 +1,8 @@
 // TinyForge SDK - Fast Monochrome Text Rendering
 // Optimized 6×8 pixel monochrome bitmap font for high-performance text rendering
 
-import { SCREEN_WIDTH, SCREEN_HEIGHT, FB_START } from "./memory";
+import { blendPixel } from "./drawing";
+import { SCREEN_HEIGHT, SCREEN_WIDTH } from "./memory";
 
 /**
  * 6×8 monochrome bitmap font data
@@ -203,12 +204,11 @@ const FONT_DATA: StaticArray<u64> = [
 ];
 
 /**
- * Draw a single character using the 6×8 monochrome font
- * Highly optimized with direct framebuffer writes
+ * Draw a single character using the 6×8 monochrome font with alpha blending
  * @param x Top-left X coordinate
  * @param y Top-left Y coordinate  
  * @param char ASCII character code (32-126)
- * @param color ABGR color value
+ * @param color ABGR color value (supports alpha channel for transparency)
  */
 // @ts-expect-error AssemblyScript decorator
 @inline
@@ -221,71 +221,44 @@ export function printChar(x: i32, y: i32, char: i32, color: u32): void {
   
   const glyphIndex = char - 32;
   const glyph = unchecked(FONT_DATA[glyphIndex]);
-  const colorValue = color | 0xFF000000;
   const rowStride = SCREEN_WIDTH;
   
-  // Blit glyph directly to framebuffer
+  // Blit glyph to framebuffer with alpha blending
   // Each byte in glyph represents one row (8 rows total)
   // Byte 7 (most significant) is the top row, byte 0 is the bottom row
   for (let row: i32 = 0; row < 8; row++) {
     const yy = y + row;
     if (yy < 0 || yy >= SCREEN_HEIGHT) continue;
     
-    // Extract row byte (8 bits, we use lower 6 bits)
+    // Extract row byte (8 bits, we use bits 7-2 for 6 pixel columns)
     // Read from byte 7 for row 0, down to byte 0 for row 7
     const rowBits = ((glyph >> ((7 - row) << 3)) & 0xFF) as u8;
     
-    // Draw 6 pixels for this row
+    // Draw 6 pixels for this row (bit 7 to bit 2, MSB is leftmost)
     let baseAddr = ((yy * rowStride + x) << 2) as usize;
     
-    // Unrolled loop for 6 pixels (bit 7 to bit 2, MSB is leftmost)
-    if (rowBits & 0x80) {
-      const xx = x;
-      if (xx >= 0 && xx < SCREEN_WIDTH) store<u32>(baseAddr, colorValue);
-    }
-    baseAddr += 4;
-    
-    if (rowBits & 0x40) {
-      const xx = x + 1;
-      if (xx >= 0 && xx < SCREEN_WIDTH) store<u32>(baseAddr, colorValue);
-    }
-    baseAddr += 4;
-    
-    if (rowBits & 0x20) {
-      const xx = x + 2;
-      if (xx >= 0 && xx < SCREEN_WIDTH) store<u32>(baseAddr, colorValue);
-    }
-    baseAddr += 4;
-    
-    if (rowBits & 0x10) {
-      const xx = x + 3;
-      if (xx >= 0 && xx < SCREEN_WIDTH) store<u32>(baseAddr, colorValue);
-    }
-    baseAddr += 4;
-    
-    if (rowBits & 0x08) {
-      const xx = x + 4;
-      if (xx >= 0 && xx < SCREEN_WIDTH) store<u32>(baseAddr, colorValue);
-    }
-    baseAddr += 4;
-    
-    if (rowBits & 0x04) {
-      const xx = x + 5;
-      if (xx >= 0 && xx < SCREEN_WIDTH) store<u32>(baseAddr, colorValue);
+    for (let col: i32 = 0; col < 6; col++) {
+      const bitMask = ((0x80 as i32) >> col) as u8;
+      if (rowBits & bitMask) {
+        const xx = x + col;
+        if (xx >= 0 && xx < SCREEN_WIDTH) {
+          blendPixel(baseAddr, color);
+        }
+      }
+      baseAddr += 4;
     }
   }
 }
 
 /**
- * Print a string of text using the 6×8 monochrome font
+ * Print a string of text using the 6×8 monochrome font with alpha blending
  * Characters are 6 pixels wide with no spacing between them
  * Supports ASCII characters 32-126 (space through ~)
- * Highly optimized for speed with direct framebuffer access
  * 
  * @param x Starting X coordinate
  * @param y Starting Y coordinate
  * @param text String to print (supports upper, lower, numbers, symbols)
- * @param color ABGR color value
+ * @param color ABGR color value (supports alpha channel for transparency)
  */
 export function print(x: i32, y: i32, text: string, color: u32): void {
   const len = text.length;

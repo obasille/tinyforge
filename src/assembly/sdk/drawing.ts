@@ -17,27 +17,71 @@ import {
 export declare function clearFramebuffer(color: u32): void;
 
 /**
- * Set a single pixel in the framebuffer
+ * Internal helper to write a pixel with alpha blending
+ * @param addr Memory address to write to
+ * @param srcColor Source color in ABGR format
+ */
+// @ts-expect-error AssemblyScript decorator
+@inline
+export function blendPixel(addr: usize, srcColor: u32): void {
+  const srcA = (srcColor >> 24) & 0xff;
+
+  // Fast path: fully opaque
+  if (srcA == 0xff) {
+    store<u32>(addr, srcColor | 0xff000000);
+    return;
+  }
+
+  // Fast path: fully transparent
+  if (srcA == 0) return;
+
+  // Alpha blending required
+  const dstPixel = load<u32>(addr);
+
+  // Extract source RGB
+  const srcR = srcColor & 0xff;
+  const srcG = (srcColor >> 8) & 0xff;
+  const srcB = (srcColor >> 16) & 0xff;
+
+  // Extract destination RGB
+  const dstR = dstPixel & 0xff;
+  const dstG = (dstPixel >> 8) & 0xff;
+  const dstB = (dstPixel >> 16) & 0xff;
+
+  // Blend using bit shift approximation: (x * a + 128) >> 8 ≈ x * a / 255
+  const invAlpha = 255 - srcA;
+
+  const blendR = ((srcR * srcA + dstR * invAlpha + 128) >> 8) as u8;
+  const blendG = ((srcG * srcA + dstG * invAlpha + 128) >> 8) as u8;
+  const blendB = ((srcB * srcA + dstB * invAlpha + 128) >> 8) as u8;
+
+  // Store blended pixel in ABGR format
+  const blended = (blendR as u32) | ((blendG as u32) << 8) | ((blendB as u32) << 16);
+  store<u32>(addr, blended | 0xff000000);
+}
+
+/**
+ * Set a single pixel in the framebuffer with alpha blending
  * Coordinates are clipped to screen bounds
  * @param x X coordinate (0-319)
  * @param y Y coordinate (0-239)
- * @param color ABGR color value
+ * @param color ABGR color value (supports alpha channel for transparency)
  */
 // @ts-expect-error AssemblyScript decorator
 @inline
 export function pset(x: i32, y: i32, color: u32): void {
   if (x < 0 || x >= SCREEN_WIDTH || y < 0 || y >= SCREEN_HEIGHT) return;
-  const i = (y * SCREEN_WIDTH + x) << 2;
-  store<u32>(i, color | 0xff000000);
+  const addr = ((y * SCREEN_WIDTH + x) << 2) as usize;
+  blendPixel(addr, color);
 }
 
 /**
- * Draw a filled rectangle
+ * Draw a filled rectangle with alpha blending
  * @param x Top-left X coordinate
  * @param y Top-left Y coordinate
  * @param w Width in pixels
  * @param h Height in pixels
- * @param color ABGR color value
+ * @param color ABGR color value (supports alpha channel for transparency)
  */
 export function fillRect(x: i32, y: i32, w: i32, h: i32, color: u32): void {
   if (w <= 0 || h <= 0) return;
@@ -54,26 +98,25 @@ export function fillRect(x: i32, y: i32, w: i32, h: i32, color: u32): void {
 
   if (x0 >= x1 || y0 >= y1) return;
 
-  const colorValue = color | 0xff000000;
   const rowWidth = SCREEN_WIDTH;
   const xCount = x1 - x0;
 
   for (let yy: i32 = y0; yy < y1; yy++) {
     let addr = ((yy * rowWidth + x0) << 2) as usize;
     for (let xx: i32 = 0; xx < xCount; xx++) {
-      store<u32>(addr, colorValue);
+      blendPixel(addr, color);
       addr += 4;
     }
   }
 }
 
 /**
- * Draw a rectangle outline
+ * Draw a rectangle outline with alpha blending
  * @param x Top-left X coordinate
  * @param y Top-left Y coordinate
  * @param w Width in pixels
  * @param h Height in pixels
- * @param color ABGR color value
+ * @param color ABGR color value (supports alpha channel for transparency)
  */
 export function drawRect(x: i32, y: i32, w: i32, h: i32, color: u32): void {
   if (w <= 0 || h <= 0) return;
@@ -90,7 +133,6 @@ export function drawRect(x: i32, y: i32, w: i32, h: i32, color: u32): void {
 
   if (x0 >= x1 || y0 >= y1) return;
 
-  const colorValue = color | 0xff000000;
   const rowWidth = SCREEN_WIDTH;
   const top = y0;
   const bottom = y1 - 1;
@@ -100,7 +142,7 @@ export function drawRect(x: i32, y: i32, w: i32, h: i32, color: u32): void {
   // Top edge
   let addrTop = ((top * rowWidth + left) << 2) as usize;
   for (let xx: i32 = left; xx <= right; xx++) {
-    store<u32>(addrTop, colorValue);
+    blendPixel(addrTop, color);
     addrTop += 4;
   }
 
@@ -108,7 +150,7 @@ export function drawRect(x: i32, y: i32, w: i32, h: i32, color: u32): void {
   if (bottom != top) {
     let addrBottom = ((bottom * rowWidth + left) << 2) as usize;
     for (let xx: i32 = left; xx <= right; xx++) {
-      store<u32>(addrBottom, colorValue);
+      blendPixel(addrBottom, color);
       addrBottom += 4;
     }
   }
@@ -118,24 +160,24 @@ export function drawRect(x: i32, y: i32, w: i32, h: i32, color: u32): void {
     for (let yy: i32 = top + 1; yy < bottom; yy++) {
       let addrLeft = ((yy * rowWidth + left) << 2) as usize;
       let addrRight = ((yy * rowWidth + right) << 2) as usize;
-      store<u32>(addrLeft, colorValue);
-      store<u32>(addrRight, colorValue);
+      blendPixel(addrLeft, color);
+      blendPixel(addrRight, color);
     }
   } else if (right == left && bottom - top > 1) {
     for (let yy: i32 = top + 1; yy < bottom; yy++) {
       let addrLeft = ((yy * rowWidth + left) << 2) as usize;
-      store<u32>(addrLeft, colorValue);
+      blendPixel(addrLeft, color);
     }
   }
 }
 
 /**
- * Draw a line using Bresenham's algorithm
+ * Draw a line using Bresenham's algorithm with alpha blending
  * @param x0 Starting X coordinate
  * @param y0 Starting Y coordinate
  * @param x1 Ending X coordinate
  * @param y1 Ending Y coordinate
- * @param color ABGR color value
+ * @param color ABGR color value (supports alpha channel for transparency)
  */
 export function drawLine(
   x0: i32, y0: i32,
@@ -203,8 +245,6 @@ export function drawLine(
     }
   }
 
-  const colorValue = color | 0xff000000;
-
   let dx = x1 - x0;
   let dy = y1 - y0;
 
@@ -219,7 +259,7 @@ export function drawLine(
   const indexIncX = sx;
   const indexIncY = sy * SCREEN_WIDTH;
   while (true) {
-    store<u32>((index << 2) as usize, colorValue);
+    blendPixel((index << 2) as usize, color);
 
     if (x0 == x1 && y0 == y1) {
       break;
@@ -240,27 +280,25 @@ export function drawLine(
 }
 
 /**
- * Draw a filled circle using midpoint algorithm
+ * Draw a filled circle using midpoint algorithm with alpha blending
  * @param cx Center X coordinate
  * @param cy Center Y coordinate
  * @param r Radius in pixels
- * @param color ABGR color value
+ * @param color ABGR color value (supports alpha channel for transparency)
  */
 export function fillCircle(cx: i32, cy: i32, r: i32, color: u32): void {
   if (r < 0) return;
 
-  const colorValue = color | 0xff000000;
-
   if (r == 0) {
     if (cx < 0 || cx >= SCREEN_WIDTH || cy < 0 || cy >= SCREEN_HEIGHT) return;
     const addr = ((cy * SCREEN_WIDTH + cx) << 2) as usize;
-    store<u32>(addr, colorValue);
+    blendPixel(addr, color);
     return;
   }
 
   const rowWidth = SCREEN_WIDTH;
 
-  function drawSpan(y: i32, xStart: i32, xEnd: i32, colorValue: u32): void {
+  function drawSpan(y: i32, xStart: i32, xEnd: i32, col: u32): void {
     if (y < 0 || y >= SCREEN_HEIGHT) return;
     let xs = xStart;
     let xe = xEnd;
@@ -271,7 +309,7 @@ export function fillCircle(cx: i32, cy: i32, r: i32, color: u32): void {
     let addr = ((y * rowWidth + xs) << 2) as usize;
     const count = xe - xs + 1;
     for (let i: i32 = 0; i < count; i++) {
-      store<u32>(addr, colorValue);
+      blendPixel(addr, col);
       addr += 4;
     }
   }
@@ -281,12 +319,12 @@ export function fillCircle(cx: i32, cy: i32, r: i32, color: u32): void {
   let err: i32 = 1 - r;
 
   while (x >= y) {
-    drawSpan(cy + y, cx - x, cx + x, colorValue);
-    drawSpan(cy - y, cx - x, cx + x, colorValue);
+    drawSpan(cy + y, cx - x, cx + x, color);
+    drawSpan(cy - y, cx - x, cx + x, color);
 
     if (x != y) {
-      drawSpan(cy + x, cx - y, cx + y, colorValue);
-      drawSpan(cy - x, cx - y, cx + y, colorValue);
+      drawSpan(cy + x, cx - y, cx + y, color);
+      drawSpan(cy - x, cx - y, cx + y, color);
     }
 
     y++;
@@ -300,16 +338,15 @@ export function fillCircle(cx: i32, cy: i32, r: i32, color: u32): void {
 }
 
 /**
- * Draw a circle outline using midpoint algorithm
+ * Draw a circle outline using midpoint algorithm with alpha blending
  * @param cx Center X coordinate
  * @param cy Center Y coordinate
  * @param r Radius in pixels
- * @param color ABGR color value
+ * @param color ABGR color value (supports alpha channel for transparency)
  */
 export function drawCircle(cx: i32, cy: i32, r: i32, color: u32): void {
   if (r < 0) return;
 
-  const colorValue = color | 0xff000000;
   const rowWidth = SCREEN_WIDTH;
 
   let x: i32 = r;
@@ -326,16 +363,16 @@ export function drawCircle(cx: i32, cy: i32, r: i32, color: u32): void {
       const rowBase = (yTop * rowWidth) as usize;
       const x1 = cx + x;
       const x2 = cx - x;
-      if (x1 >= 0 && x1 < SCREEN_WIDTH) store<u32>(((rowBase + x1) << 2) as usize, colorValue);
-      if (x2 >= 0 && x2 < SCREEN_WIDTH) store<u32>(((rowBase + x2) << 2) as usize, colorValue);
+      if (x1 >= 0 && x1 < SCREEN_WIDTH) blendPixel(((rowBase + x1) << 2) as usize, color);
+      if (x2 >= 0 && x2 < SCREEN_WIDTH) blendPixel(((rowBase + x2) << 2) as usize, color);
     }
 
     if (yBottom != yTop && yBottom >= 0 && yBottom < SCREEN_HEIGHT) {
       const rowBase = (yBottom * rowWidth) as usize;
       const x1 = cx + x;
       const x2 = cx - x;
-      if (x1 >= 0 && x1 < SCREEN_WIDTH) store<u32>(((rowBase + x1) << 2) as usize, colorValue);
-      if (x2 >= 0 && x2 < SCREEN_WIDTH) store<u32>(((rowBase + x2) << 2) as usize, colorValue);
+      if (x1 >= 0 && x1 < SCREEN_WIDTH) blendPixel(((rowBase + x1) << 2) as usize, color);
+      if (x2 >= 0 && x2 < SCREEN_WIDTH) blendPixel(((rowBase + x2) << 2) as usize, color);
     }
 
     if (x != y) {
@@ -343,16 +380,16 @@ export function drawCircle(cx: i32, cy: i32, r: i32, color: u32): void {
         const rowBase = (yRight * rowWidth) as usize;
         const x1 = cx + y;
         const x2 = cx - y;
-        if (x1 >= 0 && x1 < SCREEN_WIDTH) store<u32>(((rowBase + x1) << 2) as usize, colorValue);
-        if (x2 >= 0 && x2 < SCREEN_WIDTH) store<u32>(((rowBase + x2) << 2) as usize, colorValue);
+        if (x1 >= 0 && x1 < SCREEN_WIDTH) blendPixel(((rowBase + x1) << 2) as usize, color);
+        if (x2 >= 0 && x2 < SCREEN_WIDTH) blendPixel(((rowBase + x2) << 2) as usize, color);
       }
 
       if (yLeft >= 0 && yLeft < SCREEN_HEIGHT) {
         const rowBase = (yLeft * rowWidth) as usize;
         const x1 = cx + y;
         const x2 = cx - y;
-        if (x1 >= 0 && x1 < SCREEN_WIDTH) store<u32>(((rowBase + x1) << 2) as usize, colorValue);
-        if (x2 >= 0 && x2 < SCREEN_WIDTH) store<u32>(((rowBase + x2) << 2) as usize, colorValue);
+        if (x1 >= 0 && x1 < SCREEN_WIDTH) blendPixel(((rowBase + x1) << 2) as usize, color);
+        if (x2 >= 0 && x2 < SCREEN_WIDTH) blendPixel(((rowBase + x2) << 2) as usize, color);
       }
     }
 
