@@ -8,18 +8,22 @@ import {
   getI32,
   getU16,
   getU8,
+  toColor,
   warni,
 } from "../../sdk";
 
 import {
+  beacons,
   EXIT_RADIUS,
   getTargetShip,
   HUB_RADIUS,
+  MAX_BEACONS,
   MAX_EDGES,
   MAX_PLAYER_SHIPS,
   MemLayout,
   NUM_CLUSTERS,
   playerShips,
+  SCAN_RADIUS,
   ShipType,
   STAR_RADIUS,
   TOTAL_STARS,
@@ -131,9 +135,9 @@ export function drawStarmap(): void {
           c(0xffffff),
         );
       } else if (ship.shipType == ShipType.SURVEY_CRUISER) {
-        // Survey Cruiser: Green hollow circle
-        drawCircle(shipStar.x, shipStar.y, 4, c(0x00ff00));
-        drawCircle(shipStar.x, shipStar.y, 3, c(0x00ff00));
+        // Survey Cruiser: Purple hollow circle
+        drawCircle(shipStar.x, shipStar.y, 4, c(0xaa00ff));
+        drawCircle(shipStar.x, shipStar.y, 3, c(0xaa00ff));
       } else if (ship.shipType == ShipType.BEACON_TENDER) {
         // Beacon Tender: Yellow filled triangle (approximated with lines)
         const size: i32 = 5;
@@ -188,6 +192,96 @@ export function drawStarmap(): void {
             outlineSize,
             c(0xffffff),
           );
+        }
+      }
+    }
+  }
+
+  // Draw scan radius effect if scan just performed
+  const scanTimer = getI32(MemLayout.SCAN_TIMER);
+  const scanResult = getI32(MemLayout.SCAN_RESULT);
+  // Show green scan only during first 60 frames based on detection result
+  // Target detected (starts at 180): show green from 180-121
+  // No contact (starts at 120): show green from 120-61
+  const justScanned =
+    (scanResult >= 0 && scanTimer > 120) || (scanResult == -1 && scanTimer > 60);
+  if (justScanned) {
+    // Show scan radius expanding (30 frames) then fading (30 frames) = 1 second total
+    const activeIndex = getI32(MemLayout.ACTIVE_SHIP_INDEX);
+    const activeShip = playerShips.get(activeIndex);
+    if (activeShip.shipType == ShipType.SURVEY_CRUISER) {
+      const shipStarIndex = activeShip.currentStarIndex;
+      if (shipStarIndex >= 0 && shipStarIndex < numStars) {
+        const shipStar = stars.get(shipStarIndex);
+        // Calculate animation phase (0-59) based on which timer range
+        const scanPhase = scanResult >= 0 ? 180 - scanTimer : 120 - scanTimer;
+
+        if (scanPhase < 30) {
+          // Phase 1: Expanding from center (0-29 frames)
+          const radius = (scanPhase * SCAN_RADIUS) / 30;
+          drawCircle(shipStar.x, shipStar.y, radius, c(0x00ff00));
+          if (scanPhase < 15) {
+            drawCircle(shipStar.x, shipStar.y, radius - 2, c(0x00ff00));
+          }
+        } else {
+          // Phase 2: Full size with alpha fade (30-59 frames)
+          const fadePhase = scanPhase - 30; // 0-29
+          const alpha = (255 * (30 - fadePhase)) / 30; // 255->0
+          const color = toColor(0, 255, 0, alpha as u8);
+          drawCircle(shipStar.x, shipStar.y, SCAN_RADIUS, color);
+          if (fadePhase < 15) {
+            const alphaInner = (255 * (15 - fadePhase)) / 15; // 255->0
+            const colorInner = toColor(0, 255, 0, alphaInner as u8);
+            drawCircle(shipStar.x, shipStar.y, SCAN_RADIUS - 2, colorInner);
+          }
+        }
+      }
+    }
+  }
+
+  // Highlight target star if scan detected it (after pulse animation)
+  if (scanTimer > 0 && scanTimer <= 120) {
+    if (scanResult >= 0 && scanResult < numStars) {
+      const targetStar = stars.get(scanResult);
+      // Pulsing ring effect (period: 40 frames)
+      const highlightPhase = (120 - scanTimer) % 40;
+      const pulseExpand = highlightPhase < 20;
+      const baseRadius = pulseExpand
+        ? 8 + highlightPhase / 2
+        : 8 + (40 - highlightPhase) / 2;
+      // Draw red pulsing rings
+      drawCircle(targetStar.x, targetStar.y, baseRadius, c(0xff0000));
+      drawCircle(targetStar.x, targetStar.y, baseRadius + 2, c(0xff0000));
+      drawCircle(targetStar.x, targetStar.y, baseRadius + 4, c(0xff3333));
+    }
+  }
+
+  // Draw beacons (deployed sensors)
+  const pulsePhase = turnCounter % 30;
+  const beaconPulse = pulsePhase < 15; // Alternate flash
+
+  for (let i: i32 = 0; i < MAX_BEACONS; i++) {
+    const beacon = beacons.get(i);
+    if (beacon.isActive == 1) {
+      const beaconStarIndex = beacon.starIndex;
+      if (beaconStarIndex >= 0 && beaconStarIndex < numStars) {
+        const beaconStar = stars.get(beaconStarIndex);
+
+        if (beacon.isDetecting == 1) {
+          // Target detected: red alert beacon
+          fillCircle(beaconStar.x, beaconStar.y, 3, c(0xff0000));
+          // Draw red alert ring
+          drawCircle(beaconStar.x, beaconStar.y, 5, c(0xff0000));
+          if (beaconPulse) {
+            drawCircle(beaconStar.x, beaconStar.y, 7, c(0xff0000));
+          }
+        } else {
+          // Normal beacon: yellow
+          fillCircle(beaconStar.x, beaconStar.y, 3, c(0xffdd00));
+          // Draw pulsing outline
+          if (beaconPulse) {
+            drawCircle(beaconStar.x, beaconStar.y, 5, c(0xffdd00));
+          }
         }
       }
     }

@@ -28,12 +28,19 @@ export const STARTING_DEPLOYMENT_KITS: i32 = 3;
 // Fleet constants
 export const MAX_PLAYER_SHIPS: i32 = 3;
 
+// Detection constants
+export const MAX_BEACONS: i32 = 10;
+export const BEACON_RANGE: i32 = 45; // Detection radius in pixels
+export const SCAN_RADIUS: i32 = 70; // Survey Cruiser active scan range
+export const SCAN_COST: i32 = 2; // Sensor Energy cost for active scan
+
 // Element sizes for @unmanaged classes (aligned to 4 bytes)
 const STAR_SIZE: u32 = 16; // x(4) + y(4) + degree(4) + isHub(1) + isExit(1) + padding(2) = 16
 const EDGE_SIZE: u32 = 8; // a(4) + b(4) = 8
 const CLUSTER_SIZE: u32 = 8; // x(4) + y(4) = 8
 const TARGET_SHIP_SIZE: u32 = 8; // currentStarIndex(4) + isActive(1) + padding(3) = 8
 const PLAYER_SHIP_SIZE: u32 = 12; // shipType(4) + currentStarIndex(4) + movesThisTurn(4) = 12
+const BEACON_SIZE: u32 = 8; // starIndex(4) + isActive(1) + isDetecting(1) + padding(2) = 8
 
 // Visual constants
 export const STAR_RADIUS: i32 = 2;
@@ -139,13 +146,27 @@ export class PlayerShip {
   currentStarIndex: i32; // Current star location
   movesThisTurn: i32; // Number of jumps used this turn
 
-  constructor(
-    type: i32 = ShipType.INTERCEPTOR,
-    starIndex: i32 = 0,
-  ) {
+  constructor(type: i32 = ShipType.INTERCEPTOR, starIndex: i32 = 0) {
     this.shipType = type;
     this.currentStarIndex = starIndex;
     this.movesThisTurn = 0;
+  }
+}
+
+/**
+ * Beacon entity
+ * Persistent sensor placed by Beacon Tender ships
+ */
+@unmanaged
+export class Beacon {
+  starIndex: i32; // Star where beacon is deployed
+  isActive: u8; // 1 if deployed, 0 if slot is empty
+  isDetecting: u8; // 1 if target is within range, 0 otherwise
+
+  constructor(starIndex: i32 = 0, isActive: u8 = 0) {
+    this.starIndex = starIndex;
+    this.isActive = isActive;
+    this.isDetecting = 0;
   }
 }
 
@@ -166,14 +187,18 @@ export enum MemLayout {
   // Target ship ends at 2436 + 8 = 2444
   PLAYER_SHIPS_START = 2444, // PlayerShipArray: 4 bytes (elementSize) + 3 ships × 12 bytes = 40 bytes
   // Player ships end at 2444 + 40 = 2484
-  ACTIVE_SHIP_INDEX = 2484, // i32 (4 bytes)
-  SENSOR_ENERGY = 2488, // i32 (4 bytes)
-  COMMAND_POINTS = 2492, // i32 (4 bytes)
-  DEPLOYMENT_KITS = 2496, // i32 (4 bytes)
-  TURN_COUNTER = 2500, // i32 (4 bytes) - for animation/pulsing
-  // End at 2504
-  TEMP_WORK_START = 2504, // Working memory for algorithms (1024 bytes)
-  // Total memory: ~3528 bytes
+  BEACONS_START = 2484, // BeaconArray: 4 bytes (elementSize) + 10 beacons × 8 bytes = 84 bytes
+  // Beacons end at 2484 + 84 = 2568
+  ACTIVE_SHIP_INDEX = 2568, // i32 (4 bytes)
+  SENSOR_ENERGY = 2572, // i32 (4 bytes)
+  COMMAND_POINTS = 2576, // i32 (4 bytes)
+  DEPLOYMENT_KITS = 2580, // i32 (4 bytes)
+  TURN_COUNTER = 2584, // i32 (4 bytes) - for animation/pulsing
+  SCAN_RESULT = 2588, // i32 (4 bytes) - target star index if detected, -1 if no contact, -2 if no active scan
+  SCAN_TIMER = 2592, // i32 (4 bytes) - countdown frames for displaying scan result
+  // End at 2596
+  TEMP_WORK_START = 2596, // Working memory for algorithms (1024 bytes)
+  // Total memory: ~3620 bytes
 }
 
 export type StarArray = FixedArrayOfObj<Star>;
@@ -204,6 +229,13 @@ export const playerShips: PlayerShipArray =
     PLAYER_SHIP_SIZE,
     true,
   );
+
+export type BeaconArray = FixedArrayOfObj<Beacon>;
+export const beacons: BeaconArray = FixedArrayOfObj.fromAddress<Beacon>(
+  RAM_START + MemLayout.BEACONS_START,
+  BEACON_SIZE,
+  true,
+);
 
 // Target ship instance (reinterprets memory at TARGET_SHIP address)
 export function getTargetShip(): TargetShip {

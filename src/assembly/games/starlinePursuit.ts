@@ -22,24 +22,30 @@ import {
 
 import { drawStarmap } from "./starlinePursuit/drawStarmap";
 import { generateStarmap } from "./starlinePursuit/generateStarmap";
+import { moveTarget } from "./starlinePursuit/moveTarget";
 import {
+  BEACON_RANGE,
+  beacons,
   edges,
   GameState,
   getTargetShip,
+  MAX_BEACONS,
   MAX_COMMAND_POINTS,
   MAX_EDGES,
   MAX_PLAYER_SHIPS,
   MAX_SENSOR_ENERGY,
   MemLayout,
   playerShips,
+  SCAN_COST,
+  SCAN_RADIUS,
   SE_REGEN_PER_TURN,
   ShipType,
   stars,
   STARTING_COMMAND_POINTS,
   STARTING_DEPLOYMENT_KITS,
   STARTING_SENSOR_ENERGY,
-  TOTAL_STARS,
 } from "./starlinePursuit/types";
+import { starsDist2 } from "./starlinePursuit/utils";
 
 // === Helper Functions ===
 
@@ -210,6 +216,16 @@ export function init(): void {
   setI32(MemLayout.DEPLOYMENT_KITS, STARTING_DEPLOYMENT_KITS);
   setI32(MemLayout.ACTIVE_SHIP_INDEX, 0); // Start with interceptor
   setI32(MemLayout.TURN_COUNTER, 0);
+  setI32(MemLayout.SCAN_RESULT, -2); // No active scan
+  setI32(MemLayout.SCAN_TIMER, 0);
+
+  // Initialize all beacons to inactive
+  for (let i: i32 = 0; i < MAX_BEACONS; i++) {
+    const beacon = beacons.get(i);
+    beacon.isActive = 0;
+    beacon.starIndex = 0;
+    beacon.isDetecting = 0;
+  }
 
   logi("Fleet deployed - Target at star {}", targetShip.currentStarIndex, 0, 0);
   log("Starmap ready");
@@ -232,6 +248,12 @@ export function update(): void {
   const turnCounter = getI32(MemLayout.TURN_COUNTER);
   setI32(MemLayout.TURN_COUNTER, turnCounter + 1);
 
+  // Decrement scan timer if active
+  const scanTimer = getI32(MemLayout.SCAN_TIMER);
+  if (scanTimer > 0) {
+    setI32(MemLayout.SCAN_TIMER, scanTimer - 1);
+  }
+
   // Get active ship
   let activeIndex = getI32(MemLayout.ACTIVE_SHIP_INDEX);
   const activeShip = playerShips.get(activeIndex);
@@ -246,6 +268,94 @@ export function update(): void {
       playerShips.get(activeIndex).currentStarIndex,
     );
     return;
+  }
+
+  // A button: Ship-specific actions
+  if (buttonPressed(Button.A)) {
+    // Beacon Tender: Deploy beacon
+    if (activeShip.shipType == ShipType.BEACON_TENDER) {
+      const deploymentKits = getI32(MemLayout.DEPLOYMENT_KITS);
+      if (deploymentKits > 0) {
+        // Check if beacon already exists at this star
+        let alreadyDeployed = false;
+        for (let i: i32 = 0; i < MAX_BEACONS; i++) {
+          const beacon = beacons.get(i);
+          if (
+            beacon.isActive == 1 &&
+            beacon.starIndex == activeShip.currentStarIndex
+          ) {
+            alreadyDeployed = true;
+            break;
+          }
+        }
+
+        if (alreadyDeployed) {
+          log("Beacon already deployed here");
+        } else {
+          // Find empty beacon slot
+          let deployed = false;
+          for (let i: i32 = 0; i < MAX_BEACONS; i++) {
+            const beacon = beacons.get(i);
+            if (beacon.isActive == 0) {
+              beacon.starIndex = activeShip.currentStarIndex;
+              beacon.isActive = 1;
+              beacon.isDetecting = 0;
+              setI32(MemLayout.DEPLOYMENT_KITS, deploymentKits - 1);
+              logi(
+                "Beacon deployed at star {}",
+                activeShip.currentStarIndex,
+                0,
+                0,
+              );
+              deployed = true;
+              break;
+            }
+          }
+          if (!deployed) {
+            log("Maximum beacons deployed");
+          }
+        }
+      } else {
+        log("No deployment kits available");
+      }
+      return;
+    }
+
+    // Survey Cruiser: Active scan
+    if (activeShip.shipType == ShipType.SURVEY_CRUISER) {
+      const sensorEnergy = getI32(MemLayout.SENSOR_ENERGY);
+      if (sensorEnergy >= SCAN_COST) {
+        setI32(MemLayout.SENSOR_ENERGY, sensorEnergy - SCAN_COST);
+
+        // Check if target is within scan radius
+        const targetShip = getTargetShip();
+        const range2 = SCAN_RADIUS * SCAN_RADIUS;
+        const distance2 = starsDist2(
+          activeShip.currentStarIndex,
+          targetShip.currentStarIndex,
+        );
+
+        if (distance2 <= range2) {
+          // Store scan result for visual display
+          setI32(MemLayout.SCAN_RESULT, targetShip.currentStarIndex);
+          setI32(MemLayout.SCAN_TIMER, 180); // Show for 3 seconds (60 fps)
+          logi(
+            "TARGET DETECTED AT STAR {}!",
+            targetShip.currentStarIndex,
+            0,
+            0,
+          );
+        } else {
+          // No contact
+          setI32(MemLayout.SCAN_RESULT, -1);
+          setI32(MemLayout.SCAN_TIMER, 120); // Show for 2 seconds
+          log("Scan complete - No contact");
+        }
+      } else {
+        log("Insufficient Sensor Energy");
+      }
+      return;
+    }
   }
 
   // Check win condition (any ship reaches target)
@@ -276,6 +386,30 @@ export function update(): void {
 
     // Refresh Command Points
     setI32(MemLayout.COMMAND_POINTS, MAX_COMMAND_POINTS);
+
+    // Update target AI
+    moveTarget();
+
+    // Update beacon detection states
+    const targetShip = getTargetShip();
+    const range2 = BEACON_RANGE * BEACON_RANGE;
+    for (let i: i32 = 0; i < MAX_BEACONS; i++) {
+      const beacon = beacons.get(i);
+      if (beacon.isActive == 1) {
+        const d2 = starsDist2(beacon.starIndex, targetShip.currentStarIndex);
+        beacon.isDetecting = d2 <= range2 ? 1 : 0;
+      }
+    }
+
+    // Check if target was cornered and moved onto a player ship (should never happen with proper scoring)
+    for (let i: i32 = 0; i < MAX_PLAYER_SHIPS; i++) {
+      const ship = playerShips.get(i);
+      if (ship.currentStarIndex == targetShip.currentStarIndex) {
+        setU8(MemLayout.GAME_STATE, GameState.WON as u8);
+        log("Target cornered! Victory!");
+        return;
+      }
+    }
 
     log("Turn ended - resources refreshed");
     return;
@@ -324,6 +458,7 @@ export function draw(): void {
   drawStarmap();
 
   const state = getU8(MemLayout.GAME_STATE);
+  const turnCounter = getI32(MemLayout.TURN_COUNTER);
   const activeIndex = getI32(MemLayout.ACTIVE_SHIP_INDEX);
   const activeShip = playerShips.get(activeIndex);
   // const numStars = getU8(MemLayout.NUM_STARS);
@@ -345,6 +480,16 @@ export function draw(): void {
   drawString(160, 1, "DK:", c(0xffffff));
   drawNumber(182, 1, deploymentKits, c(0xffaa00));
 
+  // Count active beacons
+  let activeBeacons: i32 = 0;
+  for (let i: i32 = 0; i < MAX_BEACONS; i++) {
+    if (beacons.get(i).isActive == 1) {
+      activeBeacons++;
+    }
+  }
+  drawString(230, 1, "B:", c(0xffffff));
+  drawNumber(246, 1, activeBeacons, c(0xffdd00));
+
   // Draw active ship info (second row)
   const shipTypeName = getShipTypeName(activeShip.shipType);
   drawString(1, 229, shipTypeName, c(0xaaccff));
@@ -357,6 +502,18 @@ export function draw(): void {
   drawNumber(146, 229, movesRemaining, c(0xaaccff));
   drawString(154, 229, "/", c(0x666666));
   drawNumber(162, 229, moveLimit, c(0x666666));
+
+  // Show ship-specific action
+  if (state == GameState.PLAYING) {
+    if (activeShip.shipType == ShipType.BEACON_TENDER) {
+      drawString(200, 229, "A:DEPLOY BEACON", c(0xffaa00));
+    } else if (activeShip.shipType == ShipType.SURVEY_CRUISER) {
+      drawString(200, 229, "A:SCAN", c(0x00ff00));
+      drawString(260, 229, "(", c(0x666666));
+      drawNumber(268, 229, SCAN_COST, c(0x666666));
+      drawString(276, 229, "SE)", c(0x666666));
+    }
+  }
 
   // Draw map info (bottom)
   // drawString(10, 229, "STARS:", c(0xaaaaaa));
