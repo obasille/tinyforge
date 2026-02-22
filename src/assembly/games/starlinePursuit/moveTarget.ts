@@ -1,4 +1,4 @@
-import { RAM_START, getU16, log, logi, randomRange } from "../../sdk";
+import { RAM_START, log, logi, randomRange } from "../../sdk";
 import { FixedArray } from "../../sdk/arrays";
 import {
   BEACON_RANGE,
@@ -7,7 +7,8 @@ import {
   MemLayout,
   beacons,
   edges,
-  getTargetShip,
+  gameState,
+  targetShip,
   playerShips,
   stars,
 } from "./types";
@@ -34,7 +35,7 @@ function isStarDetected(starIndex: i32): bool {
  * Stores neighbor indices in provided array, returns count
  */
 function getAllNeighbors(starIndex: i32, neighbors: FixedArray<i32>): i32 {
-  const numEdges = getU16(MemLayout.NUM_EDGES) as i32;
+  const numEdges = gameState.numEdges as i32;
   let count: i32 = 0;
 
   for (let i: i32 = 0; i < numEdges; i++) {
@@ -124,12 +125,11 @@ function scoreNeighbor(neighborIndex: i32, currentDistance: i32): f32 {
  * Called at the end of each turn
  */
 export function moveTarget(): void {
-  const targetShip = getTargetShip();
   const currentStar = targetShip.currentStarIndex;
 
   // Use temp memory for neighbor list
   const neighbors = FixedArray.fromAddress<i32>(
-    RAM_START + MemLayout.TEMP_WORK_START,
+    RAM_START + MemLayout.TEMP_WORK,
   );
   const neighborCount = getAllNeighbors(currentStar, neighbors);
 

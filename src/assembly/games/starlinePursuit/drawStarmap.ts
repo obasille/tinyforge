@@ -5,9 +5,6 @@ import {
   drawRect,
   fillCircle,
   fillRect,
-  getI32,
-  getU16,
-  getU8,
   toColor,
   warni,
 } from "../../sdk";
@@ -15,12 +12,12 @@ import {
 import {
   beacons,
   EXIT_RADIUS,
-  getTargetShip,
+  gameState,
+  targetShip,
   HUB_RADIUS,
   MAX_BEACONS,
   MAX_EDGES,
   MAX_PLAYER_SHIPS,
-  MemLayout,
   NUM_CLUSTERS,
   playerShips,
   SCAN_RADIUS,
@@ -53,8 +50,8 @@ function drawClusterCenters(): void {
  * Draw the complete starmap (stars and lanes)
  */
 export function drawStarmap(): void {
-  const numStars = getU8(MemLayout.NUM_STARS) as i32;
-  const numEdges = getU16(MemLayout.NUM_EDGES) as i32;
+  const numStars = gameState.numStars as i32;
+  const numEdges = gameState.numEdges as i32;
 
   // Safety check: ensure values are reasonable
   if (numStars <= 0 || numStars > TOTAL_STARS) {
@@ -105,8 +102,8 @@ export function drawStarmap(): void {
   }
 
   // Draw player ships with distinct visuals
-  const activeIndex = getI32(MemLayout.ACTIVE_SHIP_INDEX);
-  const turnCounter = getI32(MemLayout.TURN_COUNTER);
+  const activeIndex = gameState.activeShipIndex;
+  const frameCounter = gameState.frameCounter;
 
   for (let i: i32 = 0; i < MAX_PLAYER_SHIPS; i++) {
     const ship = playerShips.get(i);
@@ -180,7 +177,7 @@ export function drawStarmap(): void {
       // Draw pulsing outline for active ship
       if (isActive) {
         // Pulse between frames 0-30
-        const pulsePhase = turnCounter % 30;
+        const pulsePhase = frameCounter % 30;
         const shouldDraw = pulsePhase < 15; // Draw for first half of cycle
 
         if (shouldDraw) {
@@ -198,16 +195,16 @@ export function drawStarmap(): void {
   }
 
   // Draw scan radius effect if scan just performed
-  const scanTimer = getI32(MemLayout.SCAN_TIMER);
-  const scanResult = getI32(MemLayout.SCAN_RESULT);
+  const scanTimer = gameState.scanTimer;
+  const scanResult = gameState.scanResult;
   // Show green scan only during first 60 frames based on detection result
   // Target detected (starts at 180): show green from 180-121
   // No contact (starts at 120): show green from 120-61
   const justScanned =
-    (scanResult >= 0 && scanTimer > 120) || (scanResult == -1 && scanTimer > 60);
+    (scanResult >= 0 && scanTimer > 120) ||
+    (scanResult == -1 && scanTimer > 60);
   if (justScanned) {
     // Show scan radius expanding (30 frames) then fading (30 frames) = 1 second total
-    const activeIndex = getI32(MemLayout.ACTIVE_SHIP_INDEX);
     const activeShip = playerShips.get(activeIndex);
     if (activeShip.shipType == ShipType.SURVEY_CRUISER) {
       const shipStarIndex = activeShip.currentStarIndex;
@@ -257,7 +254,7 @@ export function drawStarmap(): void {
   }
 
   // Draw beacons (deployed sensors)
-  const pulsePhase = turnCounter % 30;
+  const pulsePhase = frameCounter % 30;
   const beaconPulse = pulsePhase < 15; // Alternate flash
 
   for (let i: i32 = 0; i < MAX_BEACONS; i++) {
@@ -288,7 +285,6 @@ export function drawStarmap(): void {
   }
 
   // Draw target ship (enemy ship - red hollow square)
-  const targetShip = getTargetShip();
   if (targetShip.isActive != 0) {
     const targetStarIndex = targetShip.currentStarIndex;
 

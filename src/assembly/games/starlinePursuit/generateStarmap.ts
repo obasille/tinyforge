@@ -4,8 +4,6 @@ import {
   logi,
   RAM_START,
   randomRange,
-  setU16,
-  setU8,
   warni,
 } from "../../sdk";
 
@@ -16,6 +14,7 @@ import {
   edges,
   EXIT_COUNT,
   EXTRA_LOOPS,
+  gameState,
   HUB_COUNT,
   K_NEIGHBORS,
   MAP_HEIGHT,
@@ -404,13 +403,13 @@ function connectLocalNeighbors(
 
   // Working arrays for candidate neighbors
   const candidateIdx = FixedArray.fromAddress<i32>(
-    RAM_START + MemLayout.TEMP_WORK_START + 32,
+    RAM_START + MemLayout.TEMP_WORK + 32,
   );
   const candidateDist = FixedArray.fromAddress<i32>(
-    RAM_START + MemLayout.TEMP_WORK_START + 128,
+    RAM_START + MemLayout.TEMP_WORK + 128,
   );
   const nearestIdx = FixedArray.fromAddress<i32>(
-    RAM_START + MemLayout.TEMP_WORK_START + 224,
+    RAM_START + MemLayout.TEMP_WORK + 224,
   );
 
   // For each star, find k nearest neighbors and connect
@@ -518,7 +517,7 @@ function floodFillComponent(
   visited: FixedArray<u8>,
 ): i32 {
   const stack = FixedArray.fromAddress<i32>(
-    RAM_START + MemLayout.TEMP_WORK_START + 256,
+    RAM_START + MemLayout.TEMP_WORK + 256,
   );
   let stackSize = 0;
   let compSize = 0;
@@ -567,7 +566,7 @@ function connectComponents(
     iterations++;
     // Reset visited array
     const visited = FixedArray.fromAddress<u8>(
-      RAM_START + MemLayout.TEMP_WORK_START + 512,
+      RAM_START + MemLayout.TEMP_WORK + 512,
     );
     for (let i = 0; i < numStars; i++) {
       visited.set(i, 0);
@@ -575,10 +574,10 @@ function connectComponents(
 
     // Find all components
     const comp1 = FixedArray.fromAddress<i32>(
-      RAM_START + MemLayout.TEMP_WORK_START + 600,
+      RAM_START + MemLayout.TEMP_WORK + 600,
     );
     const comp2 = FixedArray.fromAddress<i32>(
-      RAM_START + MemLayout.TEMP_WORK_START + 700,
+      RAM_START + MemLayout.TEMP_WORK + 700,
     );
     let comp1Size = 0;
     let comp2Size = 0;
@@ -959,7 +958,8 @@ export function generateStarmap(): void {
 
   // Step 1: Place stars evenly using Poisson-like rejection
   generateStars(stars, gridCols, gridRows, MIN_STAR_DISTANCE);
-  setU8(MemLayout.NUM_STARS, numStars as u8);
+
+  gameState.numStars = numStars as u8;
 
   // Step 2: Apply cluster bias for visible clusters
   applyClusterBias(stars, numStars, NUM_CLUSTERS, CLUSTER_STRENGTH);
@@ -984,7 +984,7 @@ export function generateStarmap(): void {
   // Step 6: Add extra loops for multiple routes
   numEdges = addLoops(stars, edges, numStars, numEdges, EXTRA_LOOPS);
 
-  setU16(MemLayout.NUM_EDGES, numEdges as u16);
+  gameState.numEdges = numEdges as u16;
 
   // Step 7: Mark hubs and exits
   markHubs(stars, numStars, HUB_COUNT);

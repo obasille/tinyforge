@@ -9,15 +9,10 @@ import {
   drawNumber,
   drawString,
   FixedArray,
-  getI32,
-  getU16,
-  getU8,
   log,
   logi,
   RAM_START,
   randomRange,
-  setI32,
-  setU8,
 } from "../sdk";
 
 import { drawStarmap } from "./starlinePursuit/drawStarmap";
@@ -27,8 +22,9 @@ import {
   BEACON_RANGE,
   beacons,
   edges,
-  GameState,
-  getTargetShip,
+  GamePhase,
+  gameState,
+  targetShip,
   MAX_BEACONS,
   MAX_COMMAND_POINTS,
   MAX_EDGES,
@@ -77,7 +73,7 @@ function getShipTypeName(shipType: i32): string {
  */
 function findNeighborInDirection(starIndex: i32, direction: i32): i32 {
   const currentStar = stars.get(starIndex);
-  const numEdges = getU16(MemLayout.NUM_EDGES) as i32;
+  const numEdges = gameState.numEdges as i32;
 
   let bestIndex: i32 = -1;
   let bestScore: f32 = -999999.0;
@@ -133,22 +129,21 @@ export function init(): void {
   log("Starline Pursuit: Initializing fleet");
 
   // Set initial game state
-  setU8(MemLayout.GAME_STATE, GameState.PLAYING as u8);
+  gameState.phase = GamePhase.PLAYING as u8;
 
   // Generate the starmap
   generateStarmap();
 
-  const numStars = getU8(MemLayout.NUM_STARS) as i32;
+  const numStars = gameState.numStars as i32;
 
   // Initialize target ship at a random star position
-  const targetShip = getTargetShip();
   targetShip.currentStarIndex = randomRange(numStars);
   targetShip.isActive = 1;
 
   // Initialize player fleet (3 ships at random different positions)
   // Use temporary memory for tracking used stars during initialization
   const usedStars = FixedArray.fromAddress<i32>(
-    RAM_START + MemLayout.TEMP_WORK_START,
+    RAM_START + MemLayout.TEMP_WORK,
   );
   usedStars[0] = targetShip.currentStarIndex;
   let usedCount: i32 = 1;
@@ -211,13 +206,13 @@ export function init(): void {
   beacon.movesThisTurn = 0;
 
   // Initialize shared resources
-  setI32(MemLayout.SENSOR_ENERGY, STARTING_SENSOR_ENERGY);
-  setI32(MemLayout.COMMAND_POINTS, STARTING_COMMAND_POINTS);
-  setI32(MemLayout.DEPLOYMENT_KITS, STARTING_DEPLOYMENT_KITS);
-  setI32(MemLayout.ACTIVE_SHIP_INDEX, 0); // Start with interceptor
-  setI32(MemLayout.TURN_COUNTER, 0);
-  setI32(MemLayout.SCAN_RESULT, -2); // No active scan
-  setI32(MemLayout.SCAN_TIMER, 0);
+  gameState.sensorEnergy = STARTING_SENSOR_ENERGY;
+  gameState.commandPoints = STARTING_COMMAND_POINTS;
+  gameState.deploymentKits = STARTING_DEPLOYMENT_KITS;
+  gameState.activeShipIndex = 0; // Start with interceptor
+  gameState.frameCounter = 0;
+  gameState.scanResult = -2; // No active scan
+  gameState.scanTimer = 0;
 
   // Initialize all beacons to inactive
   for (let i: i32 = 0; i < MAX_BEACONS; i++) {
@@ -232,36 +227,33 @@ export function init(): void {
 }
 
 export function update(): void {
-  const state = getU8(MemLayout.GAME_STATE);
-  const targetShip = getTargetShip();
+  const state = gameState.phase;
 
   // Restart game on START button if won/lost
-  if (state != GameState.PLAYING && buttonPressed(Button.START)) {
+  if (state != GamePhase.PLAYING && buttonPressed(Button.START)) {
     init();
     return;
   }
 
   // Don't process game logic if not playing
-  if (state != GameState.PLAYING) return;
+  if (state != GamePhase.PLAYING) return;
 
-  // Increment turn counter (for animation)
-  const turnCounter = getI32(MemLayout.TURN_COUNTER);
-  setI32(MemLayout.TURN_COUNTER, turnCounter + 1);
+  // Increment frame counter (for animation)
+  gameState.frameCounter++;
 
   // Decrement scan timer if active
-  const scanTimer = getI32(MemLayout.SCAN_TIMER);
-  if (scanTimer > 0) {
-    setI32(MemLayout.SCAN_TIMER, scanTimer - 1);
+  if (gameState.scanTimer > 0) {
+    gameState.scanTimer--;
   }
 
   // Get active ship
-  let activeIndex = getI32(MemLayout.ACTIVE_SHIP_INDEX);
+  let activeIndex = gameState.activeShipIndex;
   const activeShip = playerShips.get(activeIndex);
 
   // B button: Switch active ship
   if (buttonPressed(Button.B)) {
     activeIndex = (activeIndex + 1) % MAX_PLAYER_SHIPS;
-    setI32(MemLayout.ACTIVE_SHIP_INDEX, activeIndex);
+    gameState.activeShipIndex = activeIndex;
     logi(
       "Switched to {} at star {}",
       activeIndex,
@@ -274,8 +266,7 @@ export function update(): void {
   if (buttonPressed(Button.A)) {
     // Beacon Tender: Deploy beacon
     if (activeShip.shipType == ShipType.BEACON_TENDER) {
-      const deploymentKits = getI32(MemLayout.DEPLOYMENT_KITS);
-      if (deploymentKits > 0) {
+      if (gameState.deploymentKits > 0) {
         // Check if beacon already exists at this star
         let alreadyDeployed = false;
         for (let i: i32 = 0; i < MAX_BEACONS; i++) {
@@ -300,7 +291,7 @@ export function update(): void {
               beacon.starIndex = activeShip.currentStarIndex;
               beacon.isActive = 1;
               beacon.isDetecting = 0;
-              setI32(MemLayout.DEPLOYMENT_KITS, deploymentKits - 1);
+              gameState.deploymentKits--;
               logi(
                 "Beacon deployed at star {}",
                 activeShip.currentStarIndex,
@@ -323,12 +314,10 @@ export function update(): void {
 
     // Survey Cruiser: Active scan
     if (activeShip.shipType == ShipType.SURVEY_CRUISER) {
-      const sensorEnergy = getI32(MemLayout.SENSOR_ENERGY);
-      if (sensorEnergy >= SCAN_COST) {
-        setI32(MemLayout.SENSOR_ENERGY, sensorEnergy - SCAN_COST);
+      if (gameState.sensorEnergy >= SCAN_COST) {
+        gameState.sensorEnergy -= SCAN_COST;
 
         // Check if target is within scan radius
-        const targetShip = getTargetShip();
         const range2 = SCAN_RADIUS * SCAN_RADIUS;
         const distance2 = starsDist2(
           activeShip.currentStarIndex,
@@ -337,8 +326,8 @@ export function update(): void {
 
         if (distance2 <= range2) {
           // Store scan result for visual display
-          setI32(MemLayout.SCAN_RESULT, targetShip.currentStarIndex);
-          setI32(MemLayout.SCAN_TIMER, 180); // Show for 3 seconds (60 fps)
+          gameState.scanResult = targetShip.currentStarIndex;
+          gameState.scanTimer = 180; // Show for 3 seconds (60 fps)
           logi(
             "TARGET DETECTED AT STAR {}!",
             targetShip.currentStarIndex,
@@ -347,8 +336,8 @@ export function update(): void {
           );
         } else {
           // No contact
-          setI32(MemLayout.SCAN_RESULT, -1);
-          setI32(MemLayout.SCAN_TIMER, 120); // Show for 2 seconds
+          gameState.scanResult = -1;
+          gameState.scanTimer = 120; // Show for 2 seconds
           log("Scan complete - No contact");
         }
       } else {
@@ -362,7 +351,7 @@ export function update(): void {
   for (let i: i32 = 0; i < MAX_PLAYER_SHIPS; i++) {
     const ship = playerShips.get(i);
     if (ship.currentStarIndex == targetShip.currentStarIndex) {
-      setU8(MemLayout.GAME_STATE, GameState.WON as u8);
+      gameState.phase = GamePhase.WON as u8;
       log("Victory! Target intercepted!");
       return;
     }
@@ -377,21 +366,17 @@ export function update(): void {
     }
 
     // Regenerate Sensor Energy
-    const currentSE = getI32(MemLayout.SENSOR_ENERGY);
-    const newSE = currentSE + SE_REGEN_PER_TURN;
-    setI32(
-      MemLayout.SENSOR_ENERGY,
-      newSE > MAX_SENSOR_ENERGY ? MAX_SENSOR_ENERGY : newSE,
-    );
+    const newSE = gameState.sensorEnergy + SE_REGEN_PER_TURN;
+    gameState.sensorEnergy =
+      newSE > MAX_SENSOR_ENERGY ? MAX_SENSOR_ENERGY : newSE;
 
     // Refresh Command Points
-    setI32(MemLayout.COMMAND_POINTS, MAX_COMMAND_POINTS);
+    gameState.commandPoints = MAX_COMMAND_POINTS;
 
     // Update target AI
     moveTarget();
 
     // Update beacon detection states
-    const targetShip = getTargetShip();
     const range2 = BEACON_RANGE * BEACON_RANGE;
     for (let i: i32 = 0; i < MAX_BEACONS; i++) {
       const beacon = beacons.get(i);
@@ -405,7 +390,7 @@ export function update(): void {
     for (let i: i32 = 0; i < MAX_PLAYER_SHIPS; i++) {
       const ship = playerShips.get(i);
       if (ship.currentStarIndex == targetShip.currentStarIndex) {
-        setU8(MemLayout.GAME_STATE, GameState.WON as u8);
+        gameState.phase = GamePhase.WON as u8;
         log("Target cornered! Victory!");
         return;
       }
@@ -443,7 +428,7 @@ export function update(): void {
 
       // Check win condition after movement
       if (activeShip.currentStarIndex == targetShip.currentStarIndex) {
-        setU8(MemLayout.GAME_STATE, GameState.WON as u8);
+        gameState.phase = GamePhase.WON as u8;
         log("Victory! Target intercepted!");
         return;
       }
@@ -457,17 +442,14 @@ export function draw(): void {
   // Draw the starmap
   drawStarmap();
 
-  const state = getU8(MemLayout.GAME_STATE);
-  const turnCounter = getI32(MemLayout.TURN_COUNTER);
-  const activeIndex = getI32(MemLayout.ACTIVE_SHIP_INDEX);
+  const state = gameState.phase;
+  const activeIndex = gameState.activeShipIndex;
   const activeShip = playerShips.get(activeIndex);
-  // const numStars = getU8(MemLayout.NUM_STARS);
-  // const numEdges = getU16(MemLayout.NUM_EDGES);
 
   // Draw shared resources (top left)
-  const sensorEnergy = getI32(MemLayout.SENSOR_ENERGY);
-  const commandPoints = getI32(MemLayout.COMMAND_POINTS);
-  const deploymentKits = getI32(MemLayout.DEPLOYMENT_KITS);
+  const sensorEnergy = gameState.sensorEnergy;
+  const commandPoints = gameState.commandPoints;
+  const deploymentKits = gameState.deploymentKits;
 
   drawString(10, 1, "SE:", c(0xffffff));
   drawNumber(34, 1, sensorEnergy, c(0x00aaff));
@@ -504,7 +486,7 @@ export function draw(): void {
   drawNumber(162, 229, moveLimit, c(0x666666));
 
   // Show ship-specific action
-  if (state == GameState.PLAYING) {
+  if (state == GamePhase.PLAYING) {
     if (activeShip.shipType == ShipType.BEACON_TENDER) {
       drawString(200, 229, "A:DEPLOY BEACON", c(0xffaa00));
     } else if (activeShip.shipType == ShipType.SURVEY_CRUISER) {
@@ -529,10 +511,10 @@ export function draw(): void {
   // }
 
   // Draw win/lose message
-  if (state == GameState.WON) {
+  if (state == GamePhase.WON) {
     drawString(80, 100, "TARGET INTERCEPTED!", c(0x00ff00));
     drawString(90, 115, "PRESS START", c(0xffffff));
-  } else if (state == GameState.LOST) {
+  } else if (state == GamePhase.LOST) {
     drawString(95, 100, "TARGET ESCAPED", c(0xff0000));
     drawString(90, 115, "PRESS START", c(0xffffff));
   }

@@ -41,6 +41,7 @@ const CLUSTER_SIZE: u32 = 8; // x(4) + y(4) = 8
 const TARGET_SHIP_SIZE: u32 = 8; // currentStarIndex(4) + isActive(1) + padding(3) = 8
 const PLAYER_SHIP_SIZE: u32 = 12; // shipType(4) + currentStarIndex(4) + movesThisTurn(4) = 12
 const BEACON_SIZE: u32 = 8; // starIndex(4) + isActive(1) + isDetecting(1) + padding(2) = 8
+const GAME_STATE_DATA_SIZE: u32 = 32; // gameState(1) + padding(3) + 7 i32 fields = 32 bytes
 
 // Visual constants
 export const STAR_RADIUS: i32 = 2;
@@ -55,7 +56,7 @@ export const MAP_OFFSET_Y: i32 = MAP_MARGIN; // Offset to shift stars down from 
 
 // === Enums ===
 
-export enum GameState {
+export enum GamePhase {
   PLAYING = 0,
   WON = 1,
   LOST = 2,
@@ -75,19 +76,11 @@ export enum ShipType {
  */
 @unmanaged
 export class Star {
-  x: i32;
-  y: i32;
-  degree: i32; // Number of connections (edges)
-  isHub: u8; // 1 if hub, 0 otherwise
-  isExit: u8; // 1 if exit, 0 otherwise
-
-  constructor(x: i32 = 0, y: i32 = 0) {
-    this.x = x;
-    this.y = y;
-    this.degree = 0;
-    this.isHub = 0;
-    this.isExit = 0;
-  }
+  x: i32 = 0;
+  y: i32 = 0;
+  degree: i32 = 0; // Number of connections (edges)
+  isHub: u8 = 0; // 1 if hub, 0 otherwise
+  isExit: u8 = 0; // 1 if exit, 0 otherwise
 }
 
 /**
@@ -96,13 +89,8 @@ export class Star {
  */
 @unmanaged
 export class Edge {
-  a: i32;
-  b: i32;
-
-  constructor(a: i32 = 0, b: i32 = 0) {
-    this.a = a;
-    this.b = b;
-  }
+  a: i32 = 0;
+  b: i32 = 0;
 }
 
 /**
@@ -112,13 +100,8 @@ export class Edge {
  */
 @unmanaged
 export class Cluster {
-  x: i32;
-  y: i32;
-
-  constructor(x: i32 = 0, y: i32 = 0) {
-    this.x = x;
-    this.y = y;
-  }
+  x: i32 = 0;
+  y: i32 = 0;
 }
 
 /**
@@ -127,13 +110,8 @@ export class Cluster {
  */
 @unmanaged
 export class TargetShip {
-  currentStarIndex: i32; // Index of the star the target is currently at
-  isActive: u8; // 1 if target is in play, 0 otherwise
-
-  constructor(starIndex: i32 = 0) {
-    this.currentStarIndex = starIndex;
-    this.isActive = 1;
-  }
+  currentStarIndex: i32 = 0; // Index of the star the target is currently at
+  isActive: u8 = 1; // 1 if target is in play, 0 otherwise
 }
 
 /**
@@ -142,15 +120,9 @@ export class TargetShip {
  */
 @unmanaged
 export class PlayerShip {
-  shipType: i32; // ShipType enum value
-  currentStarIndex: i32; // Current star location
-  movesThisTurn: i32; // Number of jumps used this turn
-
-  constructor(type: i32 = ShipType.INTERCEPTOR, starIndex: i32 = 0) {
-    this.shipType = type;
-    this.currentStarIndex = starIndex;
-    this.movesThisTurn = 0;
-  }
+  shipType: i32 = 0; // ShipType enum value
+  currentStarIndex: i32 = 0; // Current star location
+  movesThisTurn: i32 = 0; // Number of jumps used this turn
 }
 
 /**
@@ -159,65 +131,67 @@ export class PlayerShip {
  */
 @unmanaged
 export class Beacon {
-  starIndex: i32; // Star where beacon is deployed
-  isActive: u8; // 1 if deployed, 0 if slot is empty
-  isDetecting: u8; // 1 if target is within range, 0 otherwise
+  starIndex: i32 = 0; // Star where beacon is deployed
+  isActive: u8 = 0; // 1 if deployed, 0 if slot is empty
+  isDetecting: u8 = 0; // 1 if target is within range, 0 otherwise
+}
 
-  constructor(starIndex: i32 = 0, isActive: u8 = 0) {
-    this.starIndex = starIndex;
-    this.isActive = isActive;
-    this.isDetecting = 0;
-  }
+/**
+ * Game state data
+ * Consolidated game state fields in a single @unmanaged structure
+ */
+@unmanaged
+export class GameState {
+  phase: u8 = 0; // GamePhase enum value
+  numStars: u8 = 0; // Number of stars generated
+  numEdges: u16 = 0; // Number of edges generated
+  sensorEnergy: i32 = 0;
+  commandPoints: i32 = 0;
+  deploymentKits: i32 = 0;
+  activeShipIndex: i32 = 0;
+  frameCounter: i32 = 0;
+  scanResult: i32 = -2; // Target star index if detected, -1 if no contact, -2 if no active scan
+  scanTimer: i32 = 0; // Countdown frames for displaying scan result
 }
 
 // === Memory Layout ===
 
 export enum MemLayout {
-  GAME_STATE = 0, // u8 (1 byte)
-  NUM_STARS = 1, // u8 (1 byte)
-  NUM_EDGES = 2, // u16 (2 bytes) - changed from u8 to support >255 edges
-  // padding to align to 4-byte boundary
-  STARS_START = 4, // StarArray: 4 bytes (elementSize) + 50 stars × 16 bytes = 804 bytes
-  // Stars end at 4 + 804 = 808
-  EDGES_START = 808, // EdgeArray: 4 bytes (elementSize) + 200 edges × 8 bytes = 1604 bytes
-  // Edges end at 808 + 1604 = 2412
-  CLUSTERS_START = 2412, // 3 clusters × 8 bytes = 24 bytes
-  // Clusters end at 2412 + 24 = 2436
-  TARGET_SHIP = 2436, // TargetShip: 8 bytes
-  // Target ship ends at 2436 + 8 = 2444
-  PLAYER_SHIPS_START = 2444, // PlayerShipArray: 4 bytes (elementSize) + 3 ships × 12 bytes = 40 bytes
-  // Player ships end at 2444 + 40 = 2484
-  BEACONS_START = 2484, // BeaconArray: 4 bytes (elementSize) + 10 beacons × 8 bytes = 84 bytes
-  // Beacons end at 2484 + 84 = 2568
-  ACTIVE_SHIP_INDEX = 2568, // i32 (4 bytes)
-  SENSOR_ENERGY = 2572, // i32 (4 bytes)
-  COMMAND_POINTS = 2576, // i32 (4 bytes)
-  DEPLOYMENT_KITS = 2580, // i32 (4 bytes)
-  TURN_COUNTER = 2584, // i32 (4 bytes) - for animation/pulsing
-  SCAN_RESULT = 2588, // i32 (4 bytes) - target star index if detected, -1 if no contact, -2 if no active scan
-  SCAN_TIMER = 2592, // i32 (4 bytes) - countdown frames for displaying scan result
-  // End at 2596
-  TEMP_WORK_START = 2596, // Working memory for algorithms (1024 bytes)
+  STARS = 0, // StarArray: 4 bytes (elementSize) + 50 stars × 16 bytes = 804 bytes
+  // Stars end at 0 + 804 = 804
+  EDGES = 804, // EdgeArray: 4 bytes (elementSize) + 200 edges × 8 bytes = 1604 bytes
+  // Edges end at 804 + 1604 = 2408
+  CLUSTERS = 2408, // 3 clusters × 8 bytes = 24 bytes
+  // Clusters end at 2408 + 24 = 2432
+  TARGET_SHIP = 2432, // TargetShip: 8 bytes
+  // Target ship ends at 2432 + 8 = 2440
+  PLAYER_SHIPS = 2440, // PlayerShipArray: 4 bytes (elementSize) + 3 ships × 12 bytes = 40 bytes
+  // Player ships end at 2440 + 40 = 2480
+  BEACONS = 2480, // BeaconArray: 4 bytes (elementSize) + 10 beacons × 8 bytes = 84 bytes
+  // Beacons end at 2480 + 84 = 2564
+  GAME_STATE = 2564, // GameState: 32 bytes
+  // Game state data ends at 2564 + 32 = 2596
+  TEMP_WORK = 2596, // Working memory for algorithms (1024 bytes)
   // Total memory: ~3620 bytes
 }
 
 export type StarArray = FixedArrayOfObj<Star>;
 export const stars: StarArray = FixedArrayOfObj.fromAddress<Star>(
-  RAM_START + MemLayout.STARS_START,
+  RAM_START + MemLayout.STARS,
   STAR_SIZE,
   true,
 );
 
 export type EdgeArray = FixedArrayOfObj<Edge>;
 export const edges: EdgeArray = FixedArrayOfObj.fromAddress<Edge>(
-  RAM_START + MemLayout.EDGES_START,
+  RAM_START + MemLayout.EDGES,
   EDGE_SIZE,
   true,
 );
 
 export type ClusterArray = FixedArrayOfObj<Cluster>;
 export const clusters: ClusterArray = FixedArrayOfObj.fromAddress<Cluster>(
-  RAM_START + MemLayout.CLUSTERS_START,
+  RAM_START + MemLayout.CLUSTERS,
   CLUSTER_SIZE,
   true,
 );
@@ -225,19 +199,24 @@ export const clusters: ClusterArray = FixedArrayOfObj.fromAddress<Cluster>(
 export type PlayerShipArray = FixedArrayOfObj<PlayerShip>;
 export const playerShips: PlayerShipArray =
   FixedArrayOfObj.fromAddress<PlayerShip>(
-    RAM_START + MemLayout.PLAYER_SHIPS_START,
+    RAM_START + MemLayout.PLAYER_SHIPS,
     PLAYER_SHIP_SIZE,
     true,
   );
 
 export type BeaconArray = FixedArrayOfObj<Beacon>;
 export const beacons: BeaconArray = FixedArrayOfObj.fromAddress<Beacon>(
-  RAM_START + MemLayout.BEACONS_START,
+  RAM_START + MemLayout.BEACONS,
   BEACON_SIZE,
   true,
 );
 
 // Target ship instance (reinterprets memory at TARGET_SHIP address)
-export function getTargetShip(): TargetShip {
-  return changetype<TargetShip>(RAM_START + MemLayout.TARGET_SHIP);
-}
+export const targetShip: TargetShip = changetype<TargetShip>(
+  RAM_START + MemLayout.TARGET_SHIP,
+);
+
+// Game state data instance (reinterprets memory at GAME_STATE_DATA address)
+export const gameState: GameState = changetype<GameState>(
+  RAM_START + MemLayout.GAME_STATE,
+);
