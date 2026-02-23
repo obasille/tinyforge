@@ -287,8 +287,19 @@ export function drawLine(
  * @param color ABGR color value (supports alpha channel for transparency)
  */
 export function fillCircle(cx: i32, cy: i32, r: i32, color: u32): void {
+  // Reject negative radius
   if (r < 0) return;
 
+  // Early reject: circle completely outside screen
+  if (cx + r < 0 || cx - r >= SCREEN_WIDTH || cy + r < 0 || cy - r >= SCREEN_HEIGHT) return;
+
+  // Optimization: if circle covers entire screen, use fillRect
+  if (cx - r <= 0 && cx + r >= SCREEN_WIDTH - 1 && cy - r <= 0 && cy + r >= SCREEN_HEIGHT - 1) {
+    fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, color);
+    return;
+  }
+
+  // Special case: radius 0 (single pixel)
   if (r == 0) {
     if (cx < 0 || cx >= SCREEN_WIDTH || cy < 0 || cy >= SCREEN_HEIGHT) return;
     const addr = ((cy * SCREEN_WIDTH + cx) << 2) as usize;
@@ -296,9 +307,12 @@ export function fillCircle(cx: i32, cy: i32, r: i32, color: u32): void {
     return;
   }
 
+  // Precompute row width for address math
   const rowWidth = SCREEN_WIDTH;
 
+  // Draw a horizontal span (filled line) at row y from xStart to xEnd (inclusive)
   function drawSpan(y: i32, xStart: i32, xEnd: i32, col: u32): void {
+    // Clip to screen bounds
     if (y < 0 || y >= SCREEN_HEIGHT) return;
     let xs = xStart;
     let xe = xEnd;
@@ -306,6 +320,7 @@ export function fillCircle(cx: i32, cy: i32, r: i32, color: u32): void {
     if (xe >= SCREEN_WIDTH) xe = SCREEN_WIDTH - 1;
     if (xs > xe) return;
 
+    // Draw each pixel in the span
     let addr = ((y * rowWidth + xs) << 2) as usize;
     const count = xe - xs + 1;
     for (let i: i32 = 0; i < count; i++) {
@@ -314,23 +329,34 @@ export function fillCircle(cx: i32, cy: i32, r: i32, color: u32): void {
     }
   }
 
+  // Midpoint circle algorithm: draw horizontal spans for each Y
+  // Key insight: rows cy±y are unique per iteration (y increases monotonically)
+  // but rows cy±x can be visited multiple times (x stays constant while y increases)
+  // To avoid overdraw: draw cy±x only when x is about to decrease, using max y extent
   let x: i32 = r;
   let y: i32 = 0;
   let err: i32 = 1 - r;
 
   while (x >= y) {
+    // Draw horizontal spans at cy+y and cy-y (unique per y value)
     drawSpan(cy + y, cx - x, cx + x, color);
-    drawSpan(cy - y, cx - x, cx + x, color);
-
-    if (x != y) {
-      drawSpan(cy + x, cx - y, cx + y, color);
-      drawSpan(cy - x, cx - y, cx + y, color);
+    if (y != 0) {
+      drawSpan(cy - y, cx - x, cx + x, color);
     }
 
+    // Advance y
     y++;
     if (err < 0) {
       err += (y << 1) + 1;
     } else {
+      // x is about to decrease - draw cy+x and cy-x with widest extent (y-1)
+      // Skip if x == y-1 (that row was already drawn as cy±(y-1) above)
+      if (x != y - 1) {
+        drawSpan(cy + x, cx - (y - 1), cx + (y - 1), color);
+        if (x != 0) {
+          drawSpan(cy - x, cx - (y - 1), cx + (y - 1), color);
+        }
+      }
       x--;
       err += ((y - x) << 1) + 1;
     }
@@ -346,6 +372,21 @@ export function fillCircle(cx: i32, cy: i32, r: i32, color: u32): void {
  */
 export function drawCircle(cx: i32, cy: i32, r: i32, color: u32): void {
   if (r < 0) return;
+
+  // Early reject: circle completely outside screen (bounding box check)
+  if (cx + r < 0 || cx - r >= SCREEN_WIDTH || cy + r < 0 || cy - r >= SCREEN_HEIGHT) return;
+
+  // Early reject: circle so large its outline is entirely outside screen
+  // This happens when all screen corners are inside the circle
+  // Check if r² > max distance² from center to any corner
+  const dx0 = cx;                      // distance to left edge
+  const dx1 = SCREEN_WIDTH - 1 - cx;   // distance to right edge
+  const dy0 = cy;                      // distance to top edge
+  const dy1 = SCREEN_HEIGHT - 1 - cy;  // distance to bottom edge
+  const maxDx = dx0 > dx1 ? dx0 : dx1;
+  const maxDy = dy0 > dy1 ? dy0 : dy1;
+  const maxDistSq = maxDx * maxDx + maxDy * maxDy;
+  if (r * r > maxDistSq) return; // outline is beyond all corners
 
   const rowWidth = SCREEN_WIDTH;
 
@@ -364,7 +405,7 @@ export function drawCircle(cx: i32, cy: i32, r: i32, color: u32): void {
       const x1 = cx + x;
       const x2 = cx - x;
       if (x1 >= 0 && x1 < SCREEN_WIDTH) blendPixel(((rowBase + x1) << 2) as usize, color);
-      if (x2 >= 0 && x2 < SCREEN_WIDTH) blendPixel(((rowBase + x2) << 2) as usize, color);
+      if (x2 >= 0 && x2 < SCREEN_WIDTH && x2 != x1) blendPixel(((rowBase + x2) << 2) as usize, color);
     }
 
     if (yBottom != yTop && yBottom >= 0 && yBottom < SCREEN_HEIGHT) {
@@ -372,7 +413,7 @@ export function drawCircle(cx: i32, cy: i32, r: i32, color: u32): void {
       const x1 = cx + x;
       const x2 = cx - x;
       if (x1 >= 0 && x1 < SCREEN_WIDTH) blendPixel(((rowBase + x1) << 2) as usize, color);
-      if (x2 >= 0 && x2 < SCREEN_WIDTH) blendPixel(((rowBase + x2) << 2) as usize, color);
+      if (x2 >= 0 && x2 < SCREEN_WIDTH && x2 != x1) blendPixel(((rowBase + x2) << 2) as usize, color);
     }
 
     if (x != y) {
@@ -381,7 +422,7 @@ export function drawCircle(cx: i32, cy: i32, r: i32, color: u32): void {
         const x1 = cx + y;
         const x2 = cx - y;
         if (x1 >= 0 && x1 < SCREEN_WIDTH) blendPixel(((rowBase + x1) << 2) as usize, color);
-        if (x2 >= 0 && x2 < SCREEN_WIDTH) blendPixel(((rowBase + x2) << 2) as usize, color);
+        if (x2 >= 0 && x2 < SCREEN_WIDTH && x2 != x1) blendPixel(((rowBase + x2) << 2) as usize, color);
       }
 
       if (yLeft >= 0 && yLeft < SCREEN_HEIGHT) {
@@ -389,7 +430,7 @@ export function drawCircle(cx: i32, cy: i32, r: i32, color: u32): void {
         const x1 = cx + y;
         const x2 = cx - y;
         if (x1 >= 0 && x1 < SCREEN_WIDTH) blendPixel(((rowBase + x1) << 2) as usize, color);
-        if (x2 >= 0 && x2 < SCREEN_WIDTH) blendPixel(((rowBase + x2) << 2) as usize, color);
+        if (x2 >= 0 && x2 < SCREEN_WIDTH && x2 != x1) blendPixel(((rowBase + x2) << 2) as usize, color);
       }
     }
 

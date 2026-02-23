@@ -93,7 +93,7 @@ export const RNG_SEED = memoryMap.SDK_RNG_SEED_ADDR as usize;
 /** Game RAM start address */
 export const RAM_START = memoryMap.RAM_START as usize;
 
-/** Game RAM size in bytes (256 KB) */
+/** Game RAM size in bytes (~72 KB) */
 export const RAM_SIZE = memoryMap.RAM_SIZE as usize;
 
 /**
