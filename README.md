@@ -140,6 +140,36 @@ Contains only game code:
 
 The cartridge is treated as **ROM‑like code**.
 
+#### Game File Organization
+
+**Main game file:** `{gameName}.ts`
+
+Contains the exported lifecycle functions: `init()`, `update()`, `draw()`.
+
+**Supporting files:** `{gameName}/` subfolder
+
+For complex games that need multiple modules, place supporting scripts in a subfolder named **exactly like the main game file** (without the `.ts` extension).
+
+Example structure:
+
+```
+src/assembly/games/
+├─ crocodiles.ts           # Main game file
+├─ crocodiles/             # Supporting files
+│  ├─ player.ts
+│  ├─ types.ts
+│  ├─ utils.ts
+│  └─ ...
+├─ starlinePursuit.ts      # Main game file
+└─ starlinePursuit/        # Supporting files
+   ├─ types.ts
+   ├─ generateStarmap.ts
+   ├─ drawStarmap.ts
+   └─ ...
+```
+
+This keeps game code organized and isolated from other games.
+
 ---
 
 ## Framebuffer
