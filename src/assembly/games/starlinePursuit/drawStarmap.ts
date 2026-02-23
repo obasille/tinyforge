@@ -11,6 +11,7 @@ import {
 
 import {
   beacons,
+  BEACON_RANGE,
   EXIT_RADIUS,
   gameState,
   targetShip,
@@ -65,6 +66,15 @@ export function drawStarmap(): void {
 
   // Draw cluster centers (for debugging)
   // drawClusterCenters();
+
+  // Draw subtle markers for all possible target stars
+  // These are stars the target might currently occupy based on movement history
+  for (let i: i32 = 0; i < numStars; i++) {
+    const star = stars.get(i);
+    if (star.isPossibleTarget == 1) {
+      fillCircle(star.x, star.y, 7, toColor(0x66, 0x66, 0xaa, 0x40)); // Semi-transparent blue
+    }
+  }
 
   // Clamp numEdges to prevent reading beyond MAX_EDGES
   const safeNumEdges = numEdges;
@@ -197,6 +207,40 @@ export function drawStarmap(): void {
   // Draw scan radius effect if scan just performed
   const scanTimer = gameState.scanTimer;
   const scanResult = gameState.scanResult;
+
+  // Show initial target location reveal animation at game start
+  if (
+    gameState.initialRevealTimer > 0 &&
+    targetShip.currentStarIndex < numStars
+  ) {
+    const startStar = stars.get(targetShip.currentStarIndex);
+    const revealPhase = 180 - gameState.initialRevealTimer;
+
+    if (revealPhase < 30) {
+      // Expanding pulse
+      const radius = (revealPhase * SCAN_RADIUS) / 30;
+      drawCircle(startStar.x, startStar.y, radius, c(0xff0000));
+      if (revealPhase < 15 && radius > 2) {
+        drawCircle(startStar.x, startStar.y, radius - 2, c(0xff0000));
+      }
+    } else if (revealPhase < 60) {
+      // Fade out pulse
+      const fadePhase = revealPhase - 30;
+      const alpha = (255 * (30 - fadePhase)) / 30;
+      const color = toColor(255, 0, 0, alpha as u8);
+      drawCircle(startStar.x, startStar.y, SCAN_RADIUS, color);
+      if (fadePhase < 15) {
+        const alphaInner = (255 * (15 - fadePhase)) / 15;
+        const colorInner = toColor(255, 0, 0, alphaInner as u8);
+        drawCircle(startStar.x, startStar.y, SCAN_RADIUS - 2, colorInner);
+      }
+    }
+
+    // Keep the start star highlighted while reveal timer is active
+    drawCircle(startStar.x, startStar.y, 8, c(0xff0000));
+    drawCircle(startStar.x, startStar.y, 10, c(0xff3333));
+  }
+
   // Show green scan only during first 60 frames based on detection result
   // Target detected (starts at 180): show green from 180-121
   // No contact (starts at 120): show green from 120-61
@@ -264,6 +308,48 @@ export function drawStarmap(): void {
       if (beaconStarIndex >= 0 && beaconStarIndex < numStars) {
         const beaconStar = stars.get(beaconStarIndex);
 
+        // Draw beacon range animation if timer is active
+        if (beacon.rangeAnimTimer > 0) {
+          const animPhase = 60 - (beacon.rangeAnimTimer as i32);
+
+          if (animPhase < 30) {
+            // Expanding pulse (0-30 frames)
+            const radius = (animPhase * BEACON_RANGE) / 30;
+            const alpha = (255 * (30 - animPhase)) / 30; // Fade out as it expands
+            const color =
+              beacon.isDetecting == 1
+                ? toColor(255, 0, 0, alpha as u8) // Red for detecting
+                : toColor(255, 221, 0, alpha as u8); // Yellow for normal
+            drawCircle(beaconStar.x, beaconStar.y, radius, color);
+            if (radius > 3) {
+              drawCircle(beaconStar.x, beaconStar.y, radius - 2, color);
+            }
+          } else if (animPhase < 60) {
+            // Static full range with fade (30-60 frames)
+            const fadePhase = animPhase - 30;
+            const alpha = (255 * (30 - fadePhase)) / 30;
+            const color =
+              beacon.isDetecting == 1
+                ? toColor(255, 0, 0, alpha as u8)
+                : toColor(255, 221, 0, alpha as u8);
+            drawCircle(beaconStar.x, beaconStar.y, BEACON_RANGE, color);
+            if (fadePhase < 15) {
+              const alphaInner = (255 * (15 - fadePhase)) / 15;
+              const colorInner =
+                beacon.isDetecting == 1
+                  ? toColor(255, 0, 0, alphaInner as u8)
+                  : toColor(255, 221, 0, alphaInner as u8);
+              drawCircle(
+                beaconStar.x,
+                beaconStar.y,
+                BEACON_RANGE - 2,
+                colorInner,
+              );
+            }
+          }
+        }
+
+        // Draw beacon icon
         if (beacon.isDetecting == 1) {
           // Target detected: red alert beacon
           fillCircle(beaconStar.x, beaconStar.y, 3, c(0xff0000));

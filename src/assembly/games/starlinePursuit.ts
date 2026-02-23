@@ -41,7 +41,13 @@ import {
   STARTING_DEPLOYMENT_KITS,
   STARTING_SENSOR_ENERGY,
 } from "./starlinePursuit/types";
-import { starsDist2 } from "./starlinePursuit/utils";
+import {
+  clearStarTrackingByBeacon,
+  clearStarTrackingByScan,
+  initializeStarTracking,
+  starsDist2,
+  updateStarTracking,
+} from "./starlinePursuit/utils";
 
 // === Helper Functions ===
 
@@ -213,6 +219,15 @@ export function init(): void {
   gameState.frameCounter = 0;
   gameState.scanResult = -2; // No active scan
   gameState.scanTimer = 0;
+  gameState.initialRevealTimer = 180; // Show initial target location for 3 seconds
+
+  // Initialize star tracking with target's starting position
+  initializeStarTracking(targetShip.currentStarIndex);
+
+  // Clear tracking for player-occupied stars (we know target isn't there)
+  for (let i: i32 = 0; i < MAX_PLAYER_SHIPS; i++) {
+    stars.get(playerShips.get(i).currentStarIndex).isPossibleTarget = 0;
+  }
 
   // Initialize all beacons to inactive
   for (let i: i32 = 0; i < MAX_BEACONS; i++) {
@@ -244,6 +259,19 @@ export function update(): void {
   // Decrement scan timer if active
   if (gameState.scanTimer > 0) {
     gameState.scanTimer--;
+  }
+
+  // Decrement initial reveal timer if active
+  if (gameState.initialRevealTimer > 0) {
+    gameState.initialRevealTimer--;
+  }
+
+  // Decrement beacon range animation timers
+  for (let i: i32 = 0; i < MAX_BEACONS; i++) {
+    const beacon = beacons.get(i);
+    if (beacon.isActive == 1 && beacon.rangeAnimTimer > 0) {
+      beacon.rangeAnimTimer--;
+    }
   }
 
   // Get active ship
@@ -290,7 +318,23 @@ export function update(): void {
             if (beacon.isActive == 0) {
               beacon.starIndex = activeShip.currentStarIndex;
               beacon.isActive = 1;
-              beacon.isDetecting = 0;
+
+              // Check if target is within detection range
+              const range2 = BEACON_RANGE * BEACON_RANGE;
+              const d2 = starsDist2(
+                beacon.starIndex,
+                targetShip.currentStarIndex,
+              );
+              beacon.isDetecting = d2 <= range2 ? 1 : 0;
+
+              // If not detecting, clear star tracking within beacon range
+              if (beacon.isDetecting == 0) {
+                clearStarTrackingByBeacon(beacon.starIndex, BEACON_RANGE);
+              }
+
+              // Start range animation
+              beacon.rangeAnimTimer = 60;
+
               gameState.deploymentKits--;
               logi(
                 "Beacon deployed at star {}",
@@ -328,6 +372,8 @@ export function update(): void {
           // Store scan result for visual display
           gameState.scanResult = targetShip.currentStarIndex;
           gameState.scanTimer = 180; // Show for 3 seconds (60 fps)
+          // Lock tracking to known target location after positive scan
+          initializeStarTracking(targetShip.currentStarIndex);
           logi(
             "TARGET DETECTED AT STAR {}!",
             targetShip.currentStarIndex,
@@ -335,9 +381,10 @@ export function update(): void {
             0,
           );
         } else {
-          // No contact
+          // No contact - clear stars within scan radius from tracking
           gameState.scanResult = -1;
           gameState.scanTimer = 120; // Show for 2 seconds
+          clearStarTrackingByScan(activeShip.currentStarIndex, SCAN_RADIUS);
           log("Scan complete - No contact");
         }
       } else {
@@ -376,6 +423,9 @@ export function update(): void {
     // Update target AI
     moveTarget();
 
+    // Update star tracking based on possible target movements
+    updateStarTracking();
+
     // Update beacon detection states
     const range2 = BEACON_RANGE * BEACON_RANGE;
     for (let i: i32 = 0; i < MAX_BEACONS; i++) {
@@ -383,6 +433,15 @@ export function update(): void {
       if (beacon.isActive == 1) {
         const d2 = starsDist2(beacon.starIndex, targetShip.currentStarIndex);
         beacon.isDetecting = d2 <= range2 ? 1 : 0;
+
+        // If beacon is not detecting, clear star tracking within its range
+        // (we know target isn't there)
+        if (beacon.isDetecting == 0) {
+          clearStarTrackingByBeacon(beacon.starIndex, BEACON_RANGE);
+        }
+
+        // Start range animation for this turn
+        beacon.rangeAnimTimer = 60;
       }
     }
 
@@ -432,6 +491,9 @@ export function update(): void {
         log("Victory! Target intercepted!");
         return;
       }
+
+      // If target not found at this star, mark it as impossible location
+      stars.get(targetStarIndex).isPossibleTarget = 0;
     }
   }
 }

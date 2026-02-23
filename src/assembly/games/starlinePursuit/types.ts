@@ -1,4 +1,5 @@
 import {
+  FixedArray,
   FixedArrayOfObj,
   RAM_START,
   SCREEN_HEIGHT,
@@ -35,13 +36,13 @@ export const SCAN_RADIUS: i32 = 70; // Survey Cruiser active scan range
 export const SCAN_COST: i32 = 2; // Sensor Energy cost for active scan
 
 // Element sizes for @unmanaged classes (aligned to 4 bytes)
-const STAR_SIZE: u32 = 16; // x(4) + y(4) + degree(4) + isHub(1) + isExit(1) + padding(2) = 16
+const STAR_SIZE: u32 = 16; // x(4) + y(4) + degree(4) + isHub(1) + isExit(1) + isPossibleTarget(1) + padding(1) = 16
 const EDGE_SIZE: u32 = 8; // a(4) + b(4) = 8
 const CLUSTER_SIZE: u32 = 8; // x(4) + y(4) = 8
 const TARGET_SHIP_SIZE: u32 = 8; // currentStarIndex(4) + isActive(1) + padding(3) = 8
 const PLAYER_SHIP_SIZE: u32 = 12; // shipType(4) + currentStarIndex(4) + movesThisTurn(4) = 12
-const BEACON_SIZE: u32 = 8; // starIndex(4) + isActive(1) + isDetecting(1) + padding(2) = 8
-const GAME_STATE_DATA_SIZE: u32 = 32; // gameState(1) + padding(3) + 7 i32 fields = 32 bytes
+const BEACON_SIZE: u32 = 8; // starIndex(4) + isActive(1) + isDetecting(1) + rangeAnimTimer(1) + padding(1) = 8
+const GAME_STATE_DATA_SIZE: u32 = 36; // phase(1) + padding(3) + 8 i32 fields = 36 bytes
 
 // Visual constants
 export const STAR_RADIUS: i32 = 2;
@@ -81,6 +82,7 @@ export class Star {
   degree: i32 = 0; // Number of connections (edges)
   isHub: u8 = 0; // 1 if hub, 0 otherwise
   isExit: u8 = 0; // 1 if exit, 0 otherwise
+  isPossibleTarget: u8 = 0; // 1 if target might be at this star, 0 otherwise
 }
 
 /**
@@ -134,6 +136,7 @@ export class Beacon {
   starIndex: i32 = 0; // Star where beacon is deployed
   isActive: u8 = 0; // 1 if deployed, 0 if slot is empty
   isDetecting: u8 = 0; // 1 if target is within range, 0 otherwise
+  rangeAnimTimer: u8 = 0; // Animation timer for showing beacon range (60 frames = 1 second)
 }
 
 /**
@@ -152,6 +155,7 @@ export class GameState {
   frameCounter: i32 = 0;
   scanResult: i32 = -2; // Target star index if detected, -1 if no contact, -2 if no active scan
   scanTimer: i32 = 0; // Countdown frames for displaying scan result
+  initialRevealTimer: i32 = 0; // Countdown frames for initial target reveal animation
 }
 
 // === Memory Layout ===
@@ -169,10 +173,10 @@ export enum MemLayout {
   // Player ships end at 2440 + 40 = 2480
   BEACONS = 2480, // BeaconArray: 4 bytes (elementSize) + 10 beacons × 8 bytes = 84 bytes
   // Beacons end at 2480 + 84 = 2564
-  GAME_STATE = 2564, // GameState: 32 bytes
-  // Game state data ends at 2564 + 32 = 2596
-  TEMP_WORK = 2596, // Working memory for algorithms (1024 bytes)
-  // Total memory: ~3620 bytes
+  GAME_STATE = 2564, // GameState: 36 bytes
+  // Game state data ends at 2564 + 36 = 2600
+  TEMP_WORK = 2600, // Working memory for algorithms (1024 bytes)
+  // Total memory: ~3624 bytes
 }
 
 export type StarArray = FixedArrayOfObj<Star>;
