@@ -11,6 +11,7 @@ import {
   FixedArray,
   log,
   logi,
+  pset,
   RAM_START,
   randomRange,
 } from "../sdk";
@@ -243,6 +244,8 @@ export function init(): void {
   gameState.scanResult = -2; // No active scan
   gameState.scanTimer = 0;
   gameState.initialRevealTimer = 180; // Show initial target location for 3 seconds
+  gameState.scannerY = -1; // Scanner inactive
+  gameState.scannerPhase = 0;
 
   // Initialize star tracking with target's starting position
   initializeStarTracking(targetShip.currentStarIndex);
@@ -294,6 +297,24 @@ export function update(): void {
     const beacon = beacons.get(i);
     if (beacon.isActive == 1 && beacon.rangeAnimTimer > 0) {
       beacon.rangeAnimTimer--;
+    }
+  }
+
+  // Update scanner animation (runs independently)
+  if (gameState.scannerY >= 0) {
+    if (gameState.scannerPhase == 0) {
+      // Sweep down
+      gameState.scannerY += 8; // Fast sweep
+      if (gameState.scannerY >= 220) {
+        gameState.scannerPhase = 1; // Switch to sweep up
+      }
+    } else if (gameState.scannerPhase == 1) {
+      // Sweep up
+      gameState.scannerY -= 8;
+      if (gameState.scannerY <= 10) {
+        gameState.scannerPhase = 2; // Done
+        gameState.scannerY = -1; // Deactivate
+      }
     }
   }
 
@@ -428,6 +449,10 @@ export function update(): void {
     // Refresh Command Points
     gameState.commandPoints = MAX_COMMAND_POINTS;
 
+    // Start scanner animation
+    gameState.scannerY = 10; // Start at top of map area
+    gameState.scannerPhase = 0; // Begin sweep down
+
     // Update target AI
     moveTarget();
 
@@ -504,6 +529,41 @@ export function draw(): void {
 
   // Draw the starmap
   drawStarmap();
+
+  // Draw vertical scanner sweep OVER the starmap
+  if (gameState.scannerY >= 0) {
+    const scanY = gameState.scannerY;
+    
+    // Main scan line (bright green)
+    for (let x: i32 = 10; x < 310; x++) {
+      pset(x, scanY, c(0x00ff00));
+      pset(x, scanY + 1, c(0x00ff00));
+    }
+    
+    // Trailing fade lines (dimmer green)
+    for (let offset: i32 = 2; offset < 8; offset++) {
+      const alpha = (8 - offset) * 32; // Fade from 192 to 32
+      const fadeColor = c(0x00ff00) | (alpha << 24);
+      
+      if (gameState.scannerPhase == 0) {
+        // Sweeping down - trail above
+        const trailY = scanY - offset;
+        if (trailY >= 10) {
+          for (let x: i32 = 10; x < 310; x++) {
+            pset(x, trailY, fadeColor);
+          }
+        }
+      } else {
+        // Sweeping up - trail below
+        const trailY = scanY + offset;
+        if (trailY < 220) {
+          for (let x: i32 = 10; x < 310; x++) {
+            pset(x, trailY, fadeColor);
+          }
+        }
+      }
+    }
+  }
 
   const state = gameState.phase;
   const activeIndex = gameState.activeShipIndex;
