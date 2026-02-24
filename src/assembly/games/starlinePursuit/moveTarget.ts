@@ -5,6 +5,7 @@ import {
   MAX_BEACONS,
   MAX_PLAYER_SHIPS,
   MemLayout,
+  ShipType,
   beacons,
   edges,
   gameState,
@@ -79,11 +80,18 @@ function getClosestPlayerDistance(starIndex: i32): i32 {
  * Higher scores are preferred
  */
 function scoreNeighbor(neighborIndex: i32, currentDistance: i32): f32 {
-  // CRITICAL: Never move to a star occupied by a player ship
+  // CRITICAL: Never move to a star occupied by an Interceptor
+  // Other ships can be moved onto as a last resort (they detect but don't capture)
   for (let i: i32 = 0; i < MAX_PLAYER_SHIPS; i++) {
     const ship = playerShips.get(i);
     if (ship.currentStarIndex == neighborIndex) {
-      return -999999.0; // Instant reject
+      if (ship.shipType == ShipType.INTERCEPTOR) {
+        return -999999.0; // Instant reject - Interceptor captures
+      } else {
+        // Non-Interceptor ship: very heavy penalty but not instant reject
+        // Only choose this if all other options are worse (cornered)
+        return -500.0;
+      }
     }
   }
 
@@ -161,12 +169,12 @@ export function moveTarget(): void {
     targetShip.currentStarIndex = bestNeighbor;
     logi("Target moved to star {}", bestNeighbor, 0, 0);
 
-    // Safety check: ensure target didn't accidentally move to occupied star
+    // Safety check: warn if target moved onto an Interceptor (should never happen)
     for (let i: i32 = 0; i < MAX_PLAYER_SHIPS; i++) {
       const ship = playerShips.get(i);
-      if (ship.currentStarIndex == bestNeighbor) {
-        // This should NEVER happen with proper scoring
-        log("ERROR: Target moved to occupied star!");
+      if (ship.currentStarIndex == bestNeighbor && 
+          ship.shipType == ShipType.INTERCEPTOR) {
+        log("ERROR: Target moved to Interceptor!");
         return;
       }
     }
