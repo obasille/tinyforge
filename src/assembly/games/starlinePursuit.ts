@@ -74,6 +74,29 @@ function getShipTypeName(shipType: i32): string {
 }
 
 /**
+ * Check if any ship has reached the target
+ * Returns true if Interceptor captured target (game won)
+ * Logs detection if non-Interceptor found target
+ */
+function checkShipsAtTarget(): bool {
+  for (let i: i32 = 0; i < MAX_PLAYER_SHIPS; i++) {
+    const ship = playerShips.get(i);
+    if (ship.currentStarIndex == targetShip.currentStarIndex) {
+      if (ship.shipType == ShipType.INTERCEPTOR) {
+        gameState.phase = GamePhase.WON as u8;
+        log("Victory! Interceptor captured target!");
+        return true;
+      } else {
+        // Non-Interceptor detection
+        log("TARGET DETECTED! Send Interceptor to capture!");
+        initializeStarTracking(targetShip.currentStarIndex);
+      }
+    }
+  }
+  return false;
+}
+
+/**
  * Find the neighbor star visually closest to a given direction
  * direction: 0=UP, 1=RIGHT, 2=DOWN, 3=LEFT
  */
@@ -374,12 +397,7 @@ export function update(): void {
           gameState.scanTimer = 180; // Show for 3 seconds (60 fps)
           // Lock tracking to known target location after positive scan
           initializeStarTracking(targetShip.currentStarIndex);
-          logi(
-            "TARGET DETECTED AT STAR {}!",
-            targetShip.currentStarIndex,
-            0,
-            0,
-          );
+          logi("TARGET DETECTED by scan");
         } else {
           // No contact - clear stars within scan radius from tracking
           gameState.scanResult = -1;
@@ -390,16 +408,6 @@ export function update(): void {
       } else {
         log("Insufficient Sensor Energy");
       }
-      return;
-    }
-  }
-
-  // Check win condition (any ship reaches target)
-  for (let i: i32 = 0; i < MAX_PLAYER_SHIPS; i++) {
-    const ship = playerShips.get(i);
-    if (ship.currentStarIndex == targetShip.currentStarIndex) {
-      gameState.phase = GamePhase.WON as u8;
-      log("Victory! Target intercepted!");
       return;
     }
   }
@@ -445,14 +453,9 @@ export function update(): void {
       }
     }
 
-    // Check if target was cornered and moved onto a player ship (should never happen with proper scoring)
-    for (let i: i32 = 0; i < MAX_PLAYER_SHIPS; i++) {
-      const ship = playerShips.get(i);
-      if (ship.currentStarIndex == targetShip.currentStarIndex) {
-        gameState.phase = GamePhase.WON as u8;
-        log("Target cornered! Victory!");
-        return;
-      }
+    // Check if target moved onto any ship
+    if (checkShipsAtTarget()) {
+      return; // Game won
     }
 
     log("Turn ended - resources refreshed");
@@ -479,17 +482,15 @@ export function update(): void {
       activeShip.currentStarIndex = targetStarIndex;
       activeShip.movesThisTurn++;
       logi(
-        "{} jumped to star {} (Moves: {}/{})",
+        "{} jumped to star {} (Moves: {})",
         activeIndex,
         targetStarIndex,
         activeShip.movesThisTurn,
       );
 
-      // Check win condition after movement
-      if (activeShip.currentStarIndex == targetShip.currentStarIndex) {
-        gameState.phase = GamePhase.WON as u8;
-        log("Victory! Target intercepted!");
-        return;
+      // Check if ship reached target
+      if (checkShipsAtTarget()) {
+        return; // Game won or target detected
       }
 
       // If target not found at this star, mark it as impossible location
