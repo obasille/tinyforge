@@ -7,7 +7,9 @@ import {
   c,
   clearFramebuffer,
   drawNumber,
+  drawRect,
   drawString,
+  fillRect,
   FixedArray,
   log,
   logi,
@@ -37,6 +39,7 @@ import {
   SCAN_RADIUS,
   SE_REGEN_PER_TURN,
   ShipType,
+  TargetType,
   stars,
   STARTING_COMMAND_POINTS,
   STARTING_DEPLOYMENT_KITS,
@@ -71,6 +74,18 @@ function getShipTypeName(shipType: i32): string {
   if (shipType == ShipType.SCOUT) return "SCOUT";
   if (shipType == ShipType.SURVEY_CRUISER) return "SURVEY";
   if (shipType == ShipType.BEACON_TENDER) return "BEACON";
+  return "UNKNOWN";
+}
+
+/**
+ * Get target type name for briefing
+ */
+function getTargetTypeName(targetType: u8): string {
+  if (targetType == TargetType.SMUGGLER) return "SMUGGLER RUNNER";
+  if (targetType == TargetType.PIRATE) return "PIRATE RAIDER";
+  if (targetType == TargetType.GHOST) return "GHOST SIGNAL";
+  if (targetType == TargetType.COURIER) return "DIPLOMATIC COURIER";
+  if (targetType == TargetType.DECOY_MASTER) return "DECOY MASTER";
   return "UNKNOWN";
 }
 
@@ -151,6 +166,50 @@ function findNeighborInDirection(starIndex: i32, direction: i32): i32 {
   }
 
   return bestIndex;
+}
+
+/**
+ * Draw the mission briefing overlay
+ */
+function drawMissionBriefing(): void {
+  // Semi-transparent background
+  fillRect(20, 60, 280, 134, c(0x0a0a1a));
+  drawRect(20, 60, 280, 134, c(0x00aaff));
+  drawRect(21, 61, 278, 132, c(0x00aaff));
+
+  // Title
+  drawString(90, 70, "MISSION BRIEFING", c(0x00aaff));
+
+  // Target type
+  const targetTypeName = getTargetTypeName(gameState.targetType);
+  drawString(50, 90, "TARGET:", c(0xffffff));
+  drawString(114, 90, targetTypeName, c(0xffaa00));
+
+  // Target behavior description
+  const targetType = gameState.targetType;
+  if (targetType == TargetType.SMUGGLER) {
+    drawString(30, 110, "PREFERS HIGH-TRAFFIC ROUTES", c(0xaaaaaa));
+    drawString(30, 125, "AVOIDS BEACON COVERAGE", c(0xaaaaaa));
+  } else if (targetType == TargetType.PIRATE) {
+    drawString(30, 110, "PREFERS OUTER RIM ROUTES", c(0xaaaaaa));
+    drawString(30, 125, "TACTICAL MOVEMENT", c(0xaaaaaa));
+  } else if (targetType == TargetType.GHOST) {
+    drawString(30, 110, "HIGHLY UNPREDICTABLE", c(0xaaaaaa));
+    drawString(30, 125, "IGNORES BEACON ZONES", c(0xaaaaaa));
+  } else if (targetType == TargetType.COURIER) {
+    drawString(30, 110, "FAST - DIRECT ROUTES", c(0xaaaaaa));
+    drawString(30, 125, "MAY MAKE DOUBLE MOVES", c(0xaaaaaa));
+  } else if (targetType == TargetType.DECOY_MASTER) {
+    drawString(30, 110, "ADVANCED EVASION", c(0xaaaaaa));
+    drawString(30, 125, "COMPLEX PATTERNS", c(0xaaaaaa));
+  }
+
+  // Objective
+  drawString(30, 145, "OBJECTIVE: CORNER AND", c(0x00ff00));
+  drawString(30, 160, "CAPTURE WITH INTERCEPTOR", c(0x00ff00));
+
+  // Instruction
+  drawString(105, 178, "PRESS START", c(0xffffff));
 }
 
 // === Lifecycle Functions ===
@@ -243,9 +302,13 @@ export function init(): void {
   gameState.frameCounter = 0;
   gameState.scanResult = -2; // No active scan
   gameState.scanTimer = 0;
-  gameState.initialRevealTimer = 180; // Show initial target location for 3 seconds
+  gameState.initialRevealTimer = 0; // Don't start reveal yet - wait for briefing dismissal
   gameState.scannerY = -1; // Scanner inactive
   gameState.scannerPhase = 0;
+
+  // Select random target type
+  gameState.targetType = randomRange(5) as u8; // 0-4: SMUGGLER, PIRATE, GHOST, COURIER, DECOY_MASTER
+  gameState.missionBriefingDismissed = 0; // Show briefing, wait for START press
 
   // Initialize star tracking with target's starting position
   initializeStarTracking(targetShip.currentStarIndex);
@@ -278,6 +341,18 @@ export function update(): void {
 
   // Don't process game logic if not playing
   if (state != GamePhase.PLAYING) return;
+
+  // Handle mission briefing dismissal
+  if (gameState.missionBriefingDismissed == 0) {
+    // Briefing is still visible, wait for START press to dismiss
+    if (buttonPressed(Button.START)) {
+      gameState.missionBriefingDismissed = 1;
+      gameState.initialRevealTimer = 180; // Start reveal animation (3 seconds)
+      log("Mission briefing acknowledged");
+    }
+    // Don't process game logic while briefing is visible
+    return;
+  }
 
   // Increment frame counter (for animation)
   gameState.frameCounter++;
@@ -314,6 +389,15 @@ export function update(): void {
       if (gameState.scannerY <= 10) {
         gameState.scannerPhase = 2; // Done
         gameState.scannerY = -1; // Deactivate
+
+        // Scanner complete - trigger pending beacon animations
+        for (let i: i32 = 0; i < MAX_BEACONS; i++) {
+          const beacon = beacons.get(i);
+          if (beacon.isActive == 1 && beacon.pendingRangeAnim == 1) {
+            beacon.rangeAnimTimer = 60;
+            beacon.pendingRangeAnim = 0;
+          }
+        }
       }
     }
   }
@@ -376,8 +460,8 @@ export function update(): void {
                 clearStarTrackingByBeacon(beacon.starIndex, BEACON_RANGE);
               }
 
-              // Start range animation
-              beacon.rangeAnimTimer = 60;
+              // Mark for range animation (will start after scanner completes)
+              beacon.pendingRangeAnim = 1;
 
               gameState.deploymentKits--;
               logi(
@@ -473,8 +557,8 @@ export function update(): void {
           clearStarTrackingByBeacon(beacon.starIndex, BEACON_RANGE);
         }
 
-        // Start range animation for this turn
-        beacon.rangeAnimTimer = 60;
+        // Mark for range animation (will start after scanner completes)
+        beacon.pendingRangeAnim = 1;
       }
     }
 
@@ -533,18 +617,18 @@ export function draw(): void {
   // Draw vertical scanner sweep OVER the starmap
   if (gameState.scannerY >= 0) {
     const scanY = gameState.scannerY;
-    
+
     // Main scan line (bright green)
     for (let x: i32 = 10; x < 310; x++) {
       pset(x, scanY, c(0x00ff00));
       pset(x, scanY + 1, c(0x00ff00));
     }
-    
+
     // Trailing fade lines (dimmer green)
     for (let offset: i32 = 2; offset < 8; offset++) {
       const alpha = (8 - offset) * 32; // Fade from 192 to 32
       const fadeColor = c(0x00ff00) | (alpha << 24);
-      
+
       if (gameState.scannerPhase == 0) {
         // Sweeping down - trail above
         const trailY = scanY - offset;
@@ -632,6 +716,11 @@ export function draw(): void {
   //   drawString(180, 220, "B:SWITCH", c(0xaaaaaa));
   //   drawString(180, 229, "START:END", c(0xaaaaaa));
   // }
+
+  // Draw mission briefing if not dismissed
+  if (gameState.missionBriefingDismissed == 0 && state == GamePhase.PLAYING) {
+    drawMissionBriefing();
+  }
 
   // Draw win/lose message
   if (state == GamePhase.WON) {

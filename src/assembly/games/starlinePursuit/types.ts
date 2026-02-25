@@ -41,8 +41,8 @@ const EDGE_SIZE: u32 = 8; // a(4) + b(4) = 8
 const CLUSTER_SIZE: u32 = 8; // x(4) + y(4) = 8
 const TARGET_SHIP_SIZE: u32 = 8; // currentStarIndex(4) + isActive(1) + padding(3) = 8
 const PLAYER_SHIP_SIZE: u32 = 12; // shipType(4) + currentStarIndex(4) + movesThisTurn(4) = 12
-const BEACON_SIZE: u32 = 8; // starIndex(4) + isActive(1) + isDetecting(1) + rangeAnimTimer(1) + padding(1) = 8
-const GAME_STATE_DATA_SIZE: u32 = 44; // phase(1) + numStars(1) + numEdges(2) + 8 i32 fields + scannerY(4) + scannerPhase(1) + padding(3) = 44 bytes
+const BEACON_SIZE: u32 = 8; // starIndex(4) + isActive(1) + isDetecting(1) + rangeAnimTimer(1) + pendingRangeAnim(1) = 8
+const GAME_STATE_DATA_SIZE: u32 = 48; // phase(1) + numStars(1) + numEdges(2) + targetType(1) + scannerPhase(1) + padding(2) + 10 i32 fields(40) = 48 bytes
 
 // Visual constants
 export const STAR_RADIUS: i32 = 2;
@@ -68,6 +68,14 @@ export enum ShipType {
   SCOUT = 1,
   SURVEY_CRUISER = 2,
   BEACON_TENDER = 3,
+}
+
+export enum TargetType {
+  SMUGGLER = 0, // Prefers hubs, avoids beacons heavily
+  PIRATE = 1, // Prefers outer rim, occasional pause
+  GHOST = 2, // High unpredictability
+  COURIER = 3, // Fast, double moves occasionally
+  DECOY_MASTER = 4, // Complex evasion patterns
 }
 
 // === @unmanaged Structures ===
@@ -137,6 +145,7 @@ export class Beacon {
   isActive: u8 = 0; // 1 if deployed, 0 if slot is empty
   isDetecting: u8 = 0; // 1 if target is within range, 0 otherwise
   rangeAnimTimer: u8 = 0; // Animation timer for showing beacon range (60 frames = 1 second)
+  pendingRangeAnim: u8 = 0; // 1 if animation should start after scanner completes, 0 otherwise
 }
 
 /**
@@ -148,6 +157,9 @@ export class GameState {
   phase: u8 = 0; // GamePhase enum value
   numStars: u8 = 0; // Number of stars generated
   numEdges: u16 = 0; // Number of edges generated
+  targetType: u8 = 0; // TargetType enum value
+  scannerPhase: u8 = 0; // 0=sweep down, 1=sweep up, 2=done
+  // 2 bytes padding for alignment
   sensorEnergy: i32 = 0;
   commandPoints: i32 = 0;
   deploymentKits: i32 = 0;
@@ -157,7 +169,7 @@ export class GameState {
   scanTimer: i32 = 0; // Countdown frames for displaying scan result
   initialRevealTimer: i32 = 0; // Countdown frames for initial target reveal animation
   scannerY: i32 = -1; // Vertical scanner position (-1 = inactive)
-  scannerPhase: u8 = 0; // 0=sweep down, 1=sweep up, 2=done
+  missionBriefingDismissed: i32 = 0; // 0 = show briefing, 1 = briefing dismissed
 }
 
 // === Memory Layout ===

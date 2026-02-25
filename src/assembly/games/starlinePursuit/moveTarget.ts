@@ -6,6 +6,7 @@ import {
   MAX_PLAYER_SHIPS,
   MemLayout,
   ShipType,
+  TargetType,
   beacons,
   edges,
   gameState,
@@ -78,6 +79,7 @@ function getClosestPlayerDistance(starIndex: i32): i32 {
 /**
  * Score a neighbor star for target AI decision making
  * Higher scores are preferred
+ * Behavior changes based on target type
  */
 function scoreNeighbor(neighborIndex: i32, currentDistance: i32): f32 {
   // CRITICAL: Never move to a star occupied by an Interceptor
@@ -95,34 +97,95 @@ function scoreNeighbor(neighborIndex: i32, currentDistance: i32): f32 {
     }
   }
 
+  const targetType = gameState.targetType;
+  const neighbor = stars.get(neighborIndex);
   let score: f32 = 0.0;
 
-  // Factor A: Distance from player (primary motivation: flee)
+  // Factor A: Distance from player (primary motivation for most targets)
   const neighborDistance = getClosestPlayerDistance(neighborIndex);
-  if (neighborDistance > currentDistance) {
-    // Moving away from player: strong bonus
-    score += 100.0;
-  } else if (neighborDistance < currentDistance) {
-    // Moving closer to player: heavy penalty
-    score -= 200.0;
+  
+  if (targetType == TargetType.PIRATE) {
+    // Pirate: less aggressive fleeing, prefers tactical positions
+    if (neighborDistance > currentDistance) {
+      score += 60.0; // Moderate bonus for moving away
+    } else if (neighborDistance < currentDistance) {
+      score -= 100.0; // Moderate penalty for moving closer
+    }
+  } else if (targetType == TargetType.GHOST) {
+    // Ghost: unpredictable, doesn't prioritize fleeing as strongly
+    if (neighborDistance > currentDistance) {
+      score += 50.0;
+    } else if (neighborDistance < currentDistance) {
+      score -= 80.0;
+    }
+  } else {
+    // Smuggler, Courier, Decoy Master: standard fleeing behavior
+    if (neighborDistance > currentDistance) {
+      score += 100.0; // Strong bonus for moving away
+    } else if (neighborDistance < currentDistance) {
+      score -= 200.0; // Heavy penalty for moving closer
+    }
   }
-  // Same distance: neutral (score += 0)
 
-  // Factor B: Detection risk (avoid beacon zones)
+  // Factor B: Detection risk (beacon avoidance varies by type)
   if (isStarDetected(neighborIndex)) {
-    score -= 80.0; // Strong penalty for watched space
+    if (targetType == TargetType.SMUGGLER) {
+      score -= 120.0; // Smuggler: heavily avoids beacons
+    } else if (targetType == TargetType.GHOST) {
+      score -= 40.0; // Ghost: less concerned about detection
+    } else if (targetType == TargetType.DECOY_MASTER) {
+      score -= 60.0; // Decoy Master: moderate beacon avoidance
+    } else {
+      score -= 80.0; // Pirate, Courier: standard avoidance
+    }
   }
 
-  // Factor C: Route freedom (prefer hubs with many exits)
-  const neighbor = stars.get(neighborIndex);
-  if (neighbor.isHub != 0) {
-    score += 30.0; // Hubs provide escape options
-  } else if (neighbor.degree <= 1) {
-    score -= 40.0; // Dead ends are dangerous
+  // Factor C: Route preference (varies by type)
+  if (targetType == TargetType.SMUGGLER) {
+    // Smuggler: strongly prefers hubs (high-traffic routes)
+    if (neighbor.isHub != 0) {
+      score += 60.0;
+    } else if (neighbor.degree <= 1) {
+      score -= 60.0; // Really dislikes dead ends
+    } else if (neighbor.degree >= 3) {
+      score += 20.0; // Likes well-connected stars
+    }
+  } else if (targetType == TargetType.PIRATE) {
+    // Pirate: prefers outer rim (low degree) but not dead ends
+    if (neighbor.degree == 2) {
+      score += 50.0; // Ideal: edge route
+    } else if (neighbor.isHub != 0) {
+      score += 20.0; // Will use hubs but not preferred
+    } else if (neighbor.degree <= 1) {
+      score -= 30.0; // Moderate penalty for dead ends
+    }
+  } else if (targetType == TargetType.COURIER) {
+    // Courier: prefers direct routes, avoids complex networks
+    if (neighbor.degree <= 2) {
+      score += 40.0; // Prefers simple paths
+    } else if (neighbor.isHub != 0) {
+      score -= 20.0; // Avoids busy hubs (too slow)
+    }
+  } else {
+    // Ghost, Decoy Master: standard route preference
+    if (neighbor.isHub != 0) {
+      score += 30.0;
+    } else if (neighbor.degree <= 1) {
+      score -= 40.0;
+    }
   }
 
-  // Factor F: Unpredictability noise (avoid determinism)
-  const noise = (randomRange(20) as f32) - 10.0; // Random [-10, +10]
+  // Factor D: Unpredictability noise (varies by type)
+  let noiseRange: i32 = 20;
+  if (targetType == TargetType.GHOST) {
+    noiseRange = 60; // Ghost: highly unpredictable
+  } else if (targetType == TargetType.DECOY_MASTER) {
+    noiseRange = 40; // Decoy Master: moderately unpredictable
+  } else if (targetType == TargetType.COURIER) {
+    noiseRange = 10; // Courier: very predictable (efficiency-focused)
+  }
+  
+  const noise = (randomRange(noiseRange) as f32) - ((noiseRange / 2) as f32);
   score += noise;
 
   return score;
@@ -176,6 +239,33 @@ export function moveTarget(): void {
           ship.shipType == ShipType.INTERCEPTOR) {
         log("ERROR: Target moved to Interceptor!");
         return;
+      }
+    }
+    
+    // Courier: Occasionally makes double moves (33% chance)
+    if (gameState.targetType == TargetType.COURIER && randomRange(3) == 0) {
+      // Get neighbors from new position for second move
+      const secondNeighborCount = getAllNeighbors(bestNeighbor, neighbors);
+      
+      if (secondNeighborCount > 0) {
+        const secondCurrentDistance = getClosestPlayerDistance(bestNeighbor);
+        let secondBestScore: f32 = -999999.0;
+        let secondBestNeighbor: i32 = -1;
+        
+        for (let i: i32 = 0; i < secondNeighborCount; i++) {
+          const neighborIndex = neighbors[i];
+          const score = scoreNeighbor(neighborIndex, secondCurrentDistance);
+          
+          if (score > secondBestScore) {
+            secondBestScore = score;
+            secondBestNeighbor = neighborIndex;
+          }
+        }
+        
+        if (secondBestNeighbor >= 0) {
+          targetShip.currentStarIndex = secondBestNeighbor;
+          log("Courier made double move!");
+        }
       }
     }
   } else {
