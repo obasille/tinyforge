@@ -103,7 +103,7 @@ function scoreNeighbor(neighborIndex: i32, currentDistance: i32): f32 {
 
   // Factor A: Distance from player (primary motivation for most targets)
   const neighborDistance = getClosestPlayerDistance(neighborIndex);
-  
+
   if (targetType == TargetType.PIRATE) {
     // Pirate: less aggressive fleeing, prefers tactical positions
     if (neighborDistance > currentDistance) {
@@ -142,13 +142,13 @@ function scoreNeighbor(neighborIndex: i32, currentDistance: i32): f32 {
 
   // Factor C: Route preference (varies by type)
   if (targetType == TargetType.SMUGGLER) {
-    // Smuggler: strongly prefers hubs (high-traffic routes)
+    // Smuggler: prefers low sensor visibility (moderate connectivity, avoids hubs)
     if (neighbor.isHub != 0) {
-      score += 60.0;
+      score -= 40.0; // Avoids high-traffic hubs (more sensor coverage)
+    } else if (neighbor.degree == 2 || neighbor.degree == 3) {
+      score += 50.0; // Prefers moderate connectivity
     } else if (neighbor.degree <= 1) {
-      score -= 60.0; // Really dislikes dead ends
-    } else if (neighbor.degree >= 3) {
-      score += 20.0; // Likes well-connected stars
+      score -= 60.0; // Dislikes dead ends (trapped)
     }
   } else if (targetType == TargetType.PIRATE) {
     // Pirate: prefers outer rim (low degree) but not dead ends
@@ -184,7 +184,7 @@ function scoreNeighbor(neighborIndex: i32, currentDistance: i32): f32 {
   } else if (targetType == TargetType.COURIER) {
     noiseRange = 10; // Courier: very predictable (efficiency-focused)
   }
-  
+
   const noise = (randomRange(noiseRange) as f32) - ((noiseRange / 2) as f32);
   score += noise;
 
@@ -235,33 +235,35 @@ export function moveTarget(): void {
     // Safety check: warn if target moved onto an Interceptor (should never happen)
     for (let i: i32 = 0; i < MAX_PLAYER_SHIPS; i++) {
       const ship = playerShips.get(i);
-      if (ship.currentStarIndex == bestNeighbor && 
-          ship.shipType == ShipType.INTERCEPTOR) {
+      if (
+        ship.currentStarIndex == bestNeighbor &&
+        ship.shipType == ShipType.INTERCEPTOR
+      ) {
         log("ERROR: Target moved to Interceptor!");
         return;
       }
     }
-    
-    // Courier: Occasionally makes double moves (33% chance)
-    if (gameState.targetType == TargetType.COURIER && randomRange(3) == 0) {
+
+    // Courier: Occasionally makes double moves (20% chance)
+    if (gameState.targetType == TargetType.COURIER && randomRange(5) == 0) {
       // Get neighbors from new position for second move
       const secondNeighborCount = getAllNeighbors(bestNeighbor, neighbors);
-      
+
       if (secondNeighborCount > 0) {
         const secondCurrentDistance = getClosestPlayerDistance(bestNeighbor);
         let secondBestScore: f32 = -999999.0;
         let secondBestNeighbor: i32 = -1;
-        
+
         for (let i: i32 = 0; i < secondNeighborCount; i++) {
           const neighborIndex = neighbors[i];
           const score = scoreNeighbor(neighborIndex, secondCurrentDistance);
-          
+
           if (score > secondBestScore) {
             secondBestScore = score;
             secondBestNeighbor = neighborIndex;
           }
         }
-        
+
         if (secondBestNeighbor >= 0) {
           targetShip.currentStarIndex = secondBestNeighbor;
           log("Courier made double move!");

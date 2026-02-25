@@ -83,9 +83,11 @@ function getShipTypeName(shipType: i32): string {
 function getTargetTypeName(targetType: u8): string {
   if (targetType == TargetType.SMUGGLER) return "SMUGGLER RUNNER";
   if (targetType == TargetType.PIRATE) return "PIRATE RAIDER";
-  if (targetType == TargetType.GHOST) return "GHOST SIGNAL";
+  if (targetType == TargetType.GHOST) return "GHOST PROBE";
   if (targetType == TargetType.COURIER) return "DIPLOMATIC COURIER";
   if (targetType == TargetType.DECOY_MASTER) return "DECOY MASTER";
+  if (targetType == TargetType.REBEL_COMMANDER) return "REBEL COMMANDER";
+  if (targetType == TargetType.SLEEPER_AGENT) return "SLEEPER AGENT";
   return "UNKNOWN";
 }
 
@@ -188,20 +190,26 @@ function drawMissionBriefing(): void {
   // Target behavior description
   const targetType = gameState.targetType;
   if (targetType == TargetType.SMUGGLER) {
-    drawString(30, 110, "PREFERS HIGH-TRAFFIC ROUTES", c(0xaaaaaa));
+    drawString(30, 110, "LOW SENSOR VISIBILITY", c(0xaaaaaa));
     drawString(30, 125, "AVOIDS BEACON COVERAGE", c(0xaaaaaa));
   } else if (targetType == TargetType.PIRATE) {
-    drawString(30, 110, "PREFERS OUTER RIM ROUTES", c(0xaaaaaa));
-    drawString(30, 125, "TACTICAL MOVEMENT", c(0xaaaaaa));
+    drawString(30, 110, "TARGETS TRADE HUBS", c(0xaaaaaa));
+    drawString(30, 125, "SEMI-AGGRESSIVE PATTERN", c(0xaaaaaa));
   } else if (targetType == TargetType.GHOST) {
-    drawString(30, 110, "HIGHLY UNPREDICTABLE", c(0xaaaaaa));
-    drawString(30, 125, "IGNORES BEACON ZONES", c(0xaaaaaa));
+    drawString(30, 110, "STEALTH-HEAVY", c(0xaaaaaa));
+    drawString(30, 125, "HIGHLY UNPREDICTABLE", c(0xaaaaaa));
   } else if (targetType == TargetType.COURIER) {
-    drawString(30, 110, "FAST - DIRECT ROUTES", c(0xaaaaaa));
-    drawString(30, 125, "MAY MAKE DOUBLE MOVES", c(0xaaaaaa));
+    drawString(30, 110, "HIGH SPEED - DIRECT ROUTES", c(0xaaaaaa));
+    drawString(30, 125, "20PCT CHANCE DOUBLE JUMP", c(0xaaaaaa));
   } else if (targetType == TargetType.DECOY_MASTER) {
-    drawString(30, 110, "ADVANCED EVASION", c(0xaaaaaa));
-    drawString(30, 125, "COMPLEX PATTERNS", c(0xaaaaaa));
+    drawString(30, 110, "CREATES FALSE TRAILS", c(0xaaaaaa));
+    drawString(30, 125, "MISINFORMATION TACTICS", c(0xaaaaaa));
+  } else if (targetType == TargetType.REBEL_COMMANDER) {
+    drawString(30, 110, "STRATEGIC AND ADAPTIVE", c(0xaaaaaa));
+    drawString(30, 125, "ADVANCED OPPONENT", c(0xaaaaaa));
+  } else if (targetType == TargetType.SLEEPER_AGENT) {
+    drawString(30, 110, "DELAYED REVEAL", c(0xaaaaaa));
+    drawString(30, 125, "HIDDEN BEHAVIOR PATTERN", c(0xaaaaaa));
   }
 
   // Objective
@@ -306,8 +314,9 @@ export function init(): void {
   gameState.scannerY = -1; // Scanner inactive
   gameState.scannerPhase = 0;
 
-  // Select random target type
-  gameState.targetType = randomRange(5) as u8; // 0-4: SMUGGLER, PIRATE, GHOST, COURIER, DECOY_MASTER
+  // Select random target type (0-4 for now, excluding advanced types)
+  gameState.targetType = randomRange(5) as u8; // SMUGGLER, PIRATE, GHOST, COURIER, DECOY_MASTER
+  // TODO: Add REBEL_COMMANDER (5) and SLEEPER_AGENT (6) when their behaviors are fully implemented
   gameState.missionBriefingDismissed = 0; // Show briefing, wait for START press
 
   // Initialize star tracking with target's starting position

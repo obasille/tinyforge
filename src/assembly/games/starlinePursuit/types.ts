@@ -71,11 +71,13 @@ export enum ShipType {
 }
 
 export enum TargetType {
-  SMUGGLER = 0, // Prefers hubs, avoids beacons heavily
-  PIRATE = 1, // Prefers outer rim, occasional pause
-  GHOST = 2, // High unpredictability
-  COURIER = 3, // Fast, double moves occasionally
-  DECOY_MASTER = 4, // Complex evasion patterns
+  SMUGGLER = 0, // Baseline evasive, prefers low sensor visibility
+  PIRATE = 1, // Semi-aggressive, visits trade hubs
+  GHOST = 2, // Stealth-heavy, highly unpredictable
+  COURIER = 3, // High-speed, direct routes, 20% double jump
+  DECOY_MASTER = 4, // Misinformation-based, creates false trails
+  REBEL_COMMANDER = 5, // Strategic and adaptive opponent
+  SLEEPER_AGENT = 6, // Hidden behavior, delayed reveal
 }
 
 // === @unmanaged Structures ===
