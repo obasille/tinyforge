@@ -22,12 +22,17 @@ import { drawStarmap } from "./starlinePursuit/drawStarmap";
 import { generateStarmap } from "./starlinePursuit/generateStarmap";
 import { moveTarget } from "./starlinePursuit/moveTarget";
 import {
+  clearStarTrackingByBeacon,
+  clearStarTrackingByScan,
+  initializeStarTracking,
+  updateStarTracking,
+} from "./starlinePursuit/starTracking";
+import {
   BEACON_RANGE,
   beacons,
   edges,
   GamePhase,
   gameState,
-  targetShip,
   MAX_BEACONS,
   MAX_COMMAND_POINTS,
   MAX_EDGES,
@@ -39,19 +44,14 @@ import {
   SCAN_RADIUS,
   SE_REGEN_PER_TURN,
   ShipType,
-  TargetType,
   stars,
   STARTING_COMMAND_POINTS,
   STARTING_DEPLOYMENT_KITS,
   STARTING_SENSOR_ENERGY,
+  targetShip,
+  TargetType,
 } from "./starlinePursuit/types";
-import {
-  clearStarTrackingByBeacon,
-  clearStarTrackingByScan,
-  initializeStarTracking,
-  starsDist2,
-  updateStarTracking,
-} from "./starlinePursuit/utils";
+import { starsDist2 } from "./starlinePursuit/utils";
 
 // === Helper Functions ===
 
@@ -326,7 +326,6 @@ export function init(): void {
     beacon.isDetecting = 0;
   }
 
-  logi("Fleet deployed - Target at star {}", targetShip.currentStarIndex, 0, 0);
   log("Starmap ready");
 }
 
