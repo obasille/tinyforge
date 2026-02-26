@@ -524,9 +524,19 @@ function restartGame(): void {
 
   // Reset game state
   addConsoleEntry('LOG', `RNG Seed: ${formatSeedHex(getRngSeed())}`);
-  init();
+
   const displayName = formatGameDisplayName(currentGame);
-  addConsoleEntry('LOG', `${displayName} reloaded successfully`);
+  try {
+    init();
+    addConsoleEntry('LOG', `${displayName} reloaded successfully`);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    addConsoleEntry('ERROR', `Failed to reload ${displayName}: ${message}`);
+    if (e instanceof Error && e.stack) {
+      console.error('Stack trace:', e.stack);
+    }
+    hasAborted = true;
+  }
 
   // Reset timing variables
   last = performance.now();
@@ -892,16 +902,16 @@ document
     }
   });
 
-const pressStart = (event: Event): void => {
-  preventIfTouchScrollBlocked(event);
-  inputMask |= keyMap.start;
-};
-const releaseStart = (event: Event): void => {
-  preventIfTouchScrollBlocked(event);
-  inputMask &= ~keyMap.start;
-};
-canvas.addEventListener('mousedown', pressStart);
-window.addEventListener('mouseup', releaseStart);
+// const pressStart = (event: Event): void => {
+//   preventIfTouchScrollBlocked(event);
+//   inputMask |= keyMap.start;
+// };
+// const releaseStart = (event: Event): void => {
+//   preventIfTouchScrollBlocked(event);
+//   inputMask &= ~keyMap.start;
+// };
+// canvas.addEventListener('mousedown', pressStart);
+// window.addEventListener('mouseup', releaseStart);
 
 // Next button: switch to next game
 document
