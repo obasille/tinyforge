@@ -61,6 +61,14 @@ export class FixedArray<T> {
   }
 
   /**
+   * Get element size stored in first 4 bytes
+   */
+  @inline
+  get elementSize(): u32 {
+    return sizeof<T>();
+  }
+
+  /**
    * Get element at index (zero overhead with @inline)
    * @param index Array index
    * @returns Element value at index
@@ -167,11 +175,28 @@ export class FixedArrayWithCount<T, U = u16> {
    * The caller must ensure the memory at this address is properly allocated
    * and sized for the intended use (2*sizeof<U> for metadata + capacity*sizeof<T> for data)
    * @param address Memory address of the pre-allocated array
+   * @param elementSize Optional, size of each element in bytes (not used for FixedArrayWithCount but included for consistency with FixedArrayOfObjWithCount)
+   * @param capacity Optional, maximum number of elements (sets capacity in memory)
+   * @param align Optional, if true, aligns elementSize to 4-byte boundary (not used for FixedArrayWithCount but included for consistency)
    * @returns FixedArrayWithCount instance
    */
   @inline
-  static fromAddress<T, U = u16>(address: usize): FixedArrayWithCount<T, U> {
-    return changetype<FixedArrayWithCount<T, U>>(address);
+  static fromAddress<T, U = u16>(
+    address: usize,
+    elementSize: u32 = 0,
+    capacity: U = 0 as U,
+    align: bool = false,
+  ): FixedArrayWithCount<T, U> {
+    const instance = changetype<FixedArrayWithCount<T, U>>(address);
+    if (elementSize) {
+      const size = align ? (elementSize + 3) & ~3 : elementSize;
+      store<u32>(address, size);
+    }
+    if (capacity) {
+      store<U>(address + 4, 0 as U);
+      store<U>(address + 4 + sizeof<U>(), capacity);
+    }
+    return instance;
   }
 
   /**
@@ -183,6 +208,14 @@ export class FixedArrayWithCount<T, U = u16> {
   @inline
   static sizeInMemory<T, U = u16>(capacity: i32): usize {
     return sizeof<U>() * 2 + capacity * sizeof<T>();
+  }
+
+  /**
+   * Get element size
+   */
+  @inline
+  get elementSize(): u32 {
+    return sizeof<T>();
   }
 
   /**
@@ -201,7 +234,9 @@ export class FixedArrayWithCount<T, U = u16> {
   @inline
   set length(value: U) {
     const baseAddr = changetype<usize>(this);
-    store<U>(baseAddr, value); // Math.max(0, Mathf.min(value, this.capacity)));
+    const checkedSize =
+      value < 0 ? 0 : value > this.capacity ? this.capacity : value;
+    store<U>(baseAddr, checkedSize as U);
   }
 
   /**
@@ -214,13 +249,22 @@ export class FixedArrayWithCount<T, U = u16> {
   }
 
   /**
-   * Set maximum capacity (should be set once during initialization)
+   * Return the base address of the array data (after metadata)
+   * @returns Memory address where array elements start
    */
-  // @ts-expect-error AssemblyScript decorator
   @inline
-  set capacity(value: U) {
-    const baseAddr = changetype<usize>(this);
-    store<U>(baseAddr + sizeof<U>(), value);
+  get dataStart(): usize {
+    return changetype<usize>(this) + sizeof<U>() * 2;
+  }
+
+  /**
+   * Get memory size with automatic 4-byte alignment
+   * @returns Size in bytes
+   */
+  @inline
+  get alignedMemorySize(): usize {
+    const elemSize = this.elementSize;
+    return (sizeof<U>() * 2 + elemSize * (this.capacity as i32) + 3) & ~3;
   }
 
   /**
@@ -230,8 +274,9 @@ export class FixedArrayWithCount<T, U = u16> {
    */
   @inline
   get(index: i32): T {
+    this.checkIndex(index);
     const baseAddr = changetype<usize>(this);
-    return load<T>(baseAddr + sizeof<U>() * 2 + index * sizeof<T>());
+    return load<T>(this.dataStart + index * sizeof<T>());
   }
 
   /**
@@ -241,8 +286,9 @@ export class FixedArrayWithCount<T, U = u16> {
    */
   @inline
   set(index: i32, value: T): void {
+    this.checkIndex(index);
     const baseAddr = changetype<usize>(this);
-    store<T>(baseAddr + sizeof<U>() * 2 + index * sizeof<T>(), value);
+    store<T>(this.dataStart + index * sizeof<T>(), value);
   }
 
   /**
@@ -266,15 +312,35 @@ export class FixedArrayWithCount<T, U = u16> {
   /**
    * Append element to end of array if not at capacity
    * @param value Value to append
+   * @return true if element was added, false if at capacity
    */
   @inline
-  push(value: T): void {
+  push(value: T): boolean {
     const len = this.length;
     const cap = this.capacity;
-    if ((len as i32) < (cap as i32)) {
-      this.set(len as i32, value);
-      this.length = ((len as i32) + 1) as U;
+    if ((len as i32) >= (cap as i32)) {
+      return false;
     }
+    this.set(len as i32, value);
+    this.length = ((len as i32) + 1) as U;
+    return true;
+  }
+
+  /**
+   * Grow the array by one element and return pointer to it
+   * Increases length by 1 and returns reference to the new last element
+   * @returns Reference to the newly allocated element at the end
+   * @throws Error if array is at capacity
+   */
+  @inline
+  grow(): T {
+    const len = this.length;
+    const cap = this.capacity;
+    if (len >= cap) {
+      throw new Error("FixedArrayOfObjWithCount: Cannot grow, at capacity");
+    }
+    this.length = (len + 1) as U;
+    return this.get(len);
   }
 
   /**
@@ -326,6 +392,15 @@ export class FixedArrayWithCount<T, U = u16> {
       if (this.get(i) == value) return i;
     }
     return -1;
+  }
+
+  private checkIndex(index: i32): void {
+    if (index < 0) {
+      throw new Error("FixedArrayWithCount: Index cannot be negative");
+    }
+    if (index >= (this.length as i32)) {
+      throw new Error("FixedArrayWithCount: Index exceeds length");
+    }
   }
 }
 
@@ -418,18 +493,6 @@ export class FixedArrayOfObj<T> {
   }
 
   /**
-   * Calculate memory size with automatic 4-byte alignment
-   * @param capacity Number of elements
-   * @param elementSize Size of each element in bytes (will be aligned)
-   * @returns Size in bytes
-   */
-  @inline
-  static sizeInMemoryAligned(capacity: i32, elementSize: u32): usize {
-    const alignedSize = (elementSize + 3) & ~3;
-    return 4 + capacity * alignedSize;
-  }
-
-  /**
    * Get element size stored in first 4 bytes
    */
   @inline
@@ -439,13 +502,12 @@ export class FixedArrayOfObj<T> {
   }
 
   /**
-   * Set element size (should be set once during initialization)
+   * Return the base address of the array data (after metadata)
+   * @returns Memory address where array elements start
    */
-  // @ts-expect-error AssemblyScript decorator
   @inline
-  set elementSize(value: u32) {
-    const baseAddr = changetype<usize>(this);
-    store<u32>(baseAddr, value);
+  get dataStart(): usize {
+    return changetype<usize>(this) + 4;
   }
 
   /**
@@ -455,9 +517,7 @@ export class FixedArrayOfObj<T> {
    */
   @inline
   get(index: i32): T {
-    const baseAddr = changetype<usize>(this);
-    const elemSize = load<u32>(baseAddr);
-    return changetype<T>(baseAddr + 4 + index * elemSize);
+    return changetype<T>(this.dataStart + index * this.elementSize);
   }
 
   /**
@@ -466,9 +526,8 @@ export class FixedArrayOfObj<T> {
    * @param value Object to copy into the array
    */
   set(index: i32, value: T): void {
-    const baseAddr = changetype<usize>(this);
-    const elemSize = load<u32>(baseAddr);
-    const destAddr = baseAddr + 4 + index * elemSize;
+    const elemSize = this.elementSize;
+    const destAddr = this.dataStart + index * elemSize;
     const srcAddr = changetype<usize>(value);
     memory.copy(destAddr, srcAddr, elemSize);
   }
@@ -541,6 +600,7 @@ export class FixedArrayOfObjWithCount<T, U = u16> {
    * Create a FixedArrayOfObjWithCount instance and initialize element size
    * @param address Memory address of the pre-allocated array
    * @param elementSize Optional, size of each element in bytes (otherwise must be set manually in memory)
+   * @param capacity Optional, maximum number of elements (sets capacity in memory)
    * @param align Optional, if true, aligns elementSize to 4-byte boundary
    * @returns FixedArrayOfObjWithCount instance
    */
@@ -548,14 +608,19 @@ export class FixedArrayOfObjWithCount<T, U = u16> {
   static fromAddress<T, U = u16>(
     address: usize,
     elementSize: u32 = 0,
+    capacity: U = 0 as U,
     align: bool = false,
   ): FixedArrayOfObjWithCount<T, U> {
-    const arr = changetype<FixedArrayOfObjWithCount<T, U>>(address);
+    const instance = changetype<FixedArrayOfObjWithCount<T, U>>(address);
     if (elementSize) {
       const size = align ? (elementSize + 3) & ~3 : elementSize;
       store<u32>(address, size);
     }
-    return arr;
+    if (capacity) {
+      store<U>(address + 4, 0 as U);
+      store<U>(address + 4 + sizeof<U>(), capacity);
+    }
+    return instance;
   }
 
   /**
@@ -571,34 +636,12 @@ export class FixedArrayOfObjWithCount<T, U = u16> {
   }
 
   /**
-   * Calculate memory size with automatic 4-byte alignment
-   * @param capacity Number of elements
-   * @param elementSize Size of each element in bytes (will be aligned)
-   * @returns Size in bytes
-   */
-  @inline
-  static sizeInMemoryAligned<U = u16>(capacity: i32, elementSize: u32): usize {
-    const alignedSize = (elementSize + 3) & ~3;
-    return 4 + sizeof<U>() * 2 + capacity * alignedSize;
-  }
-
-  /**
-   * Get element size stored in first 4 bytes
+   * Get element size
    */
   @inline
   get elementSize(): u32 {
     const baseAddr = changetype<usize>(this);
     return load<u32>(baseAddr);
-  }
-
-  /**
-   * Set element size (should be set once during initialization)
-   */
-  // @ts-expect-error AssemblyScript decorator
-  @inline
-  set elementSize(value: u32) {
-    const baseAddr = changetype<usize>(this);
-    store<u32>(baseAddr, value);
   }
 
   /**
@@ -617,7 +660,9 @@ export class FixedArrayOfObjWithCount<T, U = u16> {
   @inline
   set length(value: U) {
     const baseAddr = changetype<usize>(this);
-    store<U>(baseAddr + 4, value);
+    const checkedSize =
+      value < 0 ? 0 : value > this.capacity ? this.capacity : value;
+    store<U>(baseAddr + 4, checkedSize as U);
   }
 
   /**
@@ -630,13 +675,23 @@ export class FixedArrayOfObjWithCount<T, U = u16> {
   }
 
   /**
-   * Set maximum capacity (should be set once during initialization)
+   * Return the base address of the array data (after metadata)
+   * @returns Memory address where array elements start
    */
-  // @ts-expect-error AssemblyScript decorator
   @inline
-  set capacity(value: U) {
-    const baseAddr = changetype<usize>(this);
-    store<U>(baseAddr + 4 + sizeof<U>(), value);
+  get dataStart(): usize {
+    return changetype<usize>(this) + 4 + sizeof<U>() * 2;
+  }
+
+  /**
+   * Get memory size with automatic 4-byte alignment
+   * @returns Size in bytes
+   */
+  @inline
+  get alignedMemorySize(): usize {
+    return (
+      (4 + sizeof<U>() * 2 + this.elementSize * (this.capacity as i32) + 3) & ~3
+    );
   }
 
   /**
@@ -646,9 +701,8 @@ export class FixedArrayOfObjWithCount<T, U = u16> {
    */
   @inline
   get(index: i32): T {
-    const baseAddr = changetype<usize>(this);
-    const elemSize = load<u32>(baseAddr);
-    return changetype<T>(baseAddr + 4 + sizeof<U>() * 2 + index * elemSize);
+    this.checkIndex(index);
+    return changetype<T>(this.dataStart + index * this.elementSize);
   }
 
   /**
@@ -657,9 +711,10 @@ export class FixedArrayOfObjWithCount<T, U = u16> {
    * @param value Object to copy into the array
    */
   set(index: i32, value: T): void {
+    this.checkIndex(index);
     const baseAddr = changetype<usize>(this);
     const elemSize = load<u32>(baseAddr);
-    const destAddr = baseAddr + 4 + sizeof<U>() * 2 + index * elemSize;
+    const destAddr = this.dataStart + index * this.elementSize;
     const srcAddr = changetype<usize>(value);
     memory.copy(destAddr, srcAddr, elemSize);
   }
@@ -697,6 +752,23 @@ export class FixedArrayOfObjWithCount<T, U = u16> {
   }
 
   /**
+   * Grow the array by one element and return pointer to it
+   * Increases length by 1 and returns reference to the new last element
+   * @returns Reference to the newly allocated element at the end
+   * @throws Error if array is at capacity
+   */
+  @inline
+  grow(): T {
+    const len = this.length;
+    const cap = this.capacity;
+    if (len >= cap) {
+      throw new Error("FixedArrayOfObjWithCount: Cannot grow, at capacity");
+    }
+    this.length = (len + 1) as U;
+    return this.get(len);
+  }
+
+  /**
    * Clear array (sets length to 0, doesn't modify data)
    */
   @inline
@@ -713,12 +785,12 @@ export class FixedArrayOfObjWithCount<T, U = u16> {
     if (index >= 0 && index < len) {
       const baseAddr = changetype<usize>(this);
       const elemSize = load<u32>(baseAddr);
-      const dataStart = baseAddr + 4 + sizeof<U>() * 2;
+      const dataStart = this.dataStart;
 
       // Shift elements left
       for (let i = index; i < len - 1; i++) {
-        const destAddr = dataStart + i * elemSize;
-        const srcAddr = dataStart + (i + 1) * elemSize;
+        const destAddr = dataStart + i * this.elementSize;
+        const srcAddr = dataStart + (i + 1) * this.elementSize;
         memory.copy(destAddr, srcAddr, elemSize);
       }
       this.length = (len - 1) as U;
@@ -739,5 +811,14 @@ export class FixedArrayOfObjWithCount<T, U = u16> {
       if (predicate(this.get(i))) return i;
     }
     return -1;
+  }
+
+  private checkIndex(index: i32): void {
+    if (index < 0) {
+      throw new Error("FixedArrayOfObjWithCount: Index cannot be negative");
+    }
+    if (index >= (this.length as i32)) {
+      throw new Error("FixedArrayOfObjWithCount: Index exceeds length");
+    }
   }
 }
