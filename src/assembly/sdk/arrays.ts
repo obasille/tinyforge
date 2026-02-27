@@ -482,3 +482,262 @@ export class FixedArrayOfObj<T> {
     return this.get(index);
   }
 }
+
+/**
+ * Zero-allocation fixed-size array for @unmanaged objects with length tracking
+ * Combines FixedArrayOfObj (element size metadata) with FixedArrayWithCount (length/capacity tracking)
+ * Uses @unmanaged pattern - no heap allocation, just address reinterpretation
+ *
+ * Memory layout (at base address):
+ *   [0 to 3]:                      u32 elementSize (size of each element in bytes)
+ *   [4 to 4+sizeof<U>-1]:          U length (current count)
+ *   [4+sizeof<U> to 4+2*sizeof<U>-1]: U capacity (maximum count)
+ *   [4+2*sizeof<U>+]:              array data (elements of type T)
+ *
+ * Supports bracket notation: arr[index] = value and val = arr[index]
+ *
+ * @example
+ * ```ts
+ * @unmanaged
+ * class Enemy {
+ *   x: i32;      // offset 0
+ *   y: i32;      // offset 4
+ *   health: i32; // offset 8
+ * }
+ *
+ * // Calculate element size using offsetof on the last field
+ * const enemySize = offsetof<Enemy>("health") + sizeof<i32>();  // 12 bytes
+ *
+ * // Calculate memory requirements:
+ * const size = FixedArrayOfObjWithCount.sizeInMemory(50, enemySize);  // 4 + 4 + 600 = 608 bytes (with u16 counters)
+ *
+ * // Create array and initialize:
+ * const enemies = FixedArrayOfObjWithCount.fromAddress<Enemy>(RAM_START + 100, enemySize);
+ * enemies.capacity = 50;
+ * enemies.clear();
+ *
+ * // Or with alignment:
+ * const enemies = FixedArrayOfObjWithCount.fromAddress<Enemy>(RAM_START + 100, enemySize, true);
+ * enemies.capacity = 50;
+ *
+ * // Usage with methods:
+ * const enemy = enemies.get(0);
+ * enemy.x = 10;
+ * enemy.health = 100;
+ * enemies.push(enemy);              // Add element
+ * const len = enemies.length;       // Get current length
+ * enemies.clear();                  // Reset length to 0
+ *
+ * // Bracket notation:
+ * enemies[0].x = 20;
+ * const e = enemies[0];
+ * ```
+ */
+@unmanaged
+export class FixedArrayOfObjWithCount<T, U = u16> {
+  // No fields - this class is just a type marker for the memory region
+
+  /**
+   * Create a FixedArrayOfObjWithCount instance and initialize element size
+   * @param address Memory address of the pre-allocated array
+   * @param elementSize Optional, size of each element in bytes (otherwise must be set manually in memory)
+   * @param align Optional, if true, aligns elementSize to 4-byte boundary
+   * @returns FixedArrayOfObjWithCount instance
+   */
+  @inline
+  static fromAddress<T, U = u16>(
+    address: usize,
+    elementSize: u32 = 0,
+    align: bool = false,
+  ): FixedArrayOfObjWithCount<T, U> {
+    const arr = changetype<FixedArrayOfObjWithCount<T, U>>(address);
+    if (elementSize) {
+      const size = align ? (elementSize + 3) & ~3 : elementSize;
+      store<u32>(address, size);
+    }
+    return arr;
+  }
+
+  /**
+   * Calculate memory size required for array with given capacity
+   * Includes metadata (elementSize + length + capacity) and data storage
+   * @param capacity Number of elements
+   * @param elementSize Size of each element in bytes
+   * @returns Size in bytes (4 bytes for elementSize + 2*sizeof<U> for counters + capacity * elementSize)
+   */
+  @inline
+  static sizeInMemory<U = u16>(capacity: i32, elementSize: u32): usize {
+    return 4 + sizeof<U>() * 2 + capacity * elementSize;
+  }
+
+  /**
+   * Calculate memory size with automatic 4-byte alignment
+   * @param capacity Number of elements
+   * @param elementSize Size of each element in bytes (will be aligned)
+   * @returns Size in bytes
+   */
+  @inline
+  static sizeInMemoryAligned<U = u16>(capacity: i32, elementSize: u32): usize {
+    const alignedSize = (elementSize + 3) & ~3;
+    return 4 + sizeof<U>() * 2 + capacity * alignedSize;
+  }
+
+  /**
+   * Get element size stored in first 4 bytes
+   */
+  @inline
+  get elementSize(): u32 {
+    const baseAddr = changetype<usize>(this);
+    return load<u32>(baseAddr);
+  }
+
+  /**
+   * Set element size (should be set once during initialization)
+   */
+  // @ts-expect-error AssemblyScript decorator
+  @inline
+  set elementSize(value: u32) {
+    const baseAddr = changetype<usize>(this);
+    store<u32>(baseAddr, value);
+  }
+
+  /**
+   * Get current length (number of elements in use)
+   */
+  @inline
+  get length(): U {
+    const baseAddr = changetype<usize>(this);
+    return load<U>(baseAddr + 4);
+  }
+
+  /**
+   * Set current length (number of elements in use)
+   */
+  // @ts-expect-error AssemblyScript decorator
+  @inline
+  set length(value: U) {
+    const baseAddr = changetype<usize>(this);
+    store<U>(baseAddr + 4, value);
+  }
+
+  /**
+   * Get maximum capacity
+   */
+  @inline
+  get capacity(): U {
+    const baseAddr = changetype<usize>(this);
+    return load<U>(baseAddr + 4 + sizeof<U>());
+  }
+
+  /**
+   * Set maximum capacity (should be set once during initialization)
+   */
+  // @ts-expect-error AssemblyScript decorator
+  @inline
+  set capacity(value: U) {
+    const baseAddr = changetype<usize>(this);
+    store<U>(baseAddr + 4 + sizeof<U>(), value);
+  }
+
+  /**
+   * Get element at index (zero overhead with @inline)
+   * @param index Array index (should be < length)
+   * @returns Element reference at index
+   */
+  @inline
+  get(index: i32): T {
+    const baseAddr = changetype<usize>(this);
+    const elemSize = load<u32>(baseAddr);
+    return changetype<T>(baseAddr + 4 + sizeof<U>() * 2 + index * elemSize);
+  }
+
+  /**
+   * Set element at index by copying object data into array memory
+   * @param index Array index (should be < length)
+   * @param value Object to copy into the array
+   */
+  set(index: i32, value: T): void {
+    const baseAddr = changetype<usize>(this);
+    const elemSize = load<u32>(baseAddr);
+    const destAddr = baseAddr + 4 + sizeof<U>() * 2 + index * elemSize;
+    const srcAddr = changetype<usize>(value);
+    memory.copy(destAddr, srcAddr, elemSize);
+  }
+
+  /**
+   * Index operator for reading: arr[index]
+   */
+  @inline
+  @operator("[]")
+  private __get(index: i32): T {
+    return this.get(index);
+  }
+
+  /**
+   * Index operator for writing: arr[index] = value
+   * Note: This copies the object data into the array
+   */
+  @inline
+  @operator("[]=")
+  private __set(index: i32, value: T): void {
+    this.set(index, value);
+  }
+
+  /**
+   * Append element to end of array if not at capacity
+   * @param value Object to append (will be copied)
+   */
+  push(value: T): void {
+    const len = this.length;
+    const cap = this.capacity;
+    if ((len as i32) < (cap as i32)) {
+      this.set(len as i32, value);
+      this.length = ((len as i32) + 1) as U;
+    }
+  }
+
+  /**
+   * Clear array (sets length to 0, doesn't modify data)
+   */
+  @inline
+  clear(): void {
+    this.length = 0 as U;
+  }
+
+  /**
+   * Remove element at index by shifting remaining elements
+   * @param index Index of element to remove
+   */
+  removeAt(index: i32): void {
+    const len = this.length as i32;
+    if (index >= 0 && index < len) {
+      const baseAddr = changetype<usize>(this);
+      const elemSize = load<u32>(baseAddr);
+      const dataStart = baseAddr + 4 + sizeof<U>() * 2;
+
+      // Shift elements left
+      for (let i = index; i < len - 1; i++) {
+        const destAddr = dataStart + i * elemSize;
+        const srcAddr = dataStart + (i + 1) * elemSize;
+        memory.copy(destAddr, srcAddr, elemSize);
+      }
+      this.length = (len - 1) as U;
+    }
+  }
+
+  /**
+   * Get index of first element matching a predicate
+   * Note: For object comparison, you need to implement custom comparison logic
+   * @param index Index to start searching from
+   * @param predicate Function that returns true for matching elements
+   * @returns Index if found, -1 otherwise
+   */
+  @inline
+  findIndex(startIndex: i32, predicate: (element: T) => bool): i32 {
+    const len = this.length as i32;
+    for (let i = startIndex; i < len; i++) {
+      if (predicate(this.get(i))) return i;
+    }
+    return -1;
+  }
+}
