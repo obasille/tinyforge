@@ -305,3 +305,42 @@ export function printRight(x: i32, y: i32, text: string, color: u32): void {
   const width = measureText(text);
   print(x - width, y, text, color);
 }
+
+/**
+ * Print a number (positive or negative, multi-digit) using the 6×8 monochrome font
+ * @param x X coordinate
+ * @param y Y coordinate
+ * @param num Number to print
+ * @param color ABGR color value
+ */
+export function printNumber(x: i32, y: i32, num: i32, color: u32): void {
+  let currentX = x;
+
+  // Handle negative numbers
+  if (num < 0) {
+    printChar(currentX, y, 45, color); // Draw '-' character
+    currentX += 6; // Each character is 6 pixels wide
+    num = -num;
+  }
+
+  // Handle zero specially
+  if (num == 0) {
+    printChar(currentX, y, 48, color); // '0'
+    return;
+  }
+
+  // Count digits to determine starting position
+  let temp = num;
+  let digitCount: i32 = 0;
+  while (temp > 0) {
+    digitCount++;
+    temp /= 10;
+  }
+
+  // Draw digits from right to left
+  for (let i: i32 = digitCount - 1; i >= 0; i--) {
+    const digit = num % 10;
+    printChar(currentX + i * 6, y, 48 + digit, color); // ASCII '0' is 48
+    num /= 10;
+  }
+}
