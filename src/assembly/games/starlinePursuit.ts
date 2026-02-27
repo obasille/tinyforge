@@ -6,13 +6,13 @@ import {
   buttonPressed,
   c,
   clearFramebuffer,
-  drawNumber,
   drawRect,
-  drawString,
   fillRect,
   UncheckedArrayView,
   log,
   logi,
+  print,
+  printNumber,
   pset,
   randomRange,
 } from "../sdk";
@@ -179,44 +179,44 @@ function drawMissionBriefing(): void {
   drawRect(21, 61, 278, 132, c(0x00aaff));
 
   // Title
-  drawString(90, 70, "MISSION BRIEFING", c(0x00aaff));
+  print(90, 70, "MISSION BRIEFING", c(0x00aaff));
 
   // Target type
   const targetTypeName = getTargetTypeName(gameState.targetType);
-  drawString(50, 90, "TARGET:", c(0xffffff));
-  drawString(114, 90, targetTypeName, c(0xffaa00));
+  print(50, 90, "TARGET:", c(0xffffff));
+  print(106, 90, targetTypeName, c(0xffaa00));
 
   // Target behavior description
   const targetType = gameState.targetType;
   if (targetType == TargetType.SMUGGLER) {
-    drawString(30, 110, "LOW SENSOR VISIBILITY", c(0xaaaaaa));
-    drawString(30, 125, "AVOIDS BEACON COVERAGE", c(0xaaaaaa));
+    print(30, 110, "LOW SENSOR VISIBILITY", c(0xaaaaaa));
+    print(30, 125, "AVOIDS BEACON COVERAGE", c(0xaaaaaa));
   } else if (targetType == TargetType.PIRATE) {
-    drawString(30, 110, "TARGETS TRADE HUBS", c(0xaaaaaa));
-    drawString(30, 125, "SEMI-AGGRESSIVE PATTERN", c(0xaaaaaa));
+    print(30, 110, "TARGETS TRADE HUBS", c(0xaaaaaa));
+    print(30, 125, "SEMI-AGGRESSIVE PATTERN", c(0xaaaaaa));
   } else if (targetType == TargetType.GHOST) {
-    drawString(30, 110, "STEALTH-HEAVY", c(0xaaaaaa));
-    drawString(30, 125, "HIGHLY UNPREDICTABLE", c(0xaaaaaa));
+    print(30, 110, "STEALTH-HEAVY", c(0xaaaaaa));
+    print(30, 125, "HIGHLY UNPREDICTABLE", c(0xaaaaaa));
   } else if (targetType == TargetType.COURIER) {
-    drawString(30, 110, "HIGH SPEED - DIRECT ROUTES", c(0xaaaaaa));
-    drawString(30, 125, "20PCT CHANCE DOUBLE JUMP", c(0xaaaaaa));
+    print(30, 110, "HIGH SPEED - DIRECT ROUTES", c(0xaaaaaa));
+    print(30, 125, "20PCT CHANCE DOUBLE JUMP", c(0xaaaaaa));
   } else if (targetType == TargetType.DECOY_MASTER) {
-    drawString(30, 110, "CREATES FALSE TRAILS", c(0xaaaaaa));
-    drawString(30, 125, "MISINFORMATION TACTICS", c(0xaaaaaa));
+    print(30, 110, "CREATES FALSE TRAILS", c(0xaaaaaa));
+    print(30, 125, "MISINFORMATION TACTICS", c(0xaaaaaa));
   } else if (targetType == TargetType.REBEL_COMMANDER) {
-    drawString(30, 110, "STRATEGIC AND ADAPTIVE", c(0xaaaaaa));
-    drawString(30, 125, "ADVANCED OPPONENT", c(0xaaaaaa));
+    print(30, 110, "STRATEGIC AND ADAPTIVE", c(0xaaaaaa));
+    print(30, 125, "ADVANCED OPPONENT", c(0xaaaaaa));
   } else if (targetType == TargetType.SLEEPER_AGENT) {
-    drawString(30, 110, "DELAYED REVEAL", c(0xaaaaaa));
-    drawString(30, 125, "HIDDEN BEHAVIOR PATTERN", c(0xaaaaaa));
+    print(30, 110, "DELAYED REVEAL", c(0xaaaaaa));
+    print(30, 125, "HIDDEN BEHAVIOR PATTERN", c(0xaaaaaa));
   }
 
   // Objective
-  drawString(30, 145, "OBJECTIVE: CORNER AND", c(0x00ff00));
-  drawString(30, 160, "CAPTURE WITH INTERCEPTOR", c(0x00ff00));
+  print(30, 145, "OBJECTIVE: CORNER AND", c(0x00ff00));
+  print(30, 160, "CAPTURE WITH INTERCEPTOR", c(0x00ff00));
 
   // Instruction
-  drawString(105, 178, "PRESS START", c(0xffffff));
+  print(105, 178, "PRESS START", c(0xffffff));
 }
 
 // === Lifecycle Functions ===
@@ -673,16 +673,16 @@ export function draw(): void {
   const commandPoints = gameState.commandPoints;
   const deploymentKits = gameState.deploymentKits;
 
-  drawString(10, 1, "SE:", c(0xffffff));
-  drawNumber(34, 1, sensorEnergy, c(0x00aaff));
-  drawString(52, 1, "/", c(0x666666));
-  drawNumber(60, 1, MAX_SENSOR_ENERGY, c(0x666666));
+  print(10, 1, "SE:", c(0xffffff));
+  printNumber(28, 1, sensorEnergy, c(0x00aaff));
+  print(46, 1, "/", c(0x666666));
+  printNumber(52, 1, MAX_SENSOR_ENERGY, c(0x666666));
 
-  drawString(100, 1, "CP:", c(0xffffff));
-  drawNumber(122, 1, commandPoints, c(0x00ff00));
+  print(85, 1, "CP:", c(0xffffff));
+  printNumber(103, 1, commandPoints, c(0x00ff00));
 
-  drawString(160, 1, "DK:", c(0xffffff));
-  drawNumber(182, 1, deploymentKits, c(0xffaa00));
+  print(135, 1, "DK:", c(0xffffff));
+  printNumber(153, 1, deploymentKits, c(0xffaa00));
 
   // Count active beacons
   let activeBeacons: i32 = 0;
@@ -691,49 +691,49 @@ export function draw(): void {
       activeBeacons++;
     }
   }
-  drawString(230, 1, "B:", c(0xffffff));
-  drawNumber(246, 1, activeBeacons, c(0xffdd00));
+  print(205, 1, "B:", c(0xffffff));
+  printNumber(217, 1, activeBeacons, c(0xffdd00));
 
   // Draw turn counter (top right corner)
-  drawString(265, 1, "T:", c(0xffffff));
-  drawNumber(281, 1, gameState.turnNumber, c(0xaaccff));
+  print(245, 1, "T:", c(0xffffff));
+  printNumber(257, 1, gameState.turnNumber, c(0xaaccff));
 
   // Draw active ship info (second row)
   const shipTypeName = getShipTypeName(activeShip.shipType);
-  drawString(1, 229, shipTypeName, c(0xaaccff));
-  drawString(1 + shipTypeName.length * 8, 229, ":", c(0xffffff));
+  print(1, 229, shipTypeName, c(0xaaccff));
+  print(1 + shipTypeName.length * 6, 229, ":", c(0xffffff));
 
   const moveLimit = getShipMoveLimit(activeShip.shipType);
   const movesRemaining = moveLimit - activeShip.movesThisTurn;
 
-  drawString(100, 229, "MOVES:", c(0xffffff));
-  drawNumber(146, 229, movesRemaining, c(0xaaccff));
-  drawString(154, 229, "/", c(0x666666));
-  drawNumber(162, 229, moveLimit, c(0x666666));
+  print(85, 229, "MOVES:", c(0xffffff));
+  printNumber(121, 229, movesRemaining, c(0xaaccff));
+  print(129, 229, "/", c(0x666666));
+  printNumber(135, 229, moveLimit, c(0x666666));
 
   // Show ship-specific action
   if (state == GamePhase.PLAYING) {
     if (activeShip.shipType == ShipType.BEACON_TENDER) {
-      drawString(200, 229, "A:DEPLOY BEACON", c(0xffaa00));
+      print(170, 229, "A:DEPLOY BEACON", c(0xffaa00));
     } else if (activeShip.shipType == ShipType.SURVEY_CRUISER) {
-      drawString(200, 229, "A:SCAN", c(0x00ff00));
-      drawString(260, 229, "(", c(0x666666));
-      drawNumber(268, 229, SCAN_COST, c(0x666666));
-      drawString(276, 229, "SE)", c(0x666666));
+      print(170, 229, "A:SCAN", c(0x00ff00));
+      print(212, 229, "(", c(0x666666));
+      printNumber(218, 229, SCAN_COST, c(0x666666));
+      print(226, 229, "SE)", c(0x666666));
     }
   }
 
   // Draw map info (bottom)
-  // drawString(10, 229, "STARS:", c(0xaaaaaa));
-  // drawNumber(56, 229, numStars as i32, c(0x666666));
+  // print(10, 229, "STARS:", c(0xaaaaaa));
+  // printNumber(46, 229, numStars as i32, c(0x666666));
 
-  // drawString(100, 229, "LANES:", c(0xaaaaaa));
-  // drawNumber(146, 229, numEdges as i32, c(0x666666));
+  // print(85, 229, "LANES:", c(0xaaaaaa));
+  // printNumber(146, 229, numEdges as i32, c(0x666666));
 
   // Draw instructions (bottom right)
   // if (state == GameState.PLAYING) {
-  //   drawString(180, 220, "B:SWITCH", c(0xaaaaaa));
-  //   drawString(180, 229, "START:END", c(0xaaaaaa));
+  //   print(155, 220, "B:SWITCH", c(0xaaaaaa));
+  //   print(155, 229, "START:END", c(0xaaaaaa));
   // }
 
   // Draw mission briefing if not dismissed
@@ -743,10 +743,10 @@ export function draw(): void {
 
   // Draw win/lose message
   if (state == GamePhase.WON) {
-    drawString(80, 100, "TARGET INTERCEPTED!", c(0x00ff00));
-    drawString(90, 115, "PRESS START", c(0xffffff));
+    print(82, 100, "TARGET INTERCEPTED!", c(0x00ff00));
+    print(99, 115, "PRESS START", c(0xffffff));
   } else if (state == GamePhase.LOST) {
-    drawString(95, 100, "TARGET ESCAPED", c(0xff0000));
-    drawString(90, 115, "PRESS START", c(0xffffff));
+    print(91, 100, "TARGET ESCAPED", c(0xff0000));
+    print(99, 115, "PRESS START", c(0xffffff));
   }
 }
