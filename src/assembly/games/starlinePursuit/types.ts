@@ -1,5 +1,5 @@
 import {
-  FixedArrayOfObjWithCount,
+  ArrayObjView,
   RAM_START,
   SCREEN_HEIGHT,
   SCREEN_WIDTH,
@@ -87,7 +87,6 @@ export class Star {
   isPossibleTarget: u8 = 0; // 1 if target might be at this star, 0 otherwise
   inNebula: u8 = 0; // 1 if star is within a nebula cloud, 0 otherwise
 }
-const STAR_SIZE: u32 = 16; // x(4) + y(4) + degree(4) + isHub(1) + isExit(1) + isPossibleTarget(1) + inNebula(1) = 16 bytes
 
 /**
  * Hyperspace lane edge
@@ -98,7 +97,6 @@ export class Edge {
   a: i32 = 0;
   b: i32 = 0;
 }
-const EDGE_SIZE: u32 = 8; // a(4) + b(4) = 8
 
 /**
  * Cluster center for star grouping
@@ -110,7 +108,6 @@ export class Cluster {
   x: i32 = 0;
   y: i32 = 0;
 }
-const CLUSTER_SIZE: u32 = 8; // x(4) + y(4) = 8
 
 /**
  * Nebula cloud region
@@ -122,7 +119,6 @@ export class Nebula {
   y: i32 = 0;
   radius: i32 = 0;
 }
-const NEBULA_SIZE: u32 = 12; // x(4) + y(4) + radius(4) = 12
 
 /**
  * Target ship entity
@@ -133,7 +129,6 @@ export class TargetShip {
   currentStarIndex: i32 = 0; // Index of the star the target is currently at
   isActive: u8 = 1; // 1 if target is in play, 0 otherwise
 }
-const TARGET_SHIP_SIZE: u32 = 8; // currentStarIndex(4) + isActive(1) + padding(3) = 8
 
 /**
  * Player ship (fleet unit)
@@ -145,7 +140,6 @@ export class PlayerShip {
   currentStarIndex: i32 = 0; // Current star location
   movesThisTurn: i32 = 0; // Number of jumps used this turn
 }
-const PLAYER_SHIP_SIZE: u32 = 12; // shipType(4) + currentStarIndex(4) + movesThisTurn(4) = 12
 
 /**
  * Beacon entity
@@ -159,7 +153,6 @@ export class Beacon {
   rangeAnimTimer: u8 = 0; // Animation timer for showing beacon range (60 frames = 1 second)
   pendingRangeAnim: u8 = 0; // 1 if animation should start after scanner completes, 0 otherwise
 }
-const BEACON_SIZE: u32 = 8; // starIndex(4) + isActive(1) + isDetecting(1) + rangeAnimTimer(1) + pendingRangeAnim(1) = 8
 
 /**
  * Game state data
@@ -183,72 +176,84 @@ export class GameState {
   missionBriefingDismissed: i32 = 0; // 0 = show briefing, 1 = briefing dismissed
   turnNumber: i32 = 0; // Current turn number (starts at 1)
 }
-const GAME_STATE_DATA_SIZE: u32 = 44; // phase(1) + targetType(1) + scannerPhase(1) + padding(1) + 10 i32 fields(40) = 44 bytes
 
 // === Memory Layout ===
 
-export type StarArray = FixedArrayOfObjWithCount<Star>;
-export const stars: StarArray = FixedArrayOfObjWithCount.fromAddress<Star>(
-  RAM_START,
-  STAR_SIZE,
+/**
+ * Memory allocator with automatic offset tracking
+ * Eliminates manual offset management and size constants
+ */
+class MemoryAllocator {
+  offset: usize;
+
+  constructor(start: usize) {
+    this.offset = start;
+  }
+
+  @inline
+  allocArray<T, U = u16>(elementSize: u32, capacity: U): ArrayObjView<T, U> {
+    const arr = ArrayObjView.fromAddress<T, U>(
+      this.offset,
+      elementSize,
+      capacity,
+      true,
+    );
+    this.offset += arr.alignedMemorySize;
+    return arr;
+  }
+
+  @inline
+  allocStruct<T>(size: u32): T {
+    const ptr = changetype<T>(this.offset);
+    this.offset += (size + 3) & ~3; // 4-byte align
+    return ptr;
+  }
+}
+
+const mem = new MemoryAllocator(RAM_START);
+
+export type StarArray = ArrayObjView<Star>;
+export const stars = mem.allocArray<Star>(
+  offsetof<Star>("inNebula") + sizeof<u8>(),
   MAX_TOTAL_STARS as u16,
-  true,
 );
 
-export type EdgeArray = FixedArrayOfObjWithCount<Edge>;
-export const edges: EdgeArray = FixedArrayOfObjWithCount.fromAddress<Edge>(
-  changetype<usize>(stars) + stars.alignedMemorySize,
-  EDGE_SIZE,
+export type EdgeArray = ArrayObjView<Edge>;
+export const edges = mem.allocArray<Edge>(
+  offsetof<Edge>("b") + sizeof<i32>(),
   MAX_EDGES as u16,
-  true,
 );
 
-export type ClusterArray = FixedArrayOfObjWithCount<Cluster>;
-export const clusters: ClusterArray =
-  FixedArrayOfObjWithCount.fromAddress<Cluster>(
-    changetype<usize>(edges) + edges.alignedMemorySize,
-    CLUSTER_SIZE,
-    NUM_CLUSTERS as u16,
-    true,
-  );
-
-export type NebulaArray = FixedArrayOfObjWithCount<Nebula>;
-export const nebulas: NebulaArray =
-  FixedArrayOfObjWithCount.fromAddress<Nebula>(
-    changetype<usize>(clusters) + clusters.alignedMemorySize,
-    NEBULA_SIZE,
-    MAX_NEBULAS as u16,
-    true,
-  );
-
-export type PlayerShipArray = FixedArrayOfObjWithCount<PlayerShip>;
-export const playerShips: PlayerShipArray =
-  FixedArrayOfObjWithCount.fromAddress<PlayerShip>(
-    changetype<usize>(nebulas) + nebulas.alignedMemorySize,
-    PLAYER_SHIP_SIZE,
-    MAX_PLAYER_SHIPS as u16,
-    true,
-  );
-
-export type BeaconArray = FixedArrayOfObjWithCount<Beacon>;
-export const beacons: BeaconArray =
-  FixedArrayOfObjWithCount.fromAddress<Beacon>(
-    changetype<usize>(playerShips) + playerShips.alignedMemorySize,
-    BEACON_SIZE,
-    MAX_BEACONS as u16,
-    true,
-  );
-
-// Target ship instance (reinterprets memory at TARGET_SHIP address)
-export const targetShip: TargetShip = changetype<TargetShip>(
-  changetype<usize>(beacons) + beacons.alignedMemorySize,
+export type ClusterArray = ArrayObjView<Cluster>;
+export const clusters = mem.allocArray<Cluster>(
+  offsetof<Cluster>("y") + sizeof<i32>(),
+  NUM_CLUSTERS as u16,
 );
 
-// Game state data instance (reinterprets memory at GAME_STATE_DATA address)
-export const gameState: GameState = changetype<GameState>(
-  changetype<usize>(targetShip) + TARGET_SHIP_SIZE,
+export type NebulaArray = ArrayObjView<Nebula>;
+export const nebulas = mem.allocArray<Nebula>(
+  offsetof<Nebula>("radius") + sizeof<i32>(),
+  MAX_NEBULAS as u16,
 );
 
-// Starting address for temporary arrays during calculations
-export const TEMP_MEM_START: usize =
-  changetype<usize>(gameState) + GAME_STATE_DATA_SIZE;
+export type PlayerShipArray = ArrayObjView<PlayerShip>;
+export const playerShips = mem.allocArray<PlayerShip>(
+  offsetof<PlayerShip>("movesThisTurn") + sizeof<i32>(),
+  MAX_PLAYER_SHIPS as u16,
+);
+
+export type BeaconArray = ArrayObjView<Beacon>;
+export const beacons = mem.allocArray<Beacon>(
+  offsetof<Beacon>("pendingRangeAnim") + sizeof<u8>(),
+  MAX_BEACONS as u16,
+);
+
+export const targetShip: TargetShip = mem.allocStruct<TargetShip>(
+  offsetof<TargetShip>("isActive") + sizeof<u8>(),
+);
+
+export const gameState: GameState = mem.allocStruct<GameState>(
+  offsetof<GameState>("turnNumber") + sizeof<i32>(),
+);
+
+export const TEMP_MEM_START: usize = mem.offset;

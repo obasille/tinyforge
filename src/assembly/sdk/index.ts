@@ -5,7 +5,7 @@
 // Do not use: new arrays, strings, objects, or any dynamic allocation
 // Only use: primitives, load/store, and stack variables
 
-export * from "./arrays";
+export * from "./arrayViews";
 export * from "./audio";
 export * from "./color";
 export * from "./drawing";

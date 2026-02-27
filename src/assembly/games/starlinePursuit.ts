@@ -10,7 +10,7 @@ import {
   drawRect,
   drawString,
   fillRect,
-  FixedArray,
+  UncheckedArrayView,
   log,
   logi,
   pset,
@@ -29,12 +29,14 @@ import {
 import {
   BEACON_RANGE,
   beacons,
+  clusters,
   edges,
   GamePhase,
   gameState,
   MAX_COMMAND_POINTS,
   MAX_EDGES,
   MAX_SENSOR_ENERGY,
+  nebulas,
   playerShips,
   SCAN_COST,
   SCAN_RADIUS,
@@ -225,6 +227,14 @@ export function init(): void {
   // Set initial game state
   gameState.phase = GamePhase.PLAYING as u8;
 
+  // Reset all arrays
+  stars.length = 0;
+  edges.length = 0;
+  clusters.length = 0;
+  nebulas.length = 0;
+  playerShips.length = 0;
+  beacons.length = 0;
+
   // Generate the starmap
   generateStarmap();
 
@@ -236,7 +246,7 @@ export function init(): void {
 
   // Initialize player fleet (3 ships at random different positions)
   // Use temporary memory for tracking used stars during initialization
-  const usedStars = FixedArray.fromAddress<i32>(TEMP_MEM_START);
+  const usedStars = UncheckedArrayView.fromAddress<i32>(TEMP_MEM_START);
   usedStars[0] = targetShip.currentStarIndex;
   let usedCount: i32 = 1;
 
@@ -330,8 +340,6 @@ export function init(): void {
     beacon.starIndex = 0;
     beacon.isDetecting = 0;
   }
-
-  log("Starmap ready");
 }
 
 export function update(): void {

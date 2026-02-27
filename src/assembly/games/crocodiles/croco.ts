@@ -1,11 +1,5 @@
 // cspell:language en,fr
-import {
-  drawSprite,
-  FixedArrayWithCount,
-  randomRange,
-  s,
-  warni,
-} from "../../sdk";
+import { drawSprite, ArrayView, randomRange, s, warni } from "../../sdk";
 
 import { trouvePointDepart } from "./level";
 import { donneProchaineCaseCheminBFS } from "./pathfinding";
@@ -48,10 +42,7 @@ export function initCroco(index: u8, croco: Croco, couleur: u32): void {
   croco.targetY = INVALIDE;
 }
 
-export function choisiNouvelleCible(
-  croco: Croco,
-  cases: FixedArrayWithCount<u16>,
-): void {
+export function choisiNouvelleCible(croco: Croco, cases: ArrayView<u16>): void {
   if (cases.length == 0) {
     croco.targetX = INVALIDE;
     croco.targetY = INVALIDE;

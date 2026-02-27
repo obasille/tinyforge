@@ -1,7 +1,7 @@
 // cspell:language en,fr
 import {
-  FixedArray,
-  FixedArrayWithCount,
+  UncheckedArrayView,
+  ArrayView,
   SCREEN_HEIGHT,
   RAM_START,
   SCREEN_WIDTH,
@@ -199,52 +199,56 @@ const MAX_CASES_VALIDES: i32 = 200; // Max valid path cells per croco
 
 // Allocate memory for case arrays
 // SDK FixedArrayWithCount layout: [u16 length][u16 capacity][data...]
-export const casesCiblesCrocoRouge =
-  FixedArrayWithCount.fromAddress<u16>(offset);
-offset += FixedArrayWithCount.sizeInMemory<u16>(MAX_CASES_CIBLES);
-export const casesCiblesCrocoViolet =
-  FixedArrayWithCount.fromAddress<u16>(offset);
-offset += FixedArrayWithCount.sizeInMemory<u16>(MAX_CASES_CIBLES);
-export const casesCiblesCrocoVert =
-  FixedArrayWithCount.fromAddress<u16>(offset);
-offset += FixedArrayWithCount.sizeInMemory<u16>(MAX_CASES_CIBLES);
+export const casesCiblesCrocoRouge = ArrayView.fromAddress<u16>(
+  offset,
+  MAX_CASES_CIBLES as u16,
+);
+offset += casesCiblesCrocoRouge.alignedMemorySize;
+export const casesCiblesCrocoViolet = ArrayView.fromAddress<u16>(
+  offset,
+  MAX_CASES_CIBLES as u16,
+);
+offset += casesCiblesCrocoViolet.alignedMemorySize;
+export const casesCiblesCrocoVert = ArrayView.fromAddress<u16>(
+  offset,
+  MAX_CASES_CIBLES as u16,
+);
+offset += casesCiblesCrocoVert.alignedMemorySize;
 
-export const casesValidesCrocoRouge =
-  FixedArrayWithCount.fromAddress<u16>(offset);
-offset += FixedArrayWithCount.sizeInMemory<u16>(MAX_CASES_VALIDES);
-export const casesValidesCrocoViolet =
-  FixedArrayWithCount.fromAddress<u16>(offset);
-offset += FixedArrayWithCount.sizeInMemory<u16>(MAX_CASES_VALIDES);
-export const casesValidesCrocoVert =
-  FixedArrayWithCount.fromAddress<u16>(offset);
-offset += FixedArrayWithCount.sizeInMemory<u16>(MAX_CASES_VALIDES);
+export const casesValidesCrocoRouge = ArrayView.fromAddress<u16>(
+  offset,
+  MAX_CASES_VALIDES as u16,
+);
+offset += casesValidesCrocoRouge.alignedMemorySize;
+export const casesValidesCrocoViolet = ArrayView.fromAddress<u16>(
+  offset,
+  MAX_CASES_VALIDES as u16,
+);
+offset += casesValidesCrocoViolet.alignedMemorySize;
+export const casesValidesCrocoVert = ArrayView.fromAddress<u16>(
+  offset,
+  MAX_CASES_VALIDES as u16,
+);
+offset += casesValidesCrocoVert.alignedMemorySize;
 
 // BFS pathfinding arrays (exported for use in pathfinding.ts)
 export const MAX_BFS_SIZE: i32 = 256;
-export const queueBFS = FixedArray.fromAddress<u16>(offset);
-offset += FixedArray.sizeInMemory<u16>(MAX_BFS_SIZE);
-export const parentsBFS = FixedArray.fromAddress<u16>(offset);
-offset += FixedArray.sizeInMemory<u16>(MAX_BFS_SIZE);
+export const queueBFS = UncheckedArrayView.fromAddress<u16>(offset);
+offset += UncheckedArrayView.sizeInMemory<u16>(MAX_BFS_SIZE);
+export const parentsBFS = UncheckedArrayView.fromAddress<u16>(offset);
+offset += UncheckedArrayView.sizeInMemory<u16>(MAX_BFS_SIZE);
 
 // Direction arrays for pathfinding (4 directions: up, down, left, right)
-export const directionX = FixedArray.fromAddress<i32>(offset);
-offset += FixedArray.sizeInMemory<i32>(4);
-export const directionY = FixedArray.fromAddress<i32>(offset);
-offset += FixedArray.sizeInMemory<i32>(4);
+export const directionX = UncheckedArrayView.fromAddress<i32>(offset);
+offset += UncheckedArrayView.sizeInMemory<i32>(4);
+export const directionY = UncheckedArrayView.fromAddress<i32>(offset);
+offset += UncheckedArrayView.sizeInMemory<i32>(4);
 
 /**
  * Initialize arrays capacities and static data
  * Call once from game init()
  */
 export function initTypeArrays(): void {
-  // Initialize capacities
-  casesCiblesCrocoRouge.capacity = MAX_CASES_CIBLES as u16;
-  casesCiblesCrocoViolet.capacity = MAX_CASES_CIBLES as u16;
-  casesCiblesCrocoVert.capacity = MAX_CASES_CIBLES as u16;
-  casesValidesCrocoRouge.capacity = MAX_CASES_VALIDES as u16;
-  casesValidesCrocoViolet.capacity = MAX_CASES_VALIDES as u16;
-  casesValidesCrocoVert.capacity = MAX_CASES_VALIDES as u16;
-
   // Initialize direction arrays
   directionX.set(0, 0);
   directionY.set(0, -1); // UP
@@ -257,13 +261,13 @@ export function initTypeArrays(): void {
 }
 
 // Helper functions to get arrays by index (avoids heap-allocated array)
-export function getCasesCibles(index: i32): FixedArrayWithCount<u16> {
+export function getCasesCibles(index: i32): ArrayView<u16> {
   if (index == 0) return casesCiblesCrocoRouge;
   if (index == 1) return casesCiblesCrocoViolet;
   return casesCiblesCrocoVert;
 }
 
-export function getCasesValides(index: i32): FixedArrayWithCount<u16> {
+export function getCasesValides(index: i32): ArrayView<u16> {
   if (index == 0) return casesValidesCrocoRouge;
   if (index == 1) return casesValidesCrocoViolet;
   return casesValidesCrocoVert;

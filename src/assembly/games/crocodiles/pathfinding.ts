@@ -1,5 +1,5 @@
 // cspell:language en,fr
-import { FixedArrayWithCount } from "../../sdk";
+import { ArrayView } from "../../sdk";
 import { caseCouleur } from "./level";
 import {
   Couleurs,
@@ -98,8 +98,8 @@ export function donneProchaineCaseCheminBFS(
 }
 
 export function construireCasesValides(
-  casesCibles: FixedArrayWithCount<u16>,
-  casesValides: FixedArrayWithCount<u16>,
+  casesCibles: ArrayView<u16>,
+  casesValides: ArrayView<u16>,
 ): void {
   // Ajouter toutes les cases cibles
   for (let i = 0; i < (casesCibles.length as i32); i++) {

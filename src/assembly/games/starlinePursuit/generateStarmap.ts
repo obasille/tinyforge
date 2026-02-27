@@ -1,4 +1,11 @@
-import { clamp, FixedArray, logi, randomRange, s, warni } from "../../sdk";
+import {
+  clamp,
+  UncheckedArrayView,
+  logi,
+  randomRange,
+  s,
+  warni,
+} from "../../sdk";
 
 import {
   CLUSTER_STRENGTH,
@@ -387,9 +394,11 @@ function connectLocalNeighbors(
   let edgeCount = edges.length as i32;
 
   // Working arrays for candidate neighbors
-  const candidateIdx = FixedArray.fromAddress<i32>(TEMP_MEM_START + 32);
-  const candidateDist = FixedArray.fromAddress<i32>(TEMP_MEM_START + 128);
-  const nearestIdx = FixedArray.fromAddress<i32>(TEMP_MEM_START + 224);
+  const candidateIdx = UncheckedArrayView.fromAddress<i32>(TEMP_MEM_START + 32);
+  const candidateDist = UncheckedArrayView.fromAddress<i32>(
+    TEMP_MEM_START + 128,
+  );
+  const nearestIdx = UncheckedArrayView.fromAddress<i32>(TEMP_MEM_START + 224);
 
   // For each star, find k nearest neighbors and connect
   const numStars = stars.length as i32;
@@ -493,10 +502,10 @@ function floodFillComponent(
   edges: EdgeArray,
   numEdges: i32,
   start: i32,
-  component: FixedArray<i32>,
-  visited: FixedArray<u8>,
+  component: UncheckedArrayView<i32>,
+  visited: UncheckedArrayView<u8>,
 ): i32 {
-  const stack = FixedArray.fromAddress<i32>(TEMP_MEM_START + 256);
+  const stack = UncheckedArrayView.fromAddress<i32>(TEMP_MEM_START + 256);
   let stackSize = 0;
   let compSize = 0;
 
@@ -541,14 +550,14 @@ function connectComponents(stars: StarArray, edges: EdgeArray): i32 {
   while (continueLoop && iterations < maxIterations) {
     iterations++;
     // Reset visited array
-    const visited = FixedArray.fromAddress<u8>(TEMP_MEM_START + 512);
+    const visited = UncheckedArrayView.fromAddress<u8>(TEMP_MEM_START + 512);
     for (let i = 0; i < numStars; i++) {
       visited.set(i, 0);
     }
 
     // Find all components
-    const comp1 = FixedArray.fromAddress<i32>(TEMP_MEM_START + 600);
-    const comp2 = FixedArray.fromAddress<i32>(TEMP_MEM_START + 700);
+    const comp1 = UncheckedArrayView.fromAddress<i32>(TEMP_MEM_START + 600);
+    const comp2 = UncheckedArrayView.fromAddress<i32>(TEMP_MEM_START + 700);
     let comp1Size = 0;
     let comp2Size = 0;
     let foundSecondComponent = false;

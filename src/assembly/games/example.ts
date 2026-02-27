@@ -3,8 +3,8 @@
 // Import console SDK
 import {
   Button,
-  FixedArray,
-  FixedArrayWithCount,
+  UncheckedArrayView,
+  ArrayView,
   SCREEN_HEIGHT,
   RAM_START,
   SCREEN_WIDTH,
@@ -20,7 +20,7 @@ import {
   log,
   pset,
   s,
-  FixedArrayOfObj,
+  UncheckedArrayObjView,
   Vec2i,
 } from "../sdk";
 
@@ -41,16 +41,16 @@ class Vars {
 const vars = changetype<Vars>(RAM_START);
 
 // Zero-allocation arrays using @unmanaged pattern
-const grid = FixedArray.fromAddress<u8>(RAM_START + 12); // 100 u8 values
-const scores = changetype<FixedArray<i32>>(RAM_START + 112); // 10 i32 values
+const grid = UncheckedArrayView.fromAddress<u8>(RAM_START + 12); // 100 u8 values
+const scores = changetype<UncheckedArrayView<i32>>(RAM_START + 112); // 10 i32 values
 
 // Zero-allocation array with dynamic length tracking (default u16 counters: 4 bytes metadata)
-const items = FixedArrayWithCount.fromAddress<u16>(RAM_START + 152); // max 20 u16 values
+const items = ArrayView.fromAddress<u16>(RAM_START + 152, 20); // max 20 u16 values, capacity 20 items
 
 // Zero-allocation array with u8 counters (only 2 bytes metadata for small arrays!)
-const tags = changetype<FixedArrayWithCount<u8, u8>>(RAM_START + 196); // max 10 u8 values
+const tags = ArrayView.fromAddress<u8, u8>(RAM_START + 196, 10); // max 10 u8 values, capacity 10 items
 
-const arrOfVec = FixedArrayOfObj.fromAddress<Vec2i>(RAM_START + 208, 8); // Array of Vec2 objects (x,y as f32)
+const arrOfVec = UncheckedArrayObjView.fromAddress<Vec2i>(RAM_START + 208, 8); // Array of Vec2 objects (x,y as f32)
 
 // === lifecycle ===
 
@@ -68,14 +68,12 @@ export function init(): void {
   grid.set(10, 42); // Set grid cell (bracket notation supported!)
 
   // Initialize dynamic array with capacity
-  items.capacity = 20;
   items.clear();
   items.push(100);
   items.push(200);
   items.push(300);
 
   // Initialize small array with u8 counters (saves 6 bytes vs i32!)
-  tags.capacity = 10;
   tags.clear();
   tags.push(1);
   tags.push(2);

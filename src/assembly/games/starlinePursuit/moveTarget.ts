@@ -1,5 +1,5 @@
 import { log, logi, randomRange } from "../../sdk";
-import { FixedArray } from "../../sdk/arrays";
+import { UncheckedArrayView } from "../../sdk/arrayViews";
 import {
   BEACON_RANGE,
   ShipType,
@@ -34,7 +34,10 @@ function isStarDetected(starIndex: i32): bool {
  * Get all neighboring stars connected to a given star
  * Stores neighbor indices in provided array, returns count
  */
-function getAllNeighbors(starIndex: i32, neighbors: FixedArray<i32>): i32 {
+function getAllNeighbors(
+  starIndex: i32,
+  neighbors: UncheckedArrayView<i32>,
+): i32 {
   const numEdges = edges.length as i32;
   let count: i32 = 0;
 
@@ -197,7 +200,7 @@ export function moveTarget(): void {
   const currentStar = targetShip.currentStarIndex;
 
   // Use temp memory for neighbor list
-  const neighbors = FixedArray.fromAddress<i32>(TEMP_MEM_START);
+  const neighbors = UncheckedArrayView.fromAddress<i32>(TEMP_MEM_START);
   const neighborCount = getAllNeighbors(currentStar, neighbors);
 
   if (neighborCount == 0) {

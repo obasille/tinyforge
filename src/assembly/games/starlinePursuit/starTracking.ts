@@ -1,4 +1,4 @@
-import { FixedArray } from "../../sdk";
+import { UncheckedArrayView } from "../../sdk";
 import { edges, playerShips, stars, TEMP_MEM_START } from "./types";
 
 /**
@@ -23,7 +23,7 @@ export function updateStarTracking(): void {
   const numEdges = edges.length as i32;
 
   // Use TEMP_WORK for temporary arrays
-  const tempWork = FixedArray.fromAddress<i32>(TEMP_MEM_START);
+  const tempWork = UncheckedArrayView.fromAddress<i32>(TEMP_MEM_START);
 
   // Get list of player-occupied stars (forbidden locations)
   let forbiddenCount: i32 = 0;

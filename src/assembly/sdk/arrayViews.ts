@@ -10,7 +10,7 @@
  * @example
  * ```ts
  * // Calculate memory requirements:
- * const size = FixedArray.sizeInMemory<u8>(100);  // 100 bytes for 100 u8 elements
+ * const size = UncheckedArrayView.sizeInMemory<u8>(100);  // 100 bytes for 100 u8 elements
  *
  * // In your game's RAM layout:
  * @unmanaged
@@ -21,7 +21,7 @@
  * }
  *
  * const vars = changetype<Vars>(RAM_START);
- * const grid = FixedArray.fromAddress<u8>(RAM_START + 8);
+ * const grid = UncheckedArrayView.fromAddress<u8>(RAM_START + 8);
  *
  * // Usage with methods:
  * grid.set(10, 42);        // Set element
@@ -34,20 +34,20 @@
  * ```
  */
 @unmanaged
-export class FixedArray<T> {
+export class UncheckedArrayView<T> {
   // No fields - this class is just a type marker for the memory region
   // Methods access 'this' as the base address
 
   /**
-   * Create a FixedArray instance from a raw memory address
+   * Create a UncheckedArrayView instance from a raw memory address
    * The caller must ensure the memory at this address is properly allocated
    * and sized for the intended use
    * @param address Memory address of the pre-allocated array
-   * @returns FixedArray instance
+   * @returns UncheckedArrayView instance
    */
   @inline
-  static fromAddress<T>(address: usize): FixedArray<T> {
-    return changetype<FixedArray<T>>(address);
+  static fromAddress<T>(address: usize): UncheckedArrayView<T> {
+    return changetype<UncheckedArrayView<T>>(address);
   }
 
   /**
@@ -56,12 +56,13 @@ export class FixedArray<T> {
    * @returns Size in bytes
    */
   @inline
-  static sizeInMemory<T>(capacity: i32): usize {
+  static sizeInMemory<T>(capacity: u32): usize {
     return capacity * sizeof<T>();
   }
 
   /**
-   * Get element size stored in first 4 bytes
+   * Get element size (computed from type T)
+   * @returns Size of each element in bytes
    */
   @inline
   get elementSize(): u32 {
@@ -135,23 +136,23 @@ export class FixedArray<T> {
  * @example
  * ```ts
  * // Calculate memory requirements:
- * const size1 = FixedArrayWithCount.sizeInMemory<u16>(50);      // 4 + 100 = 104 bytes (u16 counters)
- * const size2 = FixedArrayWithCount.sizeInMemory<u16, u8>(20);  // 2 + 40 = 42 bytes (u8 counters)
+ * const size1 = ArrayView.sizeInMemory<u16>(50);      // 4 + 100 = 104 bytes (u16 counters)
+ * const size2 = ArrayView.sizeInMemory<u16, u8>(20);  // 2 + 40 = 42 bytes (u8 counters)
  *
  * // Using fromAddress helper:
- * const items = FixedArrayWithCount.fromAddress<u16>(RAM_START + 100);
+ * const items = ArrayView.fromAddress<u16>(RAM_START + 100);
  * items.capacity = 50;
  * items.clear();
  *
- * const scores = FixedArrayWithCount.fromAddress<i32>(RAM_START + 200);
+ * const scores = ArrayView.fromAddress<i32>(RAM_START + 200);
  * scores.capacity = 10;
  *
  * // Small arrays with u8 counters (2 bytes metadata, max 255 elements):
- * const small = FixedArrayWithCount.fromAddress<u16, u8>(RAM_START + 300);
+ * const small = ArrayView.fromAddress<u16, u8>(RAM_START + 300);
  * small.capacity = 20;
  *
  * // Large arrays with u16 counters (4 bytes metadata, max 65535 elements):
- * const large = FixedArrayWithCount.fromAddress<u32, u16>(RAM_START + 400);
+ * const large = ArrayView.fromAddress<u32, u16>(RAM_START + 400);
  * large.capacity = 1000;
  *
  * // Usage with methods:
@@ -167,34 +168,28 @@ export class FixedArray<T> {
  * ```
  */
 @unmanaged
-export class FixedArrayWithCount<T, U = u16> {
+export class ArrayView<T, U = u16> {
   // No fields - this class is just a type marker for the memory region
 
   /**
-   * Create a FixedArrayWithCount instance from a raw memory address
+   * Create a ArrayView instance from a raw memory address
    * The caller must ensure the memory at this address is properly allocated
    * and sized for the intended use (2*sizeof<U> for metadata + capacity*sizeof<T> for data)
    * @param address Memory address of the pre-allocated array
-   * @param elementSize Optional, size of each element in bytes (not used for FixedArrayWithCount but included for consistency with FixedArrayOfObjWithCount)
+   * @param elementSize Optional, size of each element in bytes (not used for ArrayView but included for consistency with ArrayObjView)
    * @param capacity Optional, maximum number of elements (sets capacity in memory)
-   * @param align Optional, if true, aligns elementSize to 4-byte boundary (not used for FixedArrayWithCount but included for consistency)
-   * @returns FixedArrayWithCount instance
+   * @param align Optional, if true, aligns elementSize to 4-byte boundary (not used for ArrayView but included for consistency)
+   * @returns ArrayView instance
    */
   @inline
   static fromAddress<T, U = u16>(
     address: usize,
-    elementSize: u32 = 0,
     capacity: U = 0 as U,
-    align: bool = false,
-  ): FixedArrayWithCount<T, U> {
-    const instance = changetype<FixedArrayWithCount<T, U>>(address);
-    if (elementSize) {
-      const size = align ? (elementSize + 3) & ~3 : elementSize;
-      store<u32>(address, size);
-    }
+  ): ArrayView<T, U> {
+    const instance = changetype<ArrayView<T, U>>(address);
     if (capacity) {
-      store<U>(address + 4, 0 as U);
-      store<U>(address + 4 + sizeof<U>(), capacity);
+      store<U>(address, 0 as U);
+      store<U>(address + sizeof<U>(), capacity);
     }
     return instance;
   }
@@ -206,12 +201,13 @@ export class FixedArrayWithCount<T, U = u16> {
    * @returns Size in bytes
    */
   @inline
-  static sizeInMemory<T, U = u16>(capacity: i32): usize {
+  static sizeInMemory<T, U = u16>(capacity: U): usize {
     return sizeof<U>() * 2 + capacity * sizeof<T>();
   }
 
   /**
-   * Get element size
+   * Get element size (computed from type T)
+   * @returns Size of each element in bytes
    */
   @inline
   get elementSize(): u32 {
@@ -337,7 +333,7 @@ export class FixedArrayWithCount<T, U = u16> {
     const len = this.length;
     const cap = this.capacity;
     if (len >= cap) {
-      throw new Error("FixedArrayOfObjWithCount: Cannot grow, at capacity");
+      throw new Error("ArrayView: Cannot grow, at capacity");
     }
     this.length = (len + 1) as U;
     return this.get(len);
@@ -396,10 +392,10 @@ export class FixedArrayWithCount<T, U = u16> {
 
   private checkIndex(index: i32): void {
     if (index < 0) {
-      throw new Error("FixedArrayWithCount: Index cannot be negative");
+      throw new Error("ArrayView: Index cannot be negative");
     }
     if (index >= (this.length as i32)) {
-      throw new Error("FixedArrayWithCount: Index exceeds length");
+      throw new Error("ArrayView: Index exceeds length");
     }
   }
 }
@@ -433,7 +429,7 @@ export class FixedArrayWithCount<T, U = u16> {
  * const enemySizeAligned = (enemySize + 3) & ~3;  // 12 bytes (already aligned)
  *
  * // Calculate memory requirements:
- * const size = FixedArrayOfObj.sizeInMemory(50, enemySizeAligned);  // 4 + 600 = 604 bytes
+ * const size = UncheckedArrayObjView.sizeInMemory(50, enemySizeAligned);  // 4 + 600 = 604 bytes
  *
  * // In your game's RAM layout:
  * enum Var {
@@ -441,11 +437,11 @@ export class FixedArrayWithCount<T, U = u16> {
  * }
  *
  * // Create array and initialize element size:
- * const enemies = FixedArrayOfObj.fromAddress<Enemy>(RAM_START + Var.ENEMIES_START);
+ * const enemies = UncheckedArrayObjView.fromAddress<Enemy>(RAM_START + Var.ENEMIES_START);
  * enemies.elementSize = enemySizeAligned;
  *
- * // Or use the convenience method with automatic alignment:
- * const enemies = FixedArrayOfObj.fromAddressWithSize<Enemy>(RAM_START + Var.ENEMIES_START, enemySize, true);
+ * // Or with automatic alignment:
+ * const enemies = UncheckedArrayObjView.fromAddress<Enemy>(RAM_START + Var.ENEMIES_START, enemySize, true);
  *
  * // Access elements:
  * const enemy0 = enemies.get(0);
@@ -457,23 +453,23 @@ export class FixedArrayWithCount<T, U = u16> {
  * ```
  */
 @unmanaged
-export class FixedArrayOfObj<T> {
+export class UncheckedArrayObjView<T> {
   // No fields - this class is just a type marker for the memory region
 
   /**
-   * Create a FixedArrayOfObj instance and initialize element size
+   * Create a UncheckedArrayObjView instance and initialize element size
    * @param address Memory address of the pre-allocated array
    * @param elementSize Optional, size of each element in bytes (otherwise must be set manually in memory)
    * @param align Optional, if true, aligns elementSize to 4-byte boundary
-   * @returns FixedArrayOfObj instance
+   * @returns UncheckedArrayObjView instance
    */
   @inline
   static fromAddress<T>(
     address: usize,
     elementSize: u32 = 0,
     align: bool = false,
-  ): FixedArrayOfObj<T> {
-    const arr = changetype<FixedArrayOfObj<T>>(address);
+  ): UncheckedArrayObjView<T> {
+    const arr = changetype<UncheckedArrayObjView<T>>(address);
     if (elementSize) {
       const size = align ? (elementSize + 3) & ~3 : elementSize;
       store<u32>(address, size);
@@ -488,12 +484,13 @@ export class FixedArrayOfObj<T> {
    * @returns Size in bytes (4 bytes for metadata + capacity * elementSize)
    */
   @inline
-  static sizeInMemory(capacity: i32, elementSize: u32): usize {
+  static sizeInMemory(capacity: U, elementSize: u32): usize {
     return 4 + capacity * elementSize;
   }
 
   /**
-   * Get element size stored in first 4 bytes
+   * Get element size (possibly 4-bytes aligned)
+   * @returns Size of each element in bytes
    */
   @inline
   get elementSize(): u32 {
@@ -540,11 +537,21 @@ export class FixedArrayOfObj<T> {
   private __get(index: i32): T {
     return this.get(index);
   }
+
+  /**
+   * Index operator for writing: arr[index] = value
+   * Note: This copies the object data into the array
+   */
+  @inline
+  @operator("[]=")
+  private __set(index: i32, value: T): void {
+    this.set(index, value);
+  }
 }
 
 /**
  * Zero-allocation fixed-size array for @unmanaged objects with length tracking
- * Combines FixedArrayOfObj (element size metadata) with FixedArrayWithCount (length/capacity tracking)
+ * Combines UncheckedArrayObjView (element size metadata) with ArrayView (length/capacity tracking)
  * Uses @unmanaged pattern - no heap allocation, just address reinterpretation
  *
  * Memory layout (at base address):
@@ -568,15 +575,15 @@ export class FixedArrayOfObj<T> {
  * const enemySize = offsetof<Enemy>("health") + sizeof<i32>();  // 12 bytes
  *
  * // Calculate memory requirements:
- * const size = FixedArrayOfObjWithCount.sizeInMemory(50, enemySize);  // 4 + 4 + 600 = 608 bytes (with u16 counters)
+ * const size = ArrayObjView.sizeInMemory(50, enemySize);  // 4 + 4 + 600 = 608 bytes (with u16 counters)
  *
  * // Create array and initialize:
- * const enemies = FixedArrayOfObjWithCount.fromAddress<Enemy>(RAM_START + 100, enemySize);
+ * const enemies = ArrayObjView.fromAddress<Enemy>(RAM_START + 100, enemySize);
  * enemies.capacity = 50;
  * enemies.clear();
  *
  * // Or with alignment:
- * const enemies = FixedArrayOfObjWithCount.fromAddress<Enemy>(RAM_START + 100, enemySize, true);
+ * const enemies = ArrayObjView.fromAddress<Enemy>(RAM_START + 100, enemySize, true);
  * enemies.capacity = 50;
  *
  * // Usage with methods:
@@ -593,16 +600,16 @@ export class FixedArrayOfObj<T> {
  * ```
  */
 @unmanaged
-export class FixedArrayOfObjWithCount<T, U = u16> {
+export class ArrayObjView<T, U = u16> {
   // No fields - this class is just a type marker for the memory region
 
   /**
-   * Create a FixedArrayOfObjWithCount instance and initialize element size
+   * Create a ArrayObjView instance and initialize element size
    * @param address Memory address of the pre-allocated array
    * @param elementSize Optional, size of each element in bytes (otherwise must be set manually in memory)
    * @param capacity Optional, maximum number of elements (sets capacity in memory)
    * @param align Optional, if true, aligns elementSize to 4-byte boundary
-   * @returns FixedArrayOfObjWithCount instance
+   * @returns ArrayObjView instance
    */
   @inline
   static fromAddress<T, U = u16>(
@@ -610,8 +617,8 @@ export class FixedArrayOfObjWithCount<T, U = u16> {
     elementSize: u32 = 0,
     capacity: U = 0 as U,
     align: bool = false,
-  ): FixedArrayOfObjWithCount<T, U> {
-    const instance = changetype<FixedArrayOfObjWithCount<T, U>>(address);
+  ): ArrayObjView<T, U> {
+    const instance = changetype<ArrayObjView<T, U>>(address);
     if (elementSize) {
       const size = align ? (elementSize + 3) & ~3 : elementSize;
       store<u32>(address, size);
@@ -631,12 +638,13 @@ export class FixedArrayOfObjWithCount<T, U = u16> {
    * @returns Size in bytes (4 bytes for elementSize + 2*sizeof<U> for counters + capacity * elementSize)
    */
   @inline
-  static sizeInMemory<U = u16>(capacity: i32, elementSize: u32): usize {
+  static sizeInMemory<U = u16>(capacity: U, elementSize: u32): usize {
     return 4 + sizeof<U>() * 2 + capacity * elementSize;
   }
 
   /**
-   * Get element size
+   * Get element size (possibly 4-bytes aligned)
+   * @returns Size of each element in bytes
    */
   @inline
   get elementSize(): u32 {
@@ -762,7 +770,7 @@ export class FixedArrayOfObjWithCount<T, U = u16> {
     const len = this.length;
     const cap = this.capacity;
     if (len >= cap) {
-      throw new Error("FixedArrayOfObjWithCount: Cannot grow, at capacity");
+      throw new Error("ArrayObjView: Cannot grow, at capacity");
     }
     this.length = (len + 1) as U;
     return this.get(len);
@@ -815,10 +823,10 @@ export class FixedArrayOfObjWithCount<T, U = u16> {
 
   private checkIndex(index: i32): void {
     if (index < 0) {
-      throw new Error("FixedArrayOfObjWithCount: Index cannot be negative");
+      throw new Error("ArrayObjView: Index cannot be negative");
     }
     if (index >= (this.length as i32)) {
-      throw new Error("FixedArrayOfObjWithCount: Index exceeds length");
+      throw new Error("ArrayObjView: Index exceeds length");
     }
   }
 }
