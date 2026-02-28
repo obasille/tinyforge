@@ -5,8 +5,8 @@ import { trouveCrocoPourGamelle } from "./croco";
 import { trouveNiemePoint } from "./level";
 import {
   Couleurs,
-  donneCroco,
-  donneViande,
+  crocos,
+  viandes,
   INVALIDE,
   INVALIDE_POS,
   joueur,
@@ -17,12 +17,12 @@ import {
 // === Viandes ===
 
 export function doneViandePos(index: u8): u16 {
-  const v = donneViande(index);
+  const v = viandes.get(index);
   return ((v.y as u16) << 8) | (v.x as u16);
 }
 
 export function metViandePos(index: u8, x: u8, y: u8): void {
-  const v = donneViande(index);
+  const v = viandes.get(index);
   v.x = x;
   v.y = y;
 }
@@ -71,7 +71,7 @@ export function assigneGamelle(index: u8): void {
   const gy = ((pos >> 8) & 0xff) as u8;
   const idx = trouveCrocoPourGamelle(gx, gy);
   if ((idx as i32) < NB_CROCOS) {
-    const croco = donneCroco(idx);
+    const croco = crocos.get(idx);
     croco.gamelleX = gx;
     croco.gamelleY = gy;
   } else {
@@ -82,7 +82,7 @@ export function assigneGamelle(index: u8): void {
 export function deposeViande(jx: u8, jy: u8): void {
   if (joueur.viandePortee == INVALIDE) return;
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
-    const croco = donneCroco(i);
+    const croco = crocos.get(i);
     if (
       croco.gamelleX == jx &&
       croco.gamelleY == jy &&

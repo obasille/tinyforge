@@ -61,6 +61,28 @@ export class MemoryAllocator {
   }
 
   /**
+   * Allocate an @unmanaged struct and advance offset
+   * Returns a pointer to the allocated memory reinterpreted as type T
+   *
+   * @param size Size of the struct in bytes (use offsetof<T>("lastField") + sizeof<fieldType>())
+   * @returns Pointer to allocated struct
+   * @example
+   * ```ts
+   * @unmanaged class GameState { phase: u8; score: i32; }
+   * const size = offsetof<GameState>("score") + sizeof<i32>();
+   * const gameState = mem.allocStruct<GameState>(size);
+   * gameState.phase = 0;
+   * gameState.score = 100;
+   * ```
+   */
+  @inline
+  allocStruct<T>(size: u32): T {
+    const ptr = changetype<T>(this.offset);
+    this.addOffset(size);
+    return ptr;
+  }
+
+  /**
    * Allocate an UncheckedArrayView for primitive number types and advance offset
    * Returns a fixed-size array with NO length tracking or bounds checking
    *
@@ -109,7 +131,10 @@ export class MemoryAllocator {
       elementSize,
       capacity,
     );
-    const arr = UncheckedArrayObjView.fromAddress<T>(this.offset, elementSize as u32);
+    const arr = UncheckedArrayObjView.fromAddress<T>(
+      this.offset,
+      elementSize as u32,
+    );
     this.addOffset(size);
     return arr;
   }
@@ -167,28 +192,6 @@ export class MemoryAllocator {
     );
     this.addOffset(arr.memorySize);
     return arr;
-  }
-
-  /**
-   * Allocate an @unmanaged struct and advance offset
-   * Returns a pointer to the allocated memory reinterpreted as type T
-   *
-   * @param size Size of the struct in bytes (use offsetof<T>("lastField") + sizeof<fieldType>())
-   * @returns Pointer to allocated struct
-   * @example
-   * ```ts
-   * @unmanaged class GameState { phase: u8; score: i32; }
-   * const size = offsetof<GameState>("score") + sizeof<i32>();
-   * const gameState = mem.allocStruct<GameState>(size);
-   * gameState.phase = 0;
-   * gameState.score = 100;
-   * ```
-   */
-  @inline
-  allocStruct<T>(size: u32): T {
-    const ptr = changetype<T>(this.offset);
-    this.addOffset(size);
-    return ptr;
   }
 
   /**

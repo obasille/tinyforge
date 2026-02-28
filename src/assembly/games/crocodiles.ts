@@ -7,37 +7,23 @@
 
 import {
   Button,
+  SCREEN_WIDTH,
   buttonPressed,
   drawSprite,
   drawStartMessageBox,
   fillRect,
   s,
   warn,
-  SCREEN_WIDTH,
 } from "../sdk";
 
 // Imports des modules
 import {
-  casesCiblesCrocoRouge,
-  casesCiblesCrocoVert,
-  casesCiblesCrocoViolet,
-  casesValidesCrocoRouge,
-  casesValidesCrocoVert,
-  casesValidesCrocoViolet,
-  getCasesValides,
-  Couleurs,
-  donneCouleurCroco,
   CROCO_DEPL_DELAI,
+  Couleurs,
   EtatJeu,
   HAUTEUR_GRILLE,
   INVINCIBLE_TICKS,
-  jeu,
-  joueur,
   LARGEUR_GRILLE,
-  donneCroco,
-  donnePiège,
-  donneTunnel,
-  donneViande,
   NB_CROCOS,
   NB_PIÈGES,
   NB_TUNNELS,
@@ -45,7 +31,20 @@ import {
   TUNNEL_ANIM_TICKS,
   TUNNEL_CYCLE_TICKS,
   VIES_DEPART,
-  initTypeArrays,
+  casesCiblesCrocoRouge,
+  casesCiblesCrocoVert,
+  casesCiblesCrocoViolet,
+  casesValidesCrocoRouge,
+  casesValidesCrocoVert,
+  casesValidesCrocoViolet,
+  crocos,
+  getCasesValides,
+  initTableaux,
+  jeu,
+  joueur,
+  pieges,
+  tunnels,
+  viandes,
 } from "./crocodiles/types";
 
 import { dessineCroco, déplaceCroco, initCroco } from "./crocodiles/croco";
@@ -88,22 +87,14 @@ import {
 
 // Initialisation du jeu
 export function init(): void {
-  // Initialize type arrays (capacities and direction data)
-  initTypeArrays();
+  // Prépare les tables
+  initTableaux();
 
   // Charge le niveau
   if (!chargeNiveau(s("level1"))) {
     warn("Échec du chargement du niveau");
     return;
   }
-
-  // Clear all case arrays before populating
-  casesCiblesCrocoRouge.clear();
-  casesCiblesCrocoViolet.clear();
-  casesCiblesCrocoVert.clear();
-  casesValidesCrocoRouge.clear();
-  casesValidesCrocoViolet.clear();
-  casesValidesCrocoVert.clear();
 
   // Trouve toutes les cases colorées pour chaque croco
   trouveCasesCouleur(Couleurs.CrocoRouge, casesCiblesCrocoRouge);
@@ -120,8 +111,14 @@ export function init(): void {
 
   // Initialise les crocodiles
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
-    const croco = donneCroco(i);
-    initCroco(i as u8, croco, donneCouleurCroco(i));
+    const croco = crocos.get(i);
+    const couleur =
+      i == 0
+        ? Couleurs.CrocoRouge
+        : i == 1
+          ? Couleurs.CrocoViolet
+          : Couleurs.CrocoVert;
+    initCroco(i as u8, croco, couleur);
   }
 
   // Trouve les positions des 3 viandes
@@ -183,7 +180,7 @@ export function update(): void {
   if (joueur.invincible > 0) joueur.invincible--;
   majPièges();
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
-    const croco = donneCroco(i);
+    const croco = crocos.get(i);
     if (croco.minuteurDepl > 0) croco.minuteurDepl--;
   }
   majTunnelAnimJoueur();
@@ -203,13 +200,13 @@ export function update(): void {
   }
 
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
-    const croco = donneCroco(i);
+    const croco = crocos.get(i);
     const npos = ((joueur.y as u16) << 8) | (joueur.x as u16);
     croco.attaque = getCasesValides(i).includes(npos) ? 1 : 0;
   }
 
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
-    const croco = donneCroco(i);
+    const croco = crocos.get(i);
     if (croco.minuteurDepl == 0) {
       déplaceCroco(croco, i);
       const délai =
@@ -221,7 +218,7 @@ export function update(): void {
   // Vérifier si toutes les gamelles sont remplies (victoire)
   let toutesGamellesRemplies = true;
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
-    if (donneCroco(i).gamelleRemplie == 0) {
+    if (crocos.get(i).gamelleRemplie == 0) {
       toutesGamellesRemplies = false;
       break;
     }
@@ -265,12 +262,12 @@ export function draw(): void {
 
   // Dessine les pièges
   for (let i: i32 = 0; i < NB_PIÈGES; i++) {
-    dessinePiège(donnePiège(i));
+    dessinePiège(pieges.get(i));
   }
 
   // Dessine les tunnels
   for (let i: i32 = 0; i < NB_TUNNELS; i++) {
-    const t = donneTunnel(i);
+    const t = tunnels.get(i);
     if (!t.present) continue;
     dessineTunnel(t.x0, t.y0, t.ouvert);
     dessineTunnel(t.x1, t.y1, t.ouvert);
@@ -278,19 +275,19 @@ export function draw(): void {
 
   // Dessine les gamelles
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
-    const croco = donneCroco(i);
+    const croco = crocos.get(i);
     dessineGamelle(croco.gamelleX, croco.gamelleY, croco.gamelleRemplie);
   }
 
   // Dessine les viandes
   for (let i: i32 = 0; i < 3; i++) {
-    const v = donneViande(i);
+    const v = viandes.get(i);
     dessineViande(v.x, v.y);
   }
 
   // Dessine les crocodiles
   for (let i: i32 = 0; i < NB_CROCOS; i++) {
-    const croco = donneCroco(i);
+    const croco = crocos.get(i);
     dessineCroco(croco);
   }
 

@@ -502,7 +502,7 @@ export class UncheckedArrayObjView<T> {
    */
   @inline
   get(index: i32): T {
-    return changetype<T>(this.dataPtr + index * this.elementSize);
+    return changetype<T>(this.dataPtr + (index as usize) * this.elementSize);
   }
 
   /**

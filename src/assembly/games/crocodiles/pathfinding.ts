@@ -8,14 +8,9 @@ import {
   HAUTEUR_GRILLE,
   INVALIDE_POS,
   LARGEUR_GRILLE,
-  MAX_BFS_SIZE,
   parentsBFS,
   queueBFS,
 } from "./types";
-
-// BFS queue size tracking
-let tailleQueueBFS: i32 = 0;
-let tailleParentsBFS: i32 = 0;
 
 export function donneProchaineCaseCheminBFS(
   startX: i32,
@@ -30,16 +25,15 @@ export function donneProchaineCaseCheminBFS(
     return startPos;
   }
 
-  tailleParentsBFS = 0;
-  tailleQueueBFS = 0;
-
-  // Start BFS from end position to find start
-  queueBFS.set(tailleQueueBFS++, endPos);
+  // Clear arrays and start BFS from end position to find start
+  parentsBFS.clear();
+  queueBFS.clear();
+  queueBFS.push(endPos);
 
   let head = 0;
   let found = false;
 
-  while (head < tailleQueueBFS) {
+  while (head < (queueBFS.length as i32)) {
     const pos = queueBFS.get(head++);
 
     if (pos == startPos) {
@@ -63,16 +57,16 @@ export function donneProchaineCaseCheminBFS(
 
       // Check if already in queue
       let dejaDansQueue = false;
-      for (let j = 0; j < tailleQueueBFS; j++) {
+      for (let j = 0; j < (queueBFS.length as i32); j++) {
         if (queueBFS.get(j) == npos) {
           dejaDansQueue = true;
           break;
         }
       }
 
-      if (!dejaDansQueue && tailleQueueBFS < MAX_BFS_SIZE) {
-        parentsBFS.set(tailleParentsBFS++, pos);
-        queueBFS.set(tailleQueueBFS++, npos);
+      if (!dejaDansQueue) {
+        parentsBFS.push(pos);
+        queueBFS.push(npos);
       }
     }
   }
@@ -83,7 +77,7 @@ export function donneProchaineCaseCheminBFS(
 
   // Find index of startPos in queue
   let idx = -1;
-  for (let i = 0; i < tailleQueueBFS; i++) {
+  for (let i = 0; i < (queueBFS.length as i32); i++) {
     if (queueBFS.get(i) == startPos) {
       idx = i;
       break;
@@ -129,7 +123,7 @@ export function construireCasesValides(
           }
           // Find index of current in queueBFS
           let idx = -1;
-          for (let k = 0; k < tailleQueueBFS; k++) {
+          for (let k = 0; k < (queueBFS.length as i32); k++) {
             if (queueBFS.get(k) == current) {
               idx = k;
               break;

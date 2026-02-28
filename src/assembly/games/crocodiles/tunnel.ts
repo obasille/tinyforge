@@ -5,7 +5,7 @@ import { litCouleurCase } from "./level";
 import {
   Couleurs,
   Direction,
-  donneTunnel,
+  tunnels,
   HAUTEUR_GRILLE,
   INVALIDE,
   INVALIDE_POS,
@@ -19,7 +19,7 @@ import {
 } from "./types";
 
 export function initTunnel(index: u8): void {
-  const tunnel = donneTunnel(index);
+  const tunnel = tunnels.get(index);
   const couleur = index == 0 ? Couleurs.Tunnel1 : Couleurs.Tunnel2;
 
   // Trouve tous les pixels de cette couleur
@@ -70,17 +70,17 @@ export function majOuvertureTunnels(): void {
     jeu.tunnelTimer--;
   } else {
     if (jeu.tunnelPhase == 0) {
-      if (donneTunnel(0).present) donneTunnel(0).ouvert = 1;
-      if (donneTunnel(1).present) donneTunnel(1).ouvert = 0;
+      if (tunnels.get(0).present) tunnels.get(0).ouvert = 1;
+      if (tunnels.get(1).present) tunnels.get(1).ouvert = 0;
       jeu.tunnelPhase = 1;
     } else if (jeu.tunnelPhase == 1) {
-      if (donneTunnel(0).present) donneTunnel(0).ouvert = 0;
+      if (tunnels.get(0).present) tunnels.get(0).ouvert = 0;
       jeu.tunnelPhase = 2;
     } else if (jeu.tunnelPhase == 2) {
-      if (donneTunnel(1).present) donneTunnel(1).ouvert = 1;
+      if (tunnels.get(1).present) tunnels.get(1).ouvert = 1;
       jeu.tunnelPhase = 3;
     } else {
-      if (donneTunnel(1).present) donneTunnel(1).ouvert = 0;
+      if (tunnels.get(1).present) tunnels.get(1).ouvert = 0;
       jeu.tunnelPhase = 0;
     }
     jeu.tunnelTimer = TUNNEL_CYCLE_TICKS;
@@ -96,7 +96,7 @@ export function essaieTeleportTunnel(): void {
   let destY = INVALIDE;
 
   for (let i: i32 = 0; i < NB_TUNNELS; i++) {
-    const t = donneTunnel(i);
+    const t = tunnels.get(i);
     if (!t.present || !t.ouvert) continue;
 
     if (px == t.x0 && py == t.y0) {

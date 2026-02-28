@@ -2,8 +2,8 @@
 import {
   ArrayView,
   MemoryAllocator,
-  SCREEN_HEIGHT,
   RAM_START,
+  SCREEN_HEIGHT,
   SCREEN_WIDTH,
   c,
 } from "../../sdk";
@@ -134,73 +134,22 @@ export const jeu: Jeu = mem.allocStruct<Jeu>(offsetof<Jeu>("_fin"));
 export const joueur: Joueur = mem.allocStruct<Joueur>(
   offsetof<Joueur>("startupDelay") + sizeof<u8>(),
 );
-const croco0: Croco = mem.allocStruct<Croco>(
+export const crocos = mem.allocUncheckedObjArray<Croco>(
   offsetof<Croco>("targetY") + sizeof<u8>(),
+  NB_CROCOS,
 );
-const croco1: Croco = mem.allocStruct<Croco>(
-  offsetof<Croco>("targetY") + sizeof<u8>(),
-);
-const croco2: Croco = mem.allocStruct<Croco>(
-  offsetof<Croco>("targetY") + sizeof<u8>(),
-);
-const viande0: Viande = mem.allocStruct<Viande>(
+export const viandes = mem.allocUncheckedObjArray<Viande>(
   offsetof<Viande>("y") + sizeof<u8>(),
+  3,
 );
-const viande1: Viande = mem.allocStruct<Viande>(
-  offsetof<Viande>("y") + sizeof<u8>(),
-);
-const viande2: Viande = mem.allocStruct<Viande>(
-  offsetof<Viande>("y") + sizeof<u8>(),
-);
-const tunnel0: Tunnel = mem.allocStruct<Tunnel>(
+export const tunnels = mem.allocUncheckedObjArray<Tunnel>(
   offsetof<Tunnel>("ouvert") + sizeof<u8>(),
+  NB_TUNNELS,
 );
-const tunnel1: Tunnel = mem.allocStruct<Tunnel>(
-  offsetof<Tunnel>("ouvert") + sizeof<u8>(),
-);
-const piège0: Piège = mem.allocStruct<Piège>(
+export const pieges = mem.allocUncheckedObjArray<Piège>(
   offsetof<Piège>("timer") + sizeof<u16>(),
+  NB_PIÈGES,
 );
-const piège1: Piège = mem.allocStruct<Piège>(
-  offsetof<Piège>("timer") + sizeof<u16>(),
-);
-const piège2: Piège = mem.allocStruct<Piège>(
-  offsetof<Piège>("timer") + sizeof<u16>(),
-);
-const piège3: Piège = mem.allocStruct<Piège>(
-  offsetof<Piège>("timer") + sizeof<u16>(),
-);
-
-// Helper functions to get entities by index (avoids heap-allocated arrays)
-export function donneCroco(index: i32): Croco {
-  if (index == 0) return croco0;
-  if (index == 1) return croco1;
-  return croco2;
-}
-
-export function donneViande(index: i32): Viande {
-  if (index == 0) return viande0;
-  if (index == 1) return viande1;
-  return viande2;
-}
-
-export function donneTunnel(index: i32): Tunnel {
-  if (index == 0) return tunnel0;
-  return tunnel1;
-}
-
-export function donnePiège(index: i32): Piège {
-  if (index == 0) return piège0;
-  if (index == 1) return piège1;
-  if (index == 2) return piège2;
-  return piège3;
-}
-
-export function donneCouleurCroco(index: i32): u32 {
-  if (index == 0) return Couleurs.CrocoRouge;
-  if (index == 1) return Couleurs.CrocoViolet;
-  return Couleurs.CrocoVert;
-}
 
 // Maximum size for case arrays (grid is 20x15 = 300 cells)
 const MAX_CASES_CIBLES: i32 = 100; // Max target cells per croco
@@ -228,9 +177,8 @@ export const casesValidesCrocoVert = mem.allocArray<u16>(
 );
 
 // BFS pathfinding arrays (exported for use in pathfinding.ts)
-export const MAX_BFS_SIZE: i32 = 256;
-export const queueBFS = mem.allocUncheckedArray<u16>(MAX_BFS_SIZE);
-export const parentsBFS = mem.allocUncheckedArray<u16>(MAX_BFS_SIZE);
+export const queueBFS = mem.allocArray<u16>(256);
+export const parentsBFS = mem.allocArray<u16>(256);
 
 // Direction arrays for pathfinding (4 directions: up, down, left, right)
 export const directionX = mem.allocUncheckedArray<i32>(4);
@@ -240,10 +188,16 @@ export const directionY = mem.allocUncheckedArray<i32>(4);
  * Initialize arrays capacities and static data
  * Call once from game init()
  */
-export function initTypeArrays(): void {
-  // Set arrays to full
+export function initTableaux(): void {
+  // Efface toutes les tableaux de cases
+  casesCiblesCrocoRouge.clear();
+  casesCiblesCrocoViolet.clear();
+  casesCiblesCrocoVert.clear();
+  casesValidesCrocoRouge.clear();
+  casesValidesCrocoViolet.clear();
+  casesValidesCrocoVert.clear();
 
-  // Initialize direction arrays
+  // Initialise les tableaux de direction
   directionX.set(0, 0);
   directionY.set(0, -1); // UP
   directionX.set(1, 0);
@@ -254,7 +208,7 @@ export function initTypeArrays(): void {
   directionY.set(3, 0); // RIGHT
 }
 
-// Helper functions to get arrays by index (avoids heap-allocated array)
+// Fonctions d'accès aux tableaux de cases (pour éviter les if dans le code de jeu)
 export function getCasesCibles(index: i32): ArrayView<u16> {
   if (index == 0) return casesCiblesCrocoRouge;
   if (index == 1) return casesCiblesCrocoViolet;
