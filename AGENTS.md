@@ -637,14 +637,14 @@ warn(
 warni("Player {} at ({}, {})", id, x, y);
 ```
 
-**2. Use FixedArray for static-size arrays:**
+**2. Use UncheckedArrayView for static-size arrays:**
 
 ```ts
-import { FixedArray, RAM_START } from "./console";
+import { UncheckedArrayView, RAM_START } from "./console";
 
 // Calculate memory size needed
 const GRID_SIZE = 100;
-const gridBytes = FixedArray.sizeInMemory<u8>(GRID_SIZE); // 100 bytes
+const gridBytes = UncheckedArrayView.sizeInMemory<u8>(GRID_SIZE); // 100 bytes
 
 // Reserve in RAM layout
 enum Var {
@@ -654,7 +654,7 @@ enum Var {
 }
 
 // Create array view over pre-allocated memory
-const grid = FixedArray.fromAddress<u8>(RAM_START + 8);
+const grid = UncheckedArrayView.fromAddress<u8>(RAM_START + 8);
 
 // Use like a normal array
 grid.set(10, 42);
@@ -666,17 +666,17 @@ grid[10] = 42;
 const val = grid[10];
 ```
 
-**3. Use FixedArrayWithCount for dynamic-length tracking:**
+**3. Use ArrayView for dynamic-length tracking:**
 
 ```ts
-import { FixedArrayWithCount, RAM_START } from "./console";
+import { ArrayView, RAM_START } from "./console";
 
 // Calculate memory size (includes length/capacity metadata)
 const CAPACITY = 50;
-const size = FixedArrayWithCount.sizeInMemory<u16>(CAPACITY); // 4 + 100 = 104 bytes
+const size = ArrayView.sizeInMemory<u16>(CAPACITY); // 4 + 100 = 104 bytes
 
 // Create array with length tracking
-const items = FixedArrayWithCount.fromAddress<u16>(RAM_START + 200);
+const items = ArrayView.fromAddress<u16>(RAM_START + 200);
 items.capacity = CAPACITY;
 items.clear();
 
@@ -694,8 +694,8 @@ const x = items[0];
 
 **Key differences:**
 
-- `FixedArray<T>` - No metadata, just raw array data. You manage length manually.
-- `FixedArrayWithCount<T, U>` - Includes `length` and `capacity` metadata (2 \* sizeof<U> bytes).
+- `UncheckedArrayView<T>` - No metadata, just raw array data. You manage length manually. No bounds checking.
+- `ArrayView<T, U>` - Includes `length` and `capacity` metadata (2 \* sizeof<U> bytes). Includes bounds checking.
 - Both use `@unmanaged` pattern - no heap allocation, just memory reinterpretation.
 - Memory must be pre-allocated in your game's RAM layout.
 - Use `U = u8` for small arrays (max 255 elements), `U = u16` for larger (max 65535).
@@ -736,8 +736,8 @@ if (playerPos.y > HEIGHT) playerPos.y = HEIGHT;
 
 ```ts
 // 1. Calculate all memory requirements
-const gridSize = FixedArray.sizeInMemory<u8>(100); // 100 bytes
-const itemsSize = FixedArrayWithCount.sizeInMemory<u16>(50); // 104 bytes
+const gridSize = UncheckedArrayView.sizeInMemory<u8>(100); // 100 bytes
+const itemsSize = ArrayView.sizeInMemory<u16>(50); // 104 bytes
 
 // 2. Define RAM layout with all sizes
 enum Var {
@@ -751,8 +751,8 @@ enum Var {
 }
 
 // 3. Create views over the allocated regions
-const grid = FixedArray.fromAddress<u8>(RAM_START + Var.GRID_START);
-const items = FixedArrayWithCount.fromAddress<u16>(RAM_START + Var.ITEMS_START);
+const grid = UncheckedArrayView.fromAddress<u8>(RAM_START + Var.GRID_START);
+const items = ArrayView.fromAddress<u16>(RAM_START + Var.ITEMS_START);
 ```
 
 ### Complete Workflow for Creating a New Game
@@ -774,8 +774,8 @@ const items = FixedArrayWithCount.fromAddress<u16>(RAM_START + Var.ITEMS_START);
      drawRect,
      drawString,
      drawNumber,
-     FixedArray,
-     FixedArrayWithCount,
+     UncheckedArrayView,
+     ArrayView,
      RAM_START,
    } from "./console";
    ```

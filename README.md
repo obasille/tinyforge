@@ -958,14 +958,14 @@ Use `logi/logf`, `warni/warnf`, `errori/errorf` for interpolation (see Console L
 
 #### Fixed-Size Arrays
 
-**`FixedArray<T>`** - Zero-allocation array backed by pre-allocated memory:
+**`UncheckedArrayView<T>`** - Zero-allocation array backed by pre-allocated memory:
 
 ```ts
-import { FixedArray } from "./console";
+import { UncheckedArrayView } from "./console";
 
 // Calculate memory size needed
 const GRID_SIZE = 100;
-const gridBytes = FixedArray.sizeInMemory<u8>(GRID_SIZE); // 100 bytes
+const gridBytes = UncheckedArrayView.sizeInMemory<u8>(GRID_SIZE); // 100 bytes
 
 // Reserve memory in your RAM layout
 @unmanaged
@@ -976,7 +976,7 @@ class Vars {
 }
 
 // Create array view over pre-allocated memory
-const grid = FixedArray.fromAddress<u8>(RAM_START + 8);
+const grid = UncheckedArrayView.fromAddress<u8>(RAM_START + 8);
 
 // Use like a normal array
 grid.set(10, 42);
@@ -988,17 +988,17 @@ grid[10] = 42;
 const val = grid[10];
 ```
 
-**`FixedArrayWithCount<T, U>`** - Array with dynamic length tracking:
+**`ArrayView<T, U>`** - Array with dynamic length tracking:
 
 ```ts
-import { FixedArrayWithCount } from "./console";
+import { ArrayView } from "./console";
 
 // Calculate memory size (includes metadata)
 const CAPACITY = 50;
-const size = FixedArrayWithCount.sizeInMemory<u16>(CAPACITY); // 4 + 100 = 104 bytes
+const size = ArrayView.sizeInMemory<u16>(CAPACITY); // 4 + 100 = 104 bytes
 
 // Create array with length tracking
-const items = FixedArrayWithCount.fromAddress<u16>(RAM_START + 200);
+const items = ArrayView.fromAddress<u16>(RAM_START + 200);
 items.capacity = CAPACITY;
 items.clear();
 
@@ -1016,8 +1016,8 @@ const x = items[0];
 
 **Key differences:**
 
-- `FixedArray<T>` - No metadata, just raw array data. You manage length manually.
-- `FixedArrayWithCount<T, U>` - Includes `length` and `capacity` metadata (2 \* sizeof\<U\> bytes).
+- `UncheckedArrayView<T>` - No metadata, just raw array data. You manage length manually. No bounds checking.
+- `ArrayView<T, U>` - Includes `length` and `capacity` metadata (2 \* sizeof\<U\> bytes). Includes bounds checking.
 - Both use `@unmanaged` pattern - no heap allocation, just memory reinterpretation.
 - Memory must be pre-allocated in your game's RAM layout.
 - Use `U = u8` for small arrays (max 255 elements), `U = u16` for larger (max 65535).
