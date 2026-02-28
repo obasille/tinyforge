@@ -42,7 +42,7 @@ const CLUSTER_SIZE: u32 = 8; // x(4) + y(4) = 8
 const TARGET_SHIP_SIZE: u32 = 8; // currentStarIndex(4) + isActive(1) + padding(3) = 8
 const PLAYER_SHIP_SIZE: u32 = 12; // shipType(4) + currentStarIndex(4) + movesThisTurn(4) = 12
 const BEACON_SIZE: u32 = 8; // starIndex(4) + isActive(1) + isDetecting(1) + rangeAnimTimer(1) + pendingRangeAnim(1) = 8
-const GAME_STATE_DATA_SIZE: u32 = 48; // phase(1) + numStars(1) + numEdges(2) + targetType(1) + scannerPhase(1) + padding(2) + 10 i32 fields(40) = 48 bytes
+const GAME_STATE_DATA_SIZE: u32 = 52; // phase(1) + numStars(1) + numEdges(2) + targetType(1) + scannerPhase(1) + padding(2) + 11 i32 fields(44) = 52 bytes
 
 // Visual constants
 export const STAR_RADIUS: i32 = 2;
@@ -172,6 +172,7 @@ export class GameState {
   initialRevealTimer: i32 = 0; // Countdown frames for initial target reveal animation
   scannerY: i32 = -1; // Vertical scanner position (-1 = inactive)
   missionBriefingDismissed: i32 = 0; // 0 = show briefing, 1 = briefing dismissed
+  turnNumber: i32 = 0; // Current turn number (starts at 1)
 }
 
 // === Memory Layout ===
@@ -189,10 +190,10 @@ export enum MemLayout {
   // Player ships end at 2440 + 40 = 2480
   BEACONS = 2480, // BeaconArray: 4 bytes (elementSize) + 10 beacons × 8 bytes = 84 bytes
   // Beacons end at 2480 + 84 = 2564
-  GAME_STATE = 2564, // GameState: 44 bytes
-  // Game state data ends at 2564 + 44 = 2608
-  TEMP_WORK = 2608, // Working memory for algorithms (1024 bytes)
-  // Total memory: ~3632 bytes
+  GAME_STATE = 2564, // GameState: 52 bytes
+  // Game state data ends at 2564 + 52 = 2616
+  TEMP_WORK = 2616, // Working memory for algorithms (1024 bytes)
+  // Total memory: ~3640 bytes
 }
 
 export type StarArray = FixedArrayOfObj<Star>;

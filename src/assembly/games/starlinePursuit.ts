@@ -6,9 +6,11 @@ import {
   buttonPressed,
   c,
   clearFramebuffer,
+  drawCircle,
   drawNumber,
   drawRect,
   drawString,
+  fillCircle,
   fillRect,
   FixedArray,
   log,
@@ -313,6 +315,7 @@ export function init(): void {
   gameState.initialRevealTimer = 0; // Don't start reveal yet - wait for briefing dismissal
   gameState.scannerY = -1; // Scanner inactive
   gameState.scannerPhase = 0;
+  gameState.turnNumber = 1; // Initialize turn counter
 
   // Select random target type (0-4 for now, excluding advanced types)
   gameState.targetType = randomRange(5) as u8; // SMUGGLER, PIRATE, GHOST, COURIER, DECOY_MASTER
@@ -575,6 +578,9 @@ export function update(): void {
       return; // Game won
     }
 
+    // Increment turn counter
+    gameState.turnNumber++;
+
     log("Turn ended - resources refreshed");
     return;
   }
@@ -687,6 +693,10 @@ export function draw(): void {
   drawString(230, 1, "B:", c(0xffffff));
   drawNumber(246, 1, activeBeacons, c(0xffdd00));
 
+  // Draw turn counter (top right corner)
+  drawString(265, 1, "T:", c(0xffffff));
+  drawNumber(281, 1, gameState.turnNumber, c(0xaaccff));
+
   // Draw active ship info (second row)
   const shipTypeName = getShipTypeName(activeShip.shipType);
   drawString(1, 229, shipTypeName, c(0xaaccff));
@@ -738,4 +748,6 @@ export function draw(): void {
     drawString(95, 100, "TARGET ESCAPED", c(0xff0000));
     drawString(90, 115, "PRESS START", c(0xffffff));
   }
+
+  fillCircle(107, 144, 10, 0x7f0000ff); // Red dot in top left corner to indicate game is active
 }
