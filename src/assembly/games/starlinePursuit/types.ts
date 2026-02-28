@@ -17,6 +17,8 @@ export const MAX_LANE_DISTANCE: i32 = 55; // Max lane length
 export const EXTRA_LOOPS: i32 = 6;
 export const HUB_COUNT: i32 = 4;
 export const EXIT_COUNT: i32 = 3;
+export const MIN_NEBULAS: i32 = 2;
+export const MAX_NEBULAS: i32 = 4;
 
 // Game constants - Resources
 export const STARTING_SENSOR_ENERGY: i32 = 10;
@@ -34,15 +36,6 @@ export const MAX_BEACONS: i32 = 10;
 export const BEACON_RANGE: i32 = 45; // Detection radius in pixels
 export const SCAN_RADIUS: i32 = 70; // Survey Cruiser active scan range
 export const SCAN_COST: i32 = 2; // Sensor Energy cost for active scan
-
-// Element sizes for @unmanaged classes (aligned to 4 bytes)
-const STAR_SIZE: u32 = 16; // x(4) + y(4) + degree(4) + isHub(1) + isExit(1) + isPossibleTarget(1) + padding(1) = 16
-const EDGE_SIZE: u32 = 8; // a(4) + b(4) = 8
-const CLUSTER_SIZE: u32 = 8; // x(4) + y(4) = 8
-const TARGET_SHIP_SIZE: u32 = 8; // currentStarIndex(4) + isActive(1) + padding(3) = 8
-const PLAYER_SHIP_SIZE: u32 = 12; // shipType(4) + currentStarIndex(4) + movesThisTurn(4) = 12
-const BEACON_SIZE: u32 = 8; // starIndex(4) + isActive(1) + isDetecting(1) + rangeAnimTimer(1) + pendingRangeAnim(1) = 8
-const GAME_STATE_DATA_SIZE: u32 = 52; // phase(1) + numStars(1) + numEdges(2) + targetType(1) + scannerPhase(1) + padding(2) + 11 i32 fields(44) = 52 bytes
 
 // Visual constants
 export const STAR_RADIUS: i32 = 2;
@@ -93,6 +86,7 @@ export class Star {
   isHub: u8 = 0; // 1 if hub, 0 otherwise
   isExit: u8 = 0; // 1 if exit, 0 otherwise
   isPossibleTarget: u8 = 0; // 1 if target might be at this star, 0 otherwise
+  inNebula: u8 = 0; // 1 if star is within a nebula cloud, 0 otherwise
 }
 
 /**
@@ -114,6 +108,17 @@ export class Edge {
 export class Cluster {
   x: i32 = 0;
   y: i32 = 0;
+}
+
+/**
+ * Nebula cloud region
+ * Visual decoration on the starmap
+ */
+@unmanaged
+export class Nebula {
+  x: i32 = 0;
+  y: i32 = 0;
+  radius: i32 = 0;
 }
 
 /**
@@ -161,7 +166,8 @@ export class GameState {
   numEdges: u16 = 0; // Number of edges generated
   targetType: u8 = 0; // TargetType enum value
   scannerPhase: u8 = 0; // 0=sweep down, 1=sweep up, 2=done
-  // 2 bytes padding for alignment
+  numNebulas: u8 = 0; // Number of nebulas generated
+  // 1 byte padding for alignment
   sensorEnergy: i32 = 0;
   commandPoints: i32 = 0;
   deploymentKits: i32 = 0;
@@ -177,23 +183,29 @@ export class GameState {
 
 // === Memory Layout ===
 
+// Element sizes for @unmanaged classes (aligned to 4 bytes)
+const STAR_SIZE: u32 = 16; // x(4) + y(4) + degree(4) + isHub(1) + isExit(1) + isPossibleTarget(1) + padding(1) = 16
+const EDGE_SIZE: u32 = 8; // a(4) + b(4) = 8
+const CLUSTER_SIZE: u32 = 8; // x(4) + y(4) = 8
+const NEBULA_SIZE: u32 = 12; // x(4) + y(4) + radius(4) = 12
+const TARGET_SHIP_SIZE: u32 = 8; // currentStarIndex(4) + isActive(1) + padding(3) = 8
+const PLAYER_SHIP_SIZE: u32 = 12; // shipType(4) + currentStarIndex(4) + movesThisTurn(4) = 12
+const BEACON_SIZE: u32 = 8; // starIndex(4) + isActive(1) + isDetecting(1) + rangeAnimTimer(1) + pendingRangeAnim(1) = 8
+const GAME_STATE_DATA_SIZE: u32 = 52; // phase(1) + numStars(1) + numEdges(2) + targetType(1) + scannerPhase(1) + padding(2) + 11 i32 fields(44) = 52 bytes
+
+// FixedArrayOfObj has a 4-byte header for length, followed by contiguous objects
+
 export enum MemLayout {
-  STARS = 0, // StarArray: 4 bytes (elementSize) + 50 stars × 16 bytes = 804 bytes
-  // Stars end at 0 + 804 = 804
-  EDGES = 804, // EdgeArray: 4 bytes (elementSize) + 200 edges × 8 bytes = 1604 bytes
-  // Edges end at 804 + 1604 = 2408
-  CLUSTERS = 2408, // 3 clusters × 8 bytes = 24 bytes
-  // Clusters end at 2408 + 24 = 2432
-  TARGET_SHIP = 2432, // TargetShip: 8 bytes
-  // Target ship ends at 2432 + 8 = 2440
-  PLAYER_SHIPS = 2440, // PlayerShipArray: 4 bytes (elementSize) + 3 ships × 12 bytes = 40 bytes
-  // Player ships end at 2440 + 40 = 2480
-  BEACONS = 2480, // BeaconArray: 4 bytes (elementSize) + 10 beacons × 8 bytes = 84 bytes
-  // Beacons end at 2480 + 84 = 2564
-  GAME_STATE = 2564, // GameState: 52 bytes
-  // Game state data ends at 2564 + 52 = 2616
-  TEMP_WORK = 2616, // Working memory for algorithms (1024 bytes)
-  // Total memory: ~3640 bytes
+  STARS = 0,
+  EDGES = STARS + (4 + TOTAL_STARS * STAR_SIZE), // 0 + (4 + 50*16) = 804
+  CLUSTERS = EDGES + (4 + MAX_EDGES * EDGE_SIZE), // 804 + (4 + 200*8) = 2408
+  NEBULAS = CLUSTERS + (4 + NUM_CLUSTERS * CLUSTER_SIZE), // 2408 + (4 + 3*8) = 2436
+  TARGET_SHIP = NEBULAS + (4 + MAX_NEBULAS * NEBULA_SIZE), // 2436 + (4 + 4*12) = 2488
+  PLAYER_SHIPS = TARGET_SHIP + TARGET_SHIP_SIZE, // 2488 + 8 = 2496
+  BEACONS = PLAYER_SHIPS + (4 + MAX_PLAYER_SHIPS * PLAYER_SHIP_SIZE), // 2496 + (4 + 3*12) = 2536
+  GAME_STATE = BEACONS + (4 + MAX_BEACONS * BEACON_SIZE), // 2536 + (4 + 10*8) = 2620
+  TEMP_WORK = GAME_STATE + GAME_STATE_DATA_SIZE, // 2620 + 52 = 2672
+  // Total memory: TEMP_WORK + 1024 = ~3696 bytes
 }
 
 export type StarArray = FixedArrayOfObj<Star>;
@@ -214,6 +226,13 @@ export type ClusterArray = FixedArrayOfObj<Cluster>;
 export const clusters: ClusterArray = FixedArrayOfObj.fromAddress<Cluster>(
   RAM_START + MemLayout.CLUSTERS,
   CLUSTER_SIZE,
+  true,
+);
+
+export type NebulaArray = FixedArrayOfObj<Nebula>;
+export const nebulas: NebulaArray = FixedArrayOfObj.fromAddress<Nebula>(
+  RAM_START + MemLayout.NEBULAS,
+  NEBULA_SIZE,
   true,
 );
 

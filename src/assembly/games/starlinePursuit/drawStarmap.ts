@@ -18,6 +18,7 @@ import {
   HUB_RADIUS,
   MAX_BEACONS,
   MAX_EDGES,
+  MAX_NEBULAS,
   MAX_PLAYER_SHIPS,
   NUM_CLUSTERS,
   playerShips,
@@ -27,6 +28,7 @@ import {
   TOTAL_STARS,
   clusters,
   edges,
+  nebulas,
   stars,
 } from "./types";
 
@@ -53,6 +55,7 @@ function drawClusterCenters(): void {
 export function drawStarmap(): void {
   const numStars = gameState.numStars as i32;
   const numEdges = gameState.numEdges as i32;
+  const numNebulas = gameState.numNebulas as i32;
 
   // Safety check: ensure values are reasonable
   if (numStars <= 0 || numStars > TOTAL_STARS) {
@@ -62,6 +65,28 @@ export function drawStarmap(): void {
   if (numEdges < 0 || numEdges > MAX_EDGES) {
     warni("Invalid numEdges: {}, expected 0-{}", numEdges, MAX_EDGES);
     return;
+  }
+  if (numNebulas < 0 || numNebulas > MAX_NEBULAS) {
+    warni("Invalid numNebulas: {}, expected 0-{}", numNebulas, MAX_NEBULAS);
+    return;
+  }
+
+  // Draw nebulas first (background layer)
+  for (let i: i32 = 0; i < numNebulas; i++) {
+    const nebula = nebulas.get(i);
+    // Draw multi-layer cloud effect with semi-transparent circles
+    const r = nebula.radius;
+    // Outer glow layer (purple/pink hue)
+    fillCircle(nebula.x, nebula.y, r, toColor(0x88, 0x44, 0xaa, 0x20));
+    // Middle layer (slightly brighter)
+    fillCircle(
+      nebula.x,
+      nebula.y,
+      (r * 2) / 3,
+      toColor(0x99, 0x55, 0xbb, 0x30),
+    );
+    // Inner core (brightest)
+    fillCircle(nebula.x, nebula.y, r / 3, toColor(0xaa, 0x66, 0xcc, 0x40));
   }
 
   // Draw cluster centers (for debugging)
@@ -98,6 +123,17 @@ export function drawStarmap(): void {
   // Draw stars with different colors/sizes based on type
   for (let i: i32 = 0; i < numStars; i++) {
     const star = stars.get(i);
+
+    // Draw purple circle around stars within nebulas
+    if (star.inNebula != 0) {
+      const r =
+        star.isExit != 0
+          ? EXIT_RADIUS
+          : star.isHub != 0
+            ? HUB_RADIUS
+            : STAR_RADIUS;
+      drawCircle(star.x, star.y, r + 1, c(0xaa66cc)); // Purple circle
+    }
 
     if (star.isExit != 0) {
       // Exit nodes: green

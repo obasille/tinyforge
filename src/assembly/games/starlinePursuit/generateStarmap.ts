@@ -1,6 +1,7 @@
 import {
   clamp,
   FixedArray,
+  log,
   logi,
   RAM_START,
   randomRange,
@@ -22,8 +23,12 @@ import {
   MAP_WIDTH,
   MAX_EDGES,
   MAX_LANE_DISTANCE,
+  MAX_NEBULAS,
   MemLayout,
+  MIN_NEBULAS,
   MIN_STAR_DISTANCE,
+  NebulaArray,
+  nebulas,
   NUM_CLUSTERS,
   StarArray,
   stars,
@@ -875,6 +880,88 @@ function isConnectedToAnyExit(
 }
 
 /**
+ * Flag stars that are within nebula clouds
+ */
+function flagStarsInNebulas(
+  stars: StarArray,
+  numStars: i32,
+  nebulas: NebulaArray,
+  numNebulas: i32,
+): void {
+  for (let i = 0; i < numStars; i++) {
+    const star = stars.get(i);
+    star.inNebula = 0; // Reset flag
+
+    // Check if star is within any nebula
+    for (let n = 0; n < numNebulas; n++) {
+      const nebula = nebulas.get(n);
+      const d2 = dist2(star.x, star.y, nebula.x, nebula.y);
+      const r2 = nebula.radius * nebula.radius;
+
+      if (d2 <= r2) {
+        star.inNebula = 1;
+        break; // No need to check other nebulas
+      }
+    }
+  }
+}
+
+/**
+ * Generate nebula clouds for visual decoration
+ * Uses grid-based placement to guarantee all nebulas are placed
+ */
+function generateNebulas(nebulas: NebulaArray, nebulaCount: i32): void {
+  const MARGIN = 50;
+  const MIN_RADIUS = 25;
+  const MAX_RADIUS = 45;
+
+  // Use grid-based placement to guarantee all nebulas are placed
+  // Calculate grid dimensions to fit the required number of nebulas
+  const gridCols = i32(Mathf.sqrt(nebulaCount as f32) + 0.5);
+  const gridRows = (nebulaCount + gridCols - 1) / gridCols; // Ceiling division
+
+  const cellWidth = (MAP_WIDTH - 2 * MARGIN) / gridCols;
+  const cellHeight = (MAP_HEIGHT - 2 * MARGIN) / gridRows;
+
+  // Calculate jitter to keep nebulas centered in cells while adding variety
+  const jitterX = cellWidth / 3;
+  const jitterY = cellHeight / 3;
+
+  let numNebulas = 0;
+
+  // Place one nebula per grid cell with random jitter
+  for (let row = 0; row < gridRows && numNebulas < nebulaCount; row++) {
+    for (let col = 0; col < gridCols && numNebulas < nebulaCount; col++) {
+      // Calculate cell center
+      const centerX = MARGIN + col * cellWidth + cellWidth / 2;
+      const centerY = MARGIN + row * cellHeight + cellHeight / 2;
+
+      // Add random jitter around center
+      const x = centerX + randomRange(jitterX * 2) - jitterX;
+      const y = centerY + randomRange(jitterY * 2) - jitterY + MAP_OFFSET_Y;
+
+      // Random radius
+      const radius = MIN_RADIUS + randomRange(MAX_RADIUS - MIN_RADIUS + 1);
+
+      // Place nebula (guaranteed placement, no rejection)
+      const nebula = nebulas.get(numNebulas);
+      nebula.x = x;
+      nebula.y = y;
+      nebula.radius = radius;
+      numNebulas++;
+
+      logi(
+        "Placed nebula {} at ({}, {}) with radius {}",
+        numNebulas,
+        x,
+        y,
+        radius,
+      );
+    }
+  }
+}
+
+/**
  * Step 8: Mark exit stars (nodes on the perimeter of the grid)
  * Uses the grid placement pattern to directly select perimeter stars
  * Ensures exits are not directly connected to each other by star lanes
@@ -940,6 +1027,7 @@ export function generateStarmap(): void {
     star.degree = 0;
     star.isHub = 0;
     star.isExit = 0;
+    star.inNebula = 0;
   }
 
   // Initialize ALL edges to invalid values to prevent garbage data
@@ -990,5 +1078,18 @@ export function generateStarmap(): void {
   markHubs(stars, numStars, HUB_COUNT);
   markExits(stars, edges, numStars, numEdges, gridCols, gridRows, EXIT_COUNT);
 
-  logi("Starmap generated: {} stars, {} lanes", numStars, numEdges);
+  // Step 8: Generate nebulas
+  const numNebulas = MIN_NEBULAS + randomRange(MAX_NEBULAS - MIN_NEBULAS + 1);
+  generateNebulas(nebulas, numNebulas);
+  gameState.numNebulas = numNebulas as u8;
+
+  // Step 9: Flag stars within nebulas
+  flagStarsInNebulas(stars, numStars, nebulas, numNebulas);
+
+  logi(
+    "Starmap generated: {} stars, {} lanes, {} nebulas",
+    numStars,
+    numEdges,
+    numNebulas,
+  );
 }

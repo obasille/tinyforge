@@ -6,11 +6,9 @@ import {
   buttonPressed,
   c,
   clearFramebuffer,
-  drawCircle,
   drawNumber,
   drawRect,
   drawString,
-  fillCircle,
   fillRect,
   FixedArray,
   log,
@@ -748,6 +746,4 @@ export function draw(): void {
     drawString(95, 100, "TARGET ESCAPED", c(0xff0000));
     drawString(90, 115, "PRESS START", c(0xffffff));
   }
-
-  fillCircle(107, 144, 10, 0x7f0000ff); // Red dot in top left corner to indicate game is active
 }
