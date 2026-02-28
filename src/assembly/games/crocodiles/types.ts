@@ -1,7 +1,7 @@
 // cspell:language en,fr
 import {
   ArrayView,
-  MemoryAllocator,
+  StaticMemoryAllocator,
   RAM_START,
   SCREEN_HEIGHT,
   SCREEN_WIDTH,
@@ -128,7 +128,7 @@ export class Piège {
 // === Memory Layout ===
 
 // Allocator state stored at RAM_START, data follows after sizeof<usize> bytes
-const mem = MemoryAllocator.fromAddress(RAM_START);
+const mem = StaticMemoryAllocator.fromAddress(RAM_START);
 
 export const jeu: Jeu = mem.allocStruct<Jeu>(offsetof<Jeu>("_fin"));
 export const joueur: Joueur = mem.allocStruct<Joueur>(

@@ -22,7 +22,7 @@ import { logi } from "./logging";
  * }
  *
  * // Create allocator and initialize with starting offset
- * const mem = MemoryAllocator.fromAddress(RAM_START + Var.ALLOCATOR, RAM_START + Var.DATA_START);
+ * const mem = StaticMemoryAllocator.fromAddress(RAM_START + Var.ALLOCATOR, RAM_START + Var.DATA_START);
  *
  * // Allocate arrays and structs
  * const stars = mem.allocArray<Star>(STAR_SIZE, MAX_STARS as u16);
@@ -31,19 +31,19 @@ import { logi } from "./logging";
  * ```
  */
 @unmanaged
-export class MemoryAllocator {
+export class StaticMemoryAllocator {
   // No fields - this class is just a type marker for the memory region
   // The offset is stored at the base address
 
   /**
-   * Create a MemoryAllocator instance from a raw memory address
+   * Create a StaticMemoryAllocator instance from a raw memory address
    * @param address Memory address where allocator state is stored (needs sizeof<usize> bytes)
    * @param startOffset Optional, initial offset value (where allocations begin)
-   * @returns MemoryAllocator instance
+   * @returns StaticMemoryAllocator instance
    */
   @inline
-  static fromAddress(address: usize): MemoryAllocator {
-    const instance = changetype<MemoryAllocator>(address);
+  static fromAddress(address: usize): StaticMemoryAllocator {
+    const instance = changetype<StaticMemoryAllocator>(address);
     // Initialize offset to start after the offset field
     store<usize>(address, address + sizeof<usize>());
     return instance;

@@ -1086,6 +1086,97 @@ This project intentionally favors **clarity and control** over abstraction.
 
 ---
 
+## Array Types and Memory Layout Management
+
+TinyForge uses zero-allocation array views for all game state. This ensures deterministic execution and compatibility with the stub runtime (no heap). The SDK provides several array types:
+
+### Array Types
+
+- **UncheckedArrayView<T>**
+  - Fixed-size, no bounds checking, no length tracking.
+  - Use for raw buffers or when you manage length manually.
+  - Example: `const grid = UncheckedArrayView.fromAddress<u8>(RAM_START + offset);`
+
+- **ArrayView<T>**
+  - Fixed-size, with length and capacity tracking.
+  - Bounds-checked, supports `push()`, `clear()`, etc.
+  - Example: `const items = ArrayView.fromAddress<u16>(RAM_START + offset);`
+
+- **UncheckedArrayObjView<T>**
+  - For arrays of `@unmanaged` structs, no bounds or length tracking.
+  - Use when you want direct struct access and manage length yourself.
+  - Example: `const enemies = UncheckedArrayObjView.fromAddress<Enemy>(RAM_START + offset, count);`
+
+- **ArrayObjView<T>**
+  - For arrays of `@unmanaged` structs, with length/capacity tracking.
+  - Bounds-checked, supports `push()`, `clear()`, etc.
+  - Example: `const crocos = ArrayObjView.fromAddress<Croco>(RAM_START + offset, capacity);`
+
+### Memory Layout Management with StaticMemoryAllocator
+
+To avoid manual offset math and ensure all game state is stored in RAM, use `StaticMemoryAllocator`:
+
+```ts
+import { StaticMemoryAllocator } from "../sdk/memoryAllocator";
+
+// Allocate from RAM_START
+const mem = StaticMemoryAllocator.fromAddress(RAM_START);
+
+// Allocate a struct
+export const gameState = mem.allocStruct<GameState>(
+  offsetof<GameState>("score") + sizeof<i32>(),
+);
+
+// Allocate arrays of primitives
+export const queueBFS = mem.allocArray<u16>(256); // ArrayView<u16>
+export const directionX = mem.allocUncheckedArray<i32>(4); // UncheckedArrayView<i32>
+
+// Allocate arrays of objects
+export const crocos = mem.allocUncheckedObjArray<Croco>(
+  offsetof<Croco>("targetY") + sizeof<u8>(),
+  NB_CROCOS,
+); // UncheckedArrayObjView<Croco>
+```
+
+#### Warnings
+
+- **UncheckedArrayView/UncheckedArrayObjView:**  
+  ⚠️ No bounds checking! Accessing out of bounds will corrupt memory.
+- **allocArray/allocUncheckedArray:**  
+  ⚠️ Only for primitive number types (i32, u8, f32, etc.)—not for `@unmanaged` objects.
+
+### Example: crocodiles/types.ts
+
+```ts
+export const crocos = mem.allocUncheckedObjArray<Croco>(
+  offsetof<Croco>("targetY") + sizeof<u8>(),
+  NB_CROCOS,
+);
+export const queueBFS = mem.allocArray<u16>(256);
+export const directionX = mem.allocUncheckedArray<i32>(4);
+```
+
+### Example: starlinePursuit/types.ts
+
+```ts
+export const stars = mem.allocUncheckedObjArray<Star>(
+  offsetof<Star>("y") + sizeof<i32>(),
+  STAR_COUNT,
+);
+export const playerPath = mem.allocArray<u16>(MAX_PATH_LENGTH);
+```
+
+### Best Practices
+
+- Always allocate all game state at startup using StaticMemoryAllocator.
+- Never use dynamic allocation (`new Array()`, etc.).
+- Access arrays directly (e.g., `crocos.get(i)`), do not use helper functions for indirection.
+- Store all persistent state in RAM, not in module-level variables.
+
+This pattern ensures your game is compatible with TinyForge’s zero-allocation runtime and supports hot reload, save states, and deterministic replay.
+
+---
+
 ## Planned / Possible Extensions
 
 - **Build-time allocation detection**
