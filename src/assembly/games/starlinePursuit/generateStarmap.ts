@@ -1,12 +1,4 @@
-import {
-  clamp,
-  FixedArray,
-  log,
-  logi,
-  RAM_START,
-  randomRange,
-  warni,
-} from "../../sdk";
+import { clamp, FixedArray, logi, randomRange, s, warni } from "../../sdk";
 
 import {
   CLUSTER_STRENGTH,
@@ -15,16 +7,13 @@ import {
   edges,
   EXIT_COUNT,
   EXTRA_LOOPS,
-  gameState,
   HUB_COUNT,
   K_NEIGHBORS,
   MAP_HEIGHT,
   MAP_OFFSET_Y,
   MAP_WIDTH,
-  MAX_EDGES,
   MAX_LANE_DISTANCE,
   MAX_NEBULAS,
-  MemLayout,
   MIN_NEBULAS,
   MIN_STAR_DISTANCE,
   NebulaArray,
@@ -32,7 +21,7 @@ import {
   NUM_CLUSTERS,
   StarArray,
   stars,
-  TOTAL_STARS,
+  TEMP_MEM_START,
 } from "./types";
 
 // === Helper Functions ===
@@ -146,22 +135,18 @@ function wouldCrossEdges(
  * Add edge and update degree counts
  * Zero allocation: uses direct property assignment
  */
-function addEdge(
-  stars: StarArray,
-  edges: EdgeArray,
-  numEdges: i32,
-  a: i32,
-  b: i32,
-): i32 {
+function addEdge(stars: StarArray, edges: EdgeArray, a: i32, b: i32): i32 {
+  const numEdges = edges.length as i32;
   if (a == b) return numEdges;
   if (edgeExists(edges, numEdges, a, b)) return numEdges;
-  if (numEdges >= MAX_EDGES) {
-    warni("Max edges reached: {}", MAX_EDGES);
+  const maxEdges = edges.capacity as i32;
+  if (numEdges >= maxEdges) {
+    warni("Max edges reached: {}", maxEdges);
     return numEdges;
   }
 
-  // Zero allocation pattern - reinterpret existing memory
-  const edge = edges.get(numEdges);
+  // Add edge to array
+  const edge = edges.grow();
   edge.a = a;
   edge.b = b;
 
@@ -195,7 +180,6 @@ function generateStars(
   const jitterY = max(1, cellHeight / 2 - minDist / 2);
 
   // Place one star per grid cell with random jitter
-  let numStars = 0;
   for (let row = 0; row < gridRows; row++) {
     for (let col = 0; col < gridCols; col++) {
       // Calculate cell center
@@ -210,14 +194,13 @@ function generateStars(
       const finalX = clamp(x, 10, MAP_WIDTH - 10);
       const finalY = clamp(y, 10, MAP_HEIGHT - 10) + MAP_OFFSET_Y;
 
-      // Zero allocation pattern - reinterpret existing memory
-      const star = stars.get(numStars);
+      // Add star to array
+      const star = stars.grow();
       star.x = finalX;
       star.y = finalY;
       star.degree = 0;
       star.isHub = 0;
       star.isExit = 0;
-      numStars++;
     }
   }
 }
@@ -228,7 +211,6 @@ function generateStars(
  */
 function applyClusterBias(
   stars: StarArray,
-  numStars: i32,
   clusterCount: i32,
   strength: f32,
 ): void {
@@ -243,8 +225,6 @@ function applyClusterBias(
   const gridRows = 2;
   const cellWidth = (MAP_WIDTH - 2 * MARGIN) / gridCols;
   const cellHeight = (MAP_HEIGHT - 2 * MARGIN) / gridRows;
-
-  let numClusters = 0;
 
   // Place each cluster in a random grid cell with jitter
   for (let c = 0; c < clusterCount; c++) {
@@ -274,6 +254,7 @@ function applyClusterBias(
 
       // Check minimum distance from existing clusters
       let tooClose = false;
+      const numClusters = clusters.length as i32;
       for (let i = 0; i < numClusters; i++) {
         const existing = clusters.get(i);
         const d2 = dist2(finalX, finalY, existing.x, existing.y);
@@ -284,10 +265,9 @@ function applyClusterBias(
       }
 
       if (!tooClose) {
-        const cluster = clusters.get(numClusters);
+        const cluster = clusters.grow();
         cluster.x = finalX;
         cluster.y = finalY;
-        numClusters++;
         placed = true;
       }
     }
@@ -295,6 +275,8 @@ function applyClusterBias(
 
   // Step 2.2: Pull stars toward nearest cluster
   const influenceR2 = INFLUENCE_RADIUS * INFLUENCE_RADIUS;
+  const numStars = stars.length as i32;
+  const numClusters = clusters.length as i32;
 
   for (let i = 0; i < numStars; i++) {
     const star = stars.get(i);
@@ -398,26 +380,19 @@ function applyClusterBias(
 function connectLocalNeighbors(
   stars: StarArray,
   edges: EdgeArray,
-  numStars: i32,
-  numEdges: i32,
   k: i32,
   maxLane: i32,
 ): i32 {
   const maxD2 = maxLane * maxLane;
-  let edgeCount = numEdges;
+  let edgeCount = edges.length as i32;
 
   // Working arrays for candidate neighbors
-  const candidateIdx = FixedArray.fromAddress<i32>(
-    RAM_START + MemLayout.TEMP_WORK + 32,
-  );
-  const candidateDist = FixedArray.fromAddress<i32>(
-    RAM_START + MemLayout.TEMP_WORK + 128,
-  );
-  const nearestIdx = FixedArray.fromAddress<i32>(
-    RAM_START + MemLayout.TEMP_WORK + 224,
-  );
+  const candidateIdx = FixedArray.fromAddress<i32>(TEMP_MEM_START + 32);
+  const candidateDist = FixedArray.fromAddress<i32>(TEMP_MEM_START + 128);
+  const nearestIdx = FixedArray.fromAddress<i32>(TEMP_MEM_START + 224);
 
   // For each star, find k nearest neighbors and connect
+  const numStars = stars.length as i32;
   for (let i = 0; i < numStars; i++) {
     const starI = stars.get(i);
 
@@ -502,7 +477,7 @@ function connectLocalNeighbors(
 
       // Only add edge if it doesn't cross any existing edges
       if (valid) {
-        edgeCount = addEdge(stars, edges, edgeCount, i, j);
+        edgeCount = addEdge(stars, edges, i, j);
       }
     }
   }
@@ -521,9 +496,7 @@ function floodFillComponent(
   component: FixedArray<i32>,
   visited: FixedArray<u8>,
 ): i32 {
-  const stack = FixedArray.fromAddress<i32>(
-    RAM_START + MemLayout.TEMP_WORK + 256,
-  );
+  const stack = FixedArray.fromAddress<i32>(TEMP_MEM_START + 256);
   let stackSize = 0;
   let compSize = 0;
 
@@ -556,12 +529,10 @@ function floodFillComponent(
  * Step 4: Ensure full connectivity by bridging disconnected components
  * Now includes crossing rejection to maintain planar graph property
  */
-function connectComponents(
-  stars: StarArray,
-  edges: EdgeArray,
-  numStars: i32,
-  numEdges: i32,
-): i32 {
+function connectComponents(stars: StarArray, edges: EdgeArray): i32 {
+  const numStars = stars.length as i32;
+  const numEdges = edges.length as i32;
+
   let edgeCount = numEdges;
   let continueLoop = true;
   let iterations = 0;
@@ -570,20 +541,14 @@ function connectComponents(
   while (continueLoop && iterations < maxIterations) {
     iterations++;
     // Reset visited array
-    const visited = FixedArray.fromAddress<u8>(
-      RAM_START + MemLayout.TEMP_WORK + 512,
-    );
+    const visited = FixedArray.fromAddress<u8>(TEMP_MEM_START + 512);
     for (let i = 0; i < numStars; i++) {
       visited.set(i, 0);
     }
 
     // Find all components
-    const comp1 = FixedArray.fromAddress<i32>(
-      RAM_START + MemLayout.TEMP_WORK + 600,
-    );
-    const comp2 = FixedArray.fromAddress<i32>(
-      RAM_START + MemLayout.TEMP_WORK + 700,
-    );
+    const comp1 = FixedArray.fromAddress<i32>(TEMP_MEM_START + 600);
+    const comp2 = FixedArray.fromAddress<i32>(TEMP_MEM_START + 700);
     let comp1Size = 0;
     let comp2Size = 0;
     let foundSecondComponent = false;
@@ -653,7 +618,7 @@ function connectComponents(
     // Connect closest non-crossing pair
     if (bestA >= 0 && bestB >= 0) {
       const prevCount = edgeCount;
-      edgeCount = addEdge(stars, edges, edgeCount, bestA, bestB);
+      edgeCount = addEdge(stars, edges, bestA, bestB);
       // Safety check: if edge wasn't added, break to avoid infinite loop
       if (edgeCount == prevCount) {
         warni(
@@ -681,12 +646,9 @@ function connectComponents(
  * OPTIMIZED: Limits the number of dead ends processed to avoid excessive iterations
  * Now includes crossing rejection to maintain planar graph property
  */
-function reduceDeadEnds(
-  stars: StarArray,
-  edges: EdgeArray,
-  numStars: i32,
-  numEdges: i32,
-): i32 {
+function reduceDeadEnds(stars: StarArray, edges: EdgeArray): i32 {
+  const numStars = stars.length as i32;
+  const numEdges = edges.length as i32;
   let edgeCount = numEdges;
   let processed = 0;
   const maxProcessed = numStars / 2; // Process at most half the stars
@@ -721,7 +683,7 @@ function reduceDeadEnds(
       }
 
       if (best >= 0) {
-        edgeCount = addEdge(stars, edges, edgeCount, i, best);
+        edgeCount = addEdge(stars, edges, i, best);
         processed++;
       }
     }
@@ -734,13 +696,10 @@ function reduceDeadEnds(
  * Step 6: Add extra loop edges for multiple routes
  * Now includes crossing rejection to maintain planar graph property
  */
-function addLoops(
-  stars: StarArray,
-  edges: EdgeArray,
-  numStars: i32,
-  numEdges: i32,
-  extra: i32,
-): i32 {
+function addLoops(stars: StarArray, edges: EdgeArray, extra: i32): i32 {
+  const numStars = stars.length as i32;
+  const numEdges = edges.length as i32;
+
   let edgeCount = numEdges;
   const maxLoopD2 = 55 * 55;
   let attempts = 0;
@@ -765,7 +724,7 @@ function addLoops(
     // Only add if within distance AND doesn't cross existing edges
     if (d < maxLoopD2 && !wouldCrossEdges(stars, edges, edgeCount, a, b)) {
       const prevCount = edgeCount;
-      edgeCount = addEdge(stars, edges, edgeCount, a, b);
+      edgeCount = addEdge(stars, edges, a, b);
       if (edgeCount > prevCount) {
         added++;
       }
@@ -778,7 +737,8 @@ function addLoops(
 /**
  * Step 7: Mark hub stars (highest degree nodes)
  */
-function markHubs(stars: StarArray, numStars: i32, hubCount: i32): void {
+function markHubs(stars: StarArray, hubCount: i32): void {
+  const numStars = stars.length as i32;
   for (let h = 0; h < hubCount; h++) {
     let best = -1;
     let bestDeg = -1;
@@ -882,12 +842,10 @@ function isConnectedToAnyExit(
 /**
  * Flag stars that are within nebula clouds
  */
-function flagStarsInNebulas(
-  stars: StarArray,
-  numStars: i32,
-  nebulas: NebulaArray,
-  numNebulas: i32,
-): void {
+function flagStarsInNebulas(stars: StarArray, nebulas: NebulaArray): void {
+  const numStars = stars.length as i32;
+  const numNebulas = nebulas.length as i32;
+
   for (let i = 0; i < numStars; i++) {
     const star = stars.get(i);
     star.inNebula = 0; // Reset flag
@@ -927,9 +885,8 @@ function generateNebulas(nebulas: NebulaArray, nebulaCount: i32): void {
   const jitterX = cellWidth / 3;
   const jitterY = cellHeight / 3;
 
-  let numNebulas = 0;
-
   // Place one nebula per grid cell with random jitter
+  const numNebulas = nebulas.length as i32;
   for (let row = 0; row < gridRows && numNebulas < nebulaCount; row++) {
     for (let col = 0; col < gridCols && numNebulas < nebulaCount; col++) {
       // Calculate cell center
@@ -944,19 +901,10 @@ function generateNebulas(nebulas: NebulaArray, nebulaCount: i32): void {
       const radius = MIN_RADIUS + randomRange(MAX_RADIUS - MIN_RADIUS + 1);
 
       // Place nebula (guaranteed placement, no rejection)
-      const nebula = nebulas.get(numNebulas);
+      const nebula = nebulas.grow();
       nebula.x = x;
       nebula.y = y;
       nebula.radius = radius;
-      numNebulas++;
-
-      logi(
-        "Placed nebula {} at ({}, {}) with radius {}",
-        numNebulas,
-        x,
-        y,
-        radius,
-      );
     }
   }
 }
@@ -969,12 +917,13 @@ function generateNebulas(nebulas: NebulaArray, nebulaCount: i32): void {
 function markExits(
   stars: StarArray,
   edges: EdgeArray,
-  numStars: i32,
-  numEdges: i32,
   gridCols: i32,
   gridRows: i32,
   exitCount: i32,
 ): void {
+  const numStars = stars.length as i32;
+  const numEdges = edges.length as i32;
+
   // Calculate perimeter length: 2*cols + 2*rows - 4 (for the 4 corners counted once)
   const perimeterLength = 2 * gridCols + 2 * gridRows - 4;
 
@@ -1019,77 +968,46 @@ function markExits(
  * Main starmap generation function following 9B specification
  */
 export function generateStarmap(): void {
-  // Initialize ALL stars to invalid values first to prevent garbage data
-  for (let i = 0; i < TOTAL_STARS; i++) {
-    const star = stars.get(i);
-    star.x = -1;
-    star.y = -1;
-    star.degree = 0;
-    star.isHub = 0;
-    star.isExit = 0;
-    star.inNebula = 0;
-  }
-
-  // Initialize ALL edges to invalid values to prevent garbage data
-  for (let i = 0; i < MAX_EDGES; i++) {
-    const edge = edges.get(i);
-    edge.a = -1;
-    edge.b = -1;
-  }
-
+  const totalStars = stars.capacity;
   // Calculate grid dimensions (same logic as generateStars)
   const gridCols = i32(
-    Mathf.sqrt(((TOTAL_STARS * MAP_WIDTH) as f32) / (MAP_HEIGHT as f32)),
+    Mathf.sqrt(((totalStars * MAP_WIDTH) as f32) / (MAP_HEIGHT as f32)),
   );
-  const gridRows = i32((TOTAL_STARS as f32) / (gridCols as f32) + 0.5);
-  const numStars = gridCols * gridRows; // Actual number of stars placed based on grid
+  const gridRows = i32((totalStars as f32) / (gridCols as f32) + 0.5);
 
   // Step 1: Place stars evenly using Poisson-like rejection
   generateStars(stars, gridCols, gridRows, MIN_STAR_DISTANCE);
 
-  gameState.numStars = numStars as u8;
-
   // Step 2: Apply cluster bias for visible clusters
-  applyClusterBias(stars, numStars, NUM_CLUSTERS, CLUSTER_STRENGTH);
+  applyClusterBias(stars, NUM_CLUSTERS, CLUSTER_STRENGTH);
 
   // Step 3: Connect local k-nearest neighbors
-  let numEdges = 0;
-  numEdges = connectLocalNeighbors(
-    stars,
-    edges,
-    numStars,
-    numEdges,
-    K_NEIGHBORS,
-    MAX_LANE_DISTANCE,
-  );
+  connectLocalNeighbors(stars, edges, K_NEIGHBORS, MAX_LANE_DISTANCE);
 
   // Step 4: Ensure full connectivity
-  numEdges = connectComponents(stars, edges, numStars, numEdges);
+  connectComponents(stars, edges);
 
   // Step 5: Reduce dead ends
-  numEdges = reduceDeadEnds(stars, edges, numStars, numEdges);
+  reduceDeadEnds(stars, edges);
 
   // Step 6: Add extra loops for multiple routes
-  numEdges = addLoops(stars, edges, numStars, numEdges, EXTRA_LOOPS);
-
-  gameState.numEdges = numEdges as u16;
+  addLoops(stars, edges, EXTRA_LOOPS);
 
   // Step 7: Mark hubs and exits
-  markHubs(stars, numStars, HUB_COUNT);
-  markExits(stars, edges, numStars, numEdges, gridCols, gridRows, EXIT_COUNT);
+  markHubs(stars, HUB_COUNT);
+  markExits(stars, edges, gridCols, gridRows, EXIT_COUNT);
 
   // Step 8: Generate nebulas
   const numNebulas = MIN_NEBULAS + randomRange(MAX_NEBULAS - MIN_NEBULAS + 1);
   generateNebulas(nebulas, numNebulas);
-  gameState.numNebulas = numNebulas as u8;
 
   // Step 9: Flag stars within nebulas
-  flagStarsInNebulas(stars, numStars, nebulas, numNebulas);
+  flagStarsInNebulas(stars, nebulas);
 
   logi(
     "Starmap generated: {} stars, {} lanes, {} nebulas",
-    numStars,
-    numEdges,
-    numNebulas,
+    stars.length,
+    edges.length,
+    nebulas.length,
   );
 }

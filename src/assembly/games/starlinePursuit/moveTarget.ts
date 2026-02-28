@@ -1,18 +1,16 @@
-import { RAM_START, log, logi, randomRange } from "../../sdk";
+import { log, logi, randomRange } from "../../sdk";
 import { FixedArray } from "../../sdk/arrays";
 import {
   BEACON_RANGE,
-  MAX_BEACONS,
-  MAX_PLAYER_SHIPS,
-  MemLayout,
   ShipType,
+  TEMP_MEM_START,
   TargetType,
   beacons,
   edges,
   gameState,
-  targetShip,
   playerShips,
   stars,
+  targetShip,
 } from "./types";
 import { starsDist2 } from "./utils";
 
@@ -21,7 +19,7 @@ import { starsDist2 } from "./utils";
  */
 function isStarDetected(starIndex: i32): bool {
   const range2 = BEACON_RANGE * BEACON_RANGE;
-  for (let i: i32 = 0; i < MAX_BEACONS; i++) {
+  for (let i = 0; i < (beacons.length as i32); i++) {
     const beacon = beacons.get(i);
     if (beacon.isActive == 1) {
       if (starsDist2(beacon.starIndex, starIndex) <= range2) {
@@ -37,7 +35,7 @@ function isStarDetected(starIndex: i32): bool {
  * Stores neighbor indices in provided array, returns count
  */
 function getAllNeighbors(starIndex: i32, neighbors: FixedArray<i32>): i32 {
-  const numEdges = gameState.numEdges as i32;
+  const numEdges = edges.length as i32;
   let count: i32 = 0;
 
   for (let i: i32 = 0; i < numEdges; i++) {
@@ -65,7 +63,7 @@ function getAllNeighbors(starIndex: i32, neighbors: FixedArray<i32>): i32 {
 function getClosestPlayerDistance(starIndex: i32): i32 {
   let minDist2: i32 = 999999;
 
-  for (let i: i32 = 0; i < MAX_PLAYER_SHIPS; i++) {
+  for (let i: i32 = 0; i < (playerShips.length as i32); i++) {
     const ship = playerShips.get(i);
     const d2 = starsDist2(starIndex, ship.currentStarIndex);
     if (d2 < minDist2) {
@@ -84,7 +82,7 @@ function getClosestPlayerDistance(starIndex: i32): i32 {
 function scoreNeighbor(neighborIndex: i32, currentDistance: i32): f32 {
   // CRITICAL: Never move to a star occupied by an Interceptor
   // Other ships can be moved onto as a last resort (they detect but don't capture)
-  for (let i: i32 = 0; i < MAX_PLAYER_SHIPS; i++) {
+  for (let i: i32 = 0; i < (playerShips.length as i32); i++) {
     const ship = playerShips.get(i);
     if (ship.currentStarIndex == neighborIndex) {
       if (ship.shipType == ShipType.INTERCEPTOR) {
@@ -199,9 +197,7 @@ export function moveTarget(): void {
   const currentStar = targetShip.currentStarIndex;
 
   // Use temp memory for neighbor list
-  const neighbors = FixedArray.fromAddress<i32>(
-    RAM_START + MemLayout.TEMP_WORK,
-  );
+  const neighbors = FixedArray.fromAddress<i32>(TEMP_MEM_START);
   const neighborCount = getAllNeighbors(currentStar, neighbors);
 
   if (neighborCount == 0) {
@@ -233,7 +229,7 @@ export function moveTarget(): void {
     logi("Target moved to star {}", bestNeighbor, 0, 0);
 
     // Safety check: warn if target moved onto an Interceptor (should never happen)
-    for (let i: i32 = 0; i < MAX_PLAYER_SHIPS; i++) {
+    for (let i: i32 = 0; i < (playerShips.length as i32); i++) {
       const ship = playerShips.get(i);
       if (
         ship.currentStarIndex == bestNeighbor &&

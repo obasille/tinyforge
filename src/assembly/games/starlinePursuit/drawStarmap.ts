@@ -6,7 +6,6 @@ import {
   fillCircle,
   fillRect,
   toColor,
-  warni,
 } from "../../sdk";
 
 import {
@@ -16,16 +15,11 @@ import {
   gameState,
   targetShip,
   HUB_RADIUS,
-  MAX_BEACONS,
-  MAX_EDGES,
-  MAX_NEBULAS,
-  MAX_PLAYER_SHIPS,
   NUM_CLUSTERS,
   playerShips,
   SCAN_RADIUS,
   ShipType,
   STAR_RADIUS,
-  TOTAL_STARS,
   clusters,
   edges,
   nebulas,
@@ -53,23 +47,9 @@ function drawClusterCenters(): void {
  * Draw the complete starmap (stars and lanes)
  */
 export function drawStarmap(): void {
-  const numStars = gameState.numStars as i32;
-  const numEdges = gameState.numEdges as i32;
-  const numNebulas = gameState.numNebulas as i32;
-
-  // Safety check: ensure values are reasonable
-  if (numStars <= 0 || numStars > TOTAL_STARS) {
-    warni("Invalid numStars: {}, expected 1-{}", numStars, TOTAL_STARS);
-    return;
-  }
-  if (numEdges < 0 || numEdges > MAX_EDGES) {
-    warni("Invalid numEdges: {}, expected 0-{}", numEdges, MAX_EDGES);
-    return;
-  }
-  if (numNebulas < 0 || numNebulas > MAX_NEBULAS) {
-    warni("Invalid numNebulas: {}, expected 0-{}", numNebulas, MAX_NEBULAS);
-    return;
-  }
+  const numStars = stars.length as i32;
+  const numEdges = edges.length as i32;
+  const numNebulas = nebulas.length as i32;
 
   // Draw nebulas first (background layer)
   for (let i: i32 = 0; i < numNebulas; i++) {
@@ -101,11 +81,8 @@ export function drawStarmap(): void {
     }
   }
 
-  // Clamp numEdges to prevent reading beyond MAX_EDGES
-  const safeNumEdges = numEdges;
-
   // Draw lanes (edges) first so stars appear on top
-  for (let i: i32 = 0; i < safeNumEdges; i++) {
+  for (let i: i32 = 0; i < numEdges; i++) {
     const edge = edges.get(i);
 
     // Bounds check to prevent crashes from invalid edges
@@ -151,7 +128,7 @@ export function drawStarmap(): void {
   const activeIndex = gameState.activeShipIndex;
   const frameCounter = gameState.frameCounter;
 
-  for (let i: i32 = 0; i < MAX_PLAYER_SHIPS; i++) {
+  for (let i: i32 = 0; i < (playerShips.length as i32); i++) {
     const ship = playerShips.get(i);
     const shipStarIndex = ship.currentStarIndex;
 
@@ -337,7 +314,7 @@ export function drawStarmap(): void {
   const pulsePhase = frameCounter % 30;
   const beaconPulse = pulsePhase < 15; // Alternate flash
 
-  for (let i: i32 = 0; i < MAX_BEACONS; i++) {
+  for (let i = 0; i < (beacons.length as i32); i++) {
     const beacon = beacons.get(i);
     if (beacon.isActive == 1) {
       const beaconStarIndex = beacon.starIndex;

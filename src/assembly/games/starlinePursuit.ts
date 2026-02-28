@@ -14,7 +14,6 @@ import {
   log,
   logi,
   pset,
-  RAM_START,
   randomRange,
 } from "../sdk";
 
@@ -33,12 +32,9 @@ import {
   edges,
   GamePhase,
   gameState,
-  MAX_BEACONS,
   MAX_COMMAND_POINTS,
   MAX_EDGES,
-  MAX_PLAYER_SHIPS,
   MAX_SENSOR_ENERGY,
-  MemLayout,
   playerShips,
   SCAN_COST,
   SCAN_RADIUS,
@@ -50,6 +46,7 @@ import {
   STARTING_SENSOR_ENERGY,
   targetShip,
   TargetType,
+  TEMP_MEM_START,
 } from "./starlinePursuit/types";
 import { starsDist2 } from "./starlinePursuit/utils";
 
@@ -97,7 +94,7 @@ function getTargetTypeName(targetType: u8): string {
  * Logs detection if non-Interceptor found target
  */
 function checkShipsAtTarget(): bool {
-  for (let i: i32 = 0; i < MAX_PLAYER_SHIPS; i++) {
+  for (let i: i32 = 0; i < (playerShips.length as i32); i++) {
     const ship = playerShips.get(i);
     if (ship.currentStarIndex == targetShip.currentStarIndex) {
       if (ship.shipType == ShipType.INTERCEPTOR) {
@@ -120,7 +117,7 @@ function checkShipsAtTarget(): bool {
  */
 function findNeighborInDirection(starIndex: i32, direction: i32): i32 {
   const currentStar = stars.get(starIndex);
-  const numEdges = gameState.numEdges as i32;
+  const numEdges = edges.length as i32;
 
   let bestIndex: i32 = -1;
   let bestScore: f32 = -999999.0;
@@ -231,7 +228,7 @@ export function init(): void {
   // Generate the starmap
   generateStarmap();
 
-  const numStars = gameState.numStars as i32;
+  const numStars = stars.length as i32;
 
   // Initialize target ship at a random star position
   targetShip.currentStarIndex = randomRange(numStars);
@@ -239,9 +236,7 @@ export function init(): void {
 
   // Initialize player fleet (3 ships at random different positions)
   // Use temporary memory for tracking used stars during initialization
-  const usedStars = FixedArray.fromAddress<i32>(
-    RAM_START + MemLayout.TEMP_WORK,
-  );
+  const usedStars = FixedArray.fromAddress<i32>(TEMP_MEM_START);
   usedStars[0] = targetShip.currentStarIndex;
   let usedCount: i32 = 1;
 
@@ -260,7 +255,7 @@ export function init(): void {
   } while (true);
   usedStars[usedCount++] = starIndex;
 
-  const interceptor = playerShips.get(0);
+  const interceptor = playerShips.grow();
   interceptor.shipType = ShipType.INTERCEPTOR;
   interceptor.currentStarIndex = starIndex;
   interceptor.movesThisTurn = 0;
@@ -279,7 +274,7 @@ export function init(): void {
   } while (true);
   usedStars[usedCount++] = starIndex;
 
-  const survey = playerShips.get(1);
+  const survey = playerShips.grow();
   survey.shipType = ShipType.SURVEY_CRUISER;
   survey.currentStarIndex = starIndex;
   survey.movesThisTurn = 0;
@@ -297,7 +292,7 @@ export function init(): void {
     if (valid) break;
   } while (true);
 
-  const beacon = playerShips.get(2);
+  const beacon = playerShips.grow();
   beacon.shipType = ShipType.BEACON_TENDER;
   beacon.currentStarIndex = starIndex;
   beacon.movesThisTurn = 0;
@@ -324,13 +319,13 @@ export function init(): void {
   initializeStarTracking(targetShip.currentStarIndex);
 
   // Clear tracking for player-occupied stars (we know target isn't there)
-  for (let i: i32 = 0; i < MAX_PLAYER_SHIPS; i++) {
+  for (let i: i32 = 0; i < (playerShips.length as i32); i++) {
     stars.get(playerShips.get(i).currentStarIndex).isPossibleTarget = 0;
   }
 
   // Initialize all beacons to inactive
-  for (let i: i32 = 0; i < MAX_BEACONS; i++) {
-    const beacon = beacons.get(i);
+  for (let i = beacons.capacity; i > 0; i--) {
+    const beacon = beacons.grow();
     beacon.isActive = 0;
     beacon.starIndex = 0;
     beacon.isDetecting = 0;
@@ -377,7 +372,7 @@ export function update(): void {
   }
 
   // Decrement beacon range animation timers
-  for (let i: i32 = 0; i < MAX_BEACONS; i++) {
+  for (let i = 0; i < (beacons.length as i32); i++) {
     const beacon = beacons.get(i);
     if (beacon.isActive == 1 && beacon.rangeAnimTimer > 0) {
       beacon.rangeAnimTimer--;
@@ -400,7 +395,7 @@ export function update(): void {
         gameState.scannerY = -1; // Deactivate
 
         // Scanner complete - trigger pending beacon animations
-        for (let i: i32 = 0; i < MAX_BEACONS; i++) {
+        for (let i = 0; i < (beacons.length as i32); i++) {
           const beacon = beacons.get(i);
           if (beacon.isActive == 1 && beacon.pendingRangeAnim == 1) {
             beacon.rangeAnimTimer = 60;
@@ -417,7 +412,7 @@ export function update(): void {
 
   // B button: Switch active ship
   if (buttonPressed(Button.B)) {
-    activeIndex = (activeIndex + 1) % MAX_PLAYER_SHIPS;
+    activeIndex = (activeIndex + 1) % (playerShips.length as i32);
     gameState.activeShipIndex = activeIndex;
     logi(
       "Switched to {} at star {}",
@@ -434,7 +429,7 @@ export function update(): void {
       if (gameState.deploymentKits > 0) {
         // Check if beacon already exists at this star
         let alreadyDeployed = false;
-        for (let i: i32 = 0; i < MAX_BEACONS; i++) {
+        for (let i = 0; i < (beacons.length as i32); i++) {
           const beacon = beacons.get(i);
           if (
             beacon.isActive == 1 &&
@@ -450,7 +445,7 @@ export function update(): void {
         } else {
           // Find empty beacon slot
           let deployed = false;
-          for (let i: i32 = 0; i < MAX_BEACONS; i++) {
+          for (let i = 0; i < (beacons.length as i32); i++) {
             const beacon = beacons.get(i);
             if (beacon.isActive == 0) {
               beacon.starIndex = activeShip.currentStarIndex;
@@ -529,7 +524,7 @@ export function update(): void {
   // START button: End turn
   if (buttonPressed(Button.START)) {
     // Reset all ships' moves
-    for (let i: i32 = 0; i < MAX_PLAYER_SHIPS; i++) {
+    for (let i: i32 = 0; i < (playerShips.length as i32); i++) {
       const ship = playerShips.get(i);
       ship.movesThisTurn = 0;
     }
@@ -554,7 +549,7 @@ export function update(): void {
 
     // Update beacon detection states
     const range2 = BEACON_RANGE * BEACON_RANGE;
-    for (let i: i32 = 0; i < MAX_BEACONS; i++) {
+    for (let i = 0; i < (beacons.length as i32); i++) {
       const beacon = beacons.get(i);
       if (beacon.isActive == 1) {
         const d2 = starsDist2(beacon.starIndex, targetShip.currentStarIndex);
@@ -683,7 +678,7 @@ export function draw(): void {
 
   // Count active beacons
   let activeBeacons: i32 = 0;
-  for (let i: i32 = 0; i < MAX_BEACONS; i++) {
+  for (let i = 0; i < (beacons.length as i32); i++) {
     if (beacons.get(i).isActive == 1) {
       activeBeacons++;
     }

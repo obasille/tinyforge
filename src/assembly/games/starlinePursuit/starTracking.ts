@@ -1,18 +1,11 @@
-import { FixedArray, RAM_START } from "../../sdk";
-import {
-  edges,
-  gameState,
-  MAX_PLAYER_SHIPS,
-  MemLayout,
-  playerShips,
-  stars,
-} from "./types";
+import { FixedArray } from "../../sdk";
+import { edges, playerShips, stars, TEMP_MEM_START } from "./types";
 
 /**
  * Initialize star tracking with single star (used at game start)
  */
 export function initializeStarTracking(starIndex: i32): void {
-  const numStars = gameState.numStars as i32;
+  const numStars = stars.length as i32;
   // Clear all tracking
   for (let i: i32 = 0; i < numStars; i++) {
     stars.get(i).isPossibleTarget = 0;
@@ -26,23 +19,22 @@ export function initializeStarTracking(starIndex: i32): void {
  * Called at the end of each turn after the target moves
  */
 export function updateStarTracking(): void {
-  const numStars = gameState.numStars as i32;
-  const numEdges = gameState.numEdges as i32;
+  const numStars = stars.length as i32;
+  const numEdges = edges.length as i32;
 
   // Use TEMP_WORK for temporary arrays
-  const tempWork = FixedArray.fromAddress<i32>(RAM_START + MemLayout.TEMP_WORK);
+  const tempWork = FixedArray.fromAddress<i32>(TEMP_MEM_START);
 
   // Get list of player-occupied stars (forbidden locations)
-  // Store in first MAX_PLAYER_SHIPS slots of temp memory
   let forbiddenCount: i32 = 0;
-  for (let i: i32 = 0; i < MAX_PLAYER_SHIPS; i++) {
+  for (let i: i32 = 0; i < (playerShips.length as i32); i++) {
     const ship = playerShips.get(i);
     tempWork[i] = ship.currentStarIndex;
     forbiddenCount++;
   }
 
   // Create new possibility map in temp memory (starting after forbidden list)
-  const newTrackingOffset = MAX_PLAYER_SHIPS;
+  const newTrackingOffset = playerShips.length as i32;
   for (let i: i32 = 0; i < numStars; i++) {
     tempWork[newTrackingOffset + i] = 0;
   }
@@ -110,7 +102,7 @@ export function clearStarTrackingByScan(
   scanCenterStarIndex: i32,
   scanRadius: i32,
 ): void {
-  const numStars = gameState.numStars as i32;
+  const numStars = stars.length as i32;
   const scanCenter = stars.get(scanCenterStarIndex);
   const radius2 = scanRadius * scanRadius;
 
@@ -138,7 +130,7 @@ export function clearStarTrackingByBeacon(
   beaconStarIndex: i32,
   beaconRange: i32,
 ): void {
-  const numStars = gameState.numStars as i32;
+  const numStars = stars.length as i32;
   const beaconStar = stars.get(beaconStarIndex);
   const range2 = beaconRange * beaconRange;
 
