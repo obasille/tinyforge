@@ -1,5 +1,6 @@
 import {
   ArrayObjView,
+  c,
   StaticMemoryAllocator,
   RAM_START,
   SCREEN_HEIGHT,
@@ -38,28 +39,30 @@ export const SCAN_RADIUS: i32 = 70; // Survey Cruiser active scan range
 export const SCAN_COST: i32 = 2; // Sensor Energy cost for active scan
 
 // Visual constants
+
 // === Colors used in Starline Pursuit ===
+
 export enum Colors {
-  BACKGROUND = 0x0a0a1a,
-  BRIEFING_BOX = 0x0a0a1a,
-  BRIEFING_BORDER = 0x00aaff,
-  BRIEFING_TITLE = 0x00aaff,
-  TEXT_WHITE = 0xffffff,
-  TEXT_YELLOW = 0xffaa00,
-  TEXT_GRAY = 0xaaaaaa,
-  OBJECTIVE_GREEN = 0x00ff00,
-  SCANNER_GREEN = 0x00ff00,
-  SCANNER_FADE = 0x00ff00, // Used with alpha fade
-  TEXT_DARKGRAY = 0x666666,
-  TEXT_BLUE = 0xaaccff,
-  BEACON_YELLOW = 0xffdd00,
-  CLUSTER_MAGENTA = 0xff00ff,
-  CLUSTER_PURPLE = 0xaa66cc,
-  CLUSTER_PURPLE_SHIP = 0xaa00ff,
-  HUB_ORANGE = 0xffaa00,
-  STAR_BLUE = 0xaaccff,
-  TARGET_RED = 0xff0000,
-  TARGET_LIGHTRED = 0xff3333,
+  Background = c(0x0a0a1a),
+  BriefingBox = c(0x0a0a1a),
+  BriefingBorder = c(0x00aaff),
+  BriefingTitle = c(0x00aaff),
+  TextWhite = c(0xffffff),
+  TextYellow = c(0xffaa00),
+  TextGray = c(0xaaaaaa),
+  ObjectiveGreen = c(0x00ff00),
+  ScannerGreen = c(0x00ff00),
+  ScannerFade = c(0x00ff00),
+  TextDarkGray = c(0x666666),
+  TextBlue = c(0xaaccff),
+  BeaconYellow = c(0xffdd00),
+  ClusterMagenta = c(0xff00ff),
+  ClusterPurple = c(0xaa66cc),
+  ClusterPurpleShip = c(0xaa00ff),
+  HubOrange = c(0xffaa00),
+  StarBlue = c(0xaaccff),
+  TargetRed = c(0xff0000),
+  TargetLightRed = c(0xff3333),
 }
 export const STAR_RADIUS: i32 = 2;
 export const HUB_RADIUS: i32 = 4;

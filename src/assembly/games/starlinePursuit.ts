@@ -4,19 +4,19 @@
 import {
   Button,
   buttonPressed,
-  c,
   clearFramebuffer,
   drawRect,
   fillRect,
-  UncheckedArrayView,
   log,
   logi,
   print,
   printNumber,
   pset,
   randomRange,
+  UncheckedArrayView,
 } from "../sdk";
 
+import { toColor, withAlpha } from "../sdk/color";
 import { drawStarmap } from "./starlinePursuit/drawStarmap";
 import { generateStarmap } from "./starlinePursuit/generateStarmap";
 import { moveTarget } from "./starlinePursuit/moveTarget";
@@ -30,6 +30,7 @@ import {
   BEACON_RANGE,
   beacons,
   clusters,
+  Colors,
   edges,
   GamePhase,
   gameState,
@@ -174,49 +175,49 @@ function findNeighborInDirection(starIndex: i32, direction: i32): i32 {
  */
 function drawMissionBriefing(): void {
   // Semi-transparent background
-  fillRect(20, 60, 280, 134, c(0x0a0a1a));
-  drawRect(20, 60, 280, 134, c(0x00aaff));
-  drawRect(21, 61, 278, 132, c(0x00aaff));
+  fillRect(20, 60, 280, 134, Colors.BriefingBox);
+  drawRect(20, 60, 280, 134, Colors.BriefingBorder);
+  drawRect(21, 61, 278, 132, Colors.BriefingBorder);
 
   // Title
-  print(90, 70, "MISSION BRIEFING", c(0x00aaff));
+  print(90, 70, "MISSION BRIEFING", Colors.BriefingTitle);
 
   // Target type
   const targetTypeName = getTargetTypeName(gameState.targetType);
-  print(50, 90, "TARGET:", c(0xffffff));
-  print(106, 90, targetTypeName, c(0xffaa00));
+  print(50, 90, "TARGET:", Colors.TextWhite);
+  print(106, 90, targetTypeName, Colors.TextYellow);
 
   // Target behavior description
   const targetType = gameState.targetType;
   if (targetType == TargetType.SMUGGLER) {
-    print(30, 110, "LOW SENSOR VISIBILITY", c(0xaaaaaa));
-    print(30, 125, "AVOIDS BEACON COVERAGE", c(0xaaaaaa));
+    print(30, 110, "LOW SENSOR VISIBILITY", Colors.TextGray);
+    print(30, 125, "AVOIDS BEACON COVERAGE", Colors.TextGray);
   } else if (targetType == TargetType.PIRATE) {
-    print(30, 110, "TARGETS TRADE HUBS", c(0xaaaaaa));
-    print(30, 125, "SEMI-AGGRESSIVE PATTERN", c(0xaaaaaa));
+    print(30, 110, "TARGETS TRADE HUBS", Colors.TextGray);
+    print(30, 125, "SEMI-AGGRESSIVE PATTERN", Colors.TextGray);
   } else if (targetType == TargetType.GHOST) {
-    print(30, 110, "STEALTH-HEAVY", c(0xaaaaaa));
-    print(30, 125, "HIGHLY UNPREDICTABLE", c(0xaaaaaa));
+    print(30, 110, "STEALTH-HEAVY", Colors.TextGray);
+    print(30, 125, "HIGHLY UNPREDICTABLE", Colors.TextGray);
   } else if (targetType == TargetType.COURIER) {
-    print(30, 110, "HIGH SPEED - DIRECT ROUTES", c(0xaaaaaa));
-    print(30, 125, "20PCT CHANCE DOUBLE JUMP", c(0xaaaaaa));
+    print(30, 110, "HIGH SPEED - DIRECT ROUTES", Colors.TextGray);
+    print(30, 125, "20PCT CHANCE DOUBLE JUMP", Colors.TextGray);
   } else if (targetType == TargetType.DECOY_MASTER) {
-    print(30, 110, "CREATES FALSE TRAILS", c(0xaaaaaa));
-    print(30, 125, "MISINFORMATION TACTICS", c(0xaaaaaa));
+    print(30, 110, "CREATES FALSE TRAILS", Colors.TextGray);
+    print(30, 125, "MISINFORMATION TACTICS", Colors.TextGray);
   } else if (targetType == TargetType.REBEL_COMMANDER) {
-    print(30, 110, "STRATEGIC AND ADAPTIVE", c(0xaaaaaa));
-    print(30, 125, "ADVANCED OPPONENT", c(0xaaaaaa));
+    print(30, 110, "STRATEGIC AND ADAPTIVE", Colors.TextGray);
+    print(30, 125, "ADVANCED OPPONENT", Colors.TextGray);
   } else if (targetType == TargetType.SLEEPER_AGENT) {
-    print(30, 110, "DELAYED REVEAL", c(0xaaaaaa));
-    print(30, 125, "HIDDEN BEHAVIOR PATTERN", c(0xaaaaaa));
+    print(30, 110, "DELAYED REVEAL", Colors.TextGray);
+    print(30, 125, "HIDDEN BEHAVIOR PATTERN", Colors.TextGray);
   }
 
   // Objective
-  print(30, 145, "OBJECTIVE: CORNER AND", c(0x00ff00));
-  print(30, 160, "CAPTURE WITH INTERCEPTOR", c(0x00ff00));
+  print(30, 145, "OBJECTIVE: CORNER AND", Colors.ObjectiveGreen);
+  print(30, 160, "CAPTURE WITH INTERCEPTOR", Colors.ObjectiveGreen);
 
   // Instruction
-  print(105, 178, "PRESS START", c(0xffffff));
+  print(105, 178, "PRESS START", Colors.TextWhite);
 }
 
 // === Lifecycle Functions ===
@@ -624,7 +625,7 @@ export function update(): void {
 }
 
 export function draw(): void {
-  clearFramebuffer(c(0x0a0a1a)); // Dark blue-black space background
+  clearFramebuffer(Colors.Background); // Dark blue-black space background
 
   // Draw the starmap
   drawStarmap();
@@ -635,14 +636,14 @@ export function draw(): void {
 
     // Main scan line (bright green)
     for (let x: i32 = 10; x < 310; x++) {
-      pset(x, scanY, c(0x00ff00));
-      pset(x, scanY + 1, c(0x00ff00));
+      pset(x, scanY, Colors.ScannerGreen);
+      pset(x, scanY + 1, Colors.ScannerGreen);
     }
 
     // Trailing fade lines (dimmer green)
     for (let offset: i32 = 2; offset < 8; offset++) {
       const alpha = (8 - offset) * 32; // Fade from 192 to 32
-      const fadeColor = c(0x00ff00) | (alpha << 24);
+      const fadeColor = withAlpha(Colors.ScannerFade, alpha as u8);
 
       if (gameState.scannerPhase == 0) {
         // Sweeping down - trail above
@@ -673,16 +674,16 @@ export function draw(): void {
   const commandPoints = gameState.commandPoints;
   const deploymentKits = gameState.deploymentKits;
 
-  print(10, 1, "SE:", c(0xffffff));
-  printNumber(28, 1, sensorEnergy, c(0x00aaff));
-  print(46, 1, "/", c(0x666666));
-  printNumber(52, 1, MAX_SENSOR_ENERGY, c(0x666666));
+  print(10, 1, "SE:", Colors.TextWhite);
+  printNumber(28, 1, sensorEnergy, Colors.BriefingBorder);
+  print(46, 1, "/", Colors.TextDarkGray);
+  printNumber(52, 1, MAX_SENSOR_ENERGY, Colors.TextDarkGray);
 
-  print(85, 1, "CP:", c(0xffffff));
-  printNumber(103, 1, commandPoints, c(0x00ff00));
+  print(85, 1, "CP:", Colors.TextWhite);
+  printNumber(103, 1, commandPoints, Colors.ObjectiveGreen);
 
-  print(135, 1, "DK:", c(0xffffff));
-  printNumber(153, 1, deploymentKits, c(0xffaa00));
+  print(135, 1, "DK:", Colors.TextWhite);
+  printNumber(153, 1, deploymentKits, Colors.TextYellow);
 
   // Count active beacons
   let activeBeacons: i32 = 0;
@@ -691,35 +692,35 @@ export function draw(): void {
       activeBeacons++;
     }
   }
-  print(205, 1, "B:", c(0xffffff));
-  printNumber(217, 1, activeBeacons, c(0xffdd00));
+  print(205, 1, "B:", Colors.TextWhite);
+  printNumber(217, 1, activeBeacons, Colors.BeaconYellow);
 
   // Draw turn counter (top right corner)
-  print(245, 1, "T:", c(0xffffff));
-  printNumber(257, 1, gameState.turnNumber, c(0xaaccff));
+  print(245, 1, "T:", Colors.TextWhite);
+  printNumber(257, 1, gameState.turnNumber, Colors.TextBlue);
 
   // Draw active ship info (second row)
   const shipTypeName = getShipTypeName(activeShip.shipType);
-  print(1, 229, shipTypeName, c(0xaaccff));
-  print(1 + shipTypeName.length * 6, 229, ":", c(0xffffff));
+  print(1, 229, shipTypeName, Colors.TextBlue);
+  print(1 + shipTypeName.length * 6, 229, ":", Colors.TextWhite);
 
   const moveLimit = getShipMoveLimit(activeShip.shipType);
   const movesRemaining = moveLimit - activeShip.movesThisTurn;
 
-  print(85, 229, "MOVES:", c(0xffffff));
-  printNumber(121, 229, movesRemaining, c(0xaaccff));
-  print(129, 229, "/", c(0x666666));
-  printNumber(135, 229, moveLimit, c(0x666666));
+  print(85, 229, "MOVES:", Colors.TextWhite);
+  printNumber(121, 229, movesRemaining, Colors.TextBlue);
+  print(129, 229, "/", Colors.TextDarkGray);
+  printNumber(135, 229, moveLimit, Colors.TextDarkGray);
 
   // Show ship-specific action
   if (state == GamePhase.PLAYING) {
     if (activeShip.shipType == ShipType.BEACON_TENDER) {
-      print(170, 229, "A:DEPLOY BEACON", c(0xffaa00));
+      print(170, 229, "A:DEPLOY BEACON", Colors.TextYellow);
     } else if (activeShip.shipType == ShipType.SURVEY_CRUISER) {
-      print(170, 229, "A:SCAN", c(0x00ff00));
-      print(212, 229, "(", c(0x666666));
-      printNumber(218, 229, SCAN_COST, c(0x666666));
-      print(226, 229, "SE)", c(0x666666));
+      print(170, 229, "A:SCAN", Colors.ObjectiveGreen);
+      print(212, 229, "(", Colors.TextDarkGray);
+      printNumber(218, 229, SCAN_COST, Colors.TextDarkGray);
+      print(226, 229, "SE)", Colors.TextDarkGray);
     }
   }
 
@@ -743,10 +744,10 @@ export function draw(): void {
 
   // Draw win/lose message
   if (state == GamePhase.WON) {
-    print(82, 100, "TARGET INTERCEPTED!", c(0x00ff00));
-    print(99, 115, "PRESS START", c(0xffffff));
+    print(82, 100, "TARGET INTERCEPTED!", Colors.ObjectiveGreen);
+    print(99, 115, "PRESS START", Colors.TextWhite);
   } else if (state == GamePhase.LOST) {
-    print(91, 100, "TARGET ESCAPED", c(0xff0000));
-    print(99, 115, "PRESS START", c(0xffffff));
+    print(91, 100, "TARGET ESCAPED", Colors.TargetRed);
+    print(99, 115, "PRESS START", Colors.TextWhite);
   }
 }

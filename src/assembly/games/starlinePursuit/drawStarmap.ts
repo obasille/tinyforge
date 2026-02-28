@@ -5,41 +5,40 @@ import {
   drawRect,
   fillCircle,
   fillRect,
-  toColor,
+  withAlpha,
 } from "../../sdk";
 
 import {
-  beacons,
   BEACON_RANGE,
+  beacons,
+  Colors,
+  edges,
   EXIT_RADIUS,
   gameState,
-  targetShip,
   HUB_RADIUS,
-  NUM_CLUSTERS,
+  nebulas,
   playerShips,
   SCAN_RADIUS,
   ShipType,
   STAR_RADIUS,
-  clusters,
-  edges,
-  nebulas,
   stars,
+  targetShip,
 } from "./types";
 
 /**
  * Draw cluster centers for debugging
- */
+       Colors.HubOrange,
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 function drawClusterCenters(): void {
   for (let i: i32 = 0; i < NUM_CLUSTERS; i++) {
     const cluster = clusters.get(i);
 
     // Draw large circle for cluster center
-    fillCircle(cluster.x, cluster.y, 8, c(0xff00ff)); // Magenta center
+    fillCircle(cluster.x, cluster.y, 8, Colors.ClusterMagenta); // Magenta center
 
     // Draw cross hairs
-    drawLine(cluster.x - 15, cluster.y, cluster.x + 15, cluster.y, c(0xff00ff));
-    drawLine(cluster.x, cluster.y - 15, cluster.x, cluster.y + 15, c(0xff00ff));
+    drawLine(cluster.x - 15, cluster.y, cluster.x + 15, cluster.y, Colors.ClusterMagenta);
+    drawLine(cluster.x, cluster.y - 15, cluster.x, cluster.y + 15, Colors.ClusterMagenta);
   }
 }
 
@@ -57,16 +56,21 @@ export function drawStarmap(): void {
     // Draw multi-layer cloud effect with semi-transparent circles
     const r = nebula.radius;
     // Outer glow layer (purple/pink hue)
-    fillCircle(nebula.x, nebula.y, r, toColor(0x88, 0x44, 0xaa, 0x20));
+    fillCircle(nebula.x, nebula.y, r, withAlpha(Colors.ClusterPurple, 0x20));
     // Middle layer (slightly brighter)
     fillCircle(
       nebula.x,
       nebula.y,
       (r * 2) / 3,
-      toColor(0x99, 0x55, 0xbb, 0x30),
+      withAlpha(Colors.ClusterPurple, 0x30),
     );
     // Inner core (brightest)
-    fillCircle(nebula.x, nebula.y, r / 3, toColor(0xaa, 0x66, 0xcc, 0x40));
+    fillCircle(
+      nebula.x,
+      nebula.y,
+      r / 3,
+      withAlpha(Colors.ClusterPurple, 0x40),
+    );
   }
 
   // Draw cluster centers (for debugging)
@@ -77,7 +81,7 @@ export function drawStarmap(): void {
   for (let i: i32 = 0; i < numStars; i++) {
     const star = stars.get(i);
     if (star.isPossibleTarget == 1) {
-      fillCircle(star.x, star.y, 7, toColor(0x66, 0x66, 0xaa, 0x40)); // Semi-transparent blue
+      fillCircle(star.x, star.y, 7, withAlpha(Colors.StarBlue, 0x40)); // Semi-transparent blue
     }
   }
 
@@ -94,7 +98,7 @@ export function drawStarmap(): void {
     const starB = stars.get(edge.b);
 
     // Draw lane as a line
-    drawLine(starA.x, starA.y, starB.x, starB.y, c(0x444444));
+    drawLine(starA.x, starA.y, starB.x, starB.y, Colors.TextDarkGray);
   }
 
   // Draw stars with different colors/sizes based on type
@@ -109,18 +113,18 @@ export function drawStarmap(): void {
           : star.isHub != 0
             ? HUB_RADIUS
             : STAR_RADIUS;
-      drawCircle(star.x, star.y, r + 1, c(0xaa66cc)); // Purple circle
+      drawCircle(star.x, star.y, r + 1, Colors.ClusterPurple); // Purple circle
     }
 
     if (star.isExit != 0) {
       // Exit nodes: green
-      fillCircle(star.x, star.y, EXIT_RADIUS, c(0x00ff00));
+      fillCircle(star.x, star.y, EXIT_RADIUS, Colors.ObjectiveGreen);
     } else if (star.isHub != 0) {
       // Hub nodes: orange
-      fillCircle(star.x, star.y, HUB_RADIUS, c(0xffaa00));
+      fillCircle(star.x, star.y, HUB_RADIUS, Colors.HubOrange);
     } else {
       // Normal stars: light blue
-      fillCircle(star.x, star.y, STAR_RADIUS, c(0xaaccff));
+      fillCircle(star.x, star.y, STAR_RADIUS, Colors.StarBlue);
     }
   }
 
@@ -145,19 +149,19 @@ export function drawStarmap(): void {
           shipStar.y - size / 2,
           size,
           size,
-          c(0x00aaff),
+          Colors.BriefingBorder,
         );
         drawRect(
           shipStar.x - size / 2,
           shipStar.y - size / 2,
           size,
           size,
-          c(0xffffff),
+          Colors.TextWhite,
         );
       } else if (ship.shipType == ShipType.SURVEY_CRUISER) {
         // Survey Cruiser: Purple hollow circle
-        drawCircle(shipStar.x, shipStar.y, 4, c(0xaa00ff));
-        drawCircle(shipStar.x, shipStar.y, 3, c(0xaa00ff));
+        drawCircle(shipStar.x, shipStar.y, 4, Colors.ClusterPurpleShip);
+        drawCircle(shipStar.x, shipStar.y, 3, Colors.ClusterPurpleShip);
       } else if (ship.shipType == ShipType.BEACON_TENDER) {
         // Beacon Tender: Yellow filled triangle (approximated with lines)
         const size: i32 = 5;
@@ -170,7 +174,7 @@ export function drawStarmap(): void {
             shipStar.y - size / 2 + dy,
             shipStar.x + width / 2,
             shipStar.y - size / 2 + dy,
-            c(0xffaa00),
+            Colors.HubOrange,
           );
         }
         // Draw triangle outline
@@ -179,21 +183,21 @@ export function drawStarmap(): void {
           shipStar.y - size,
           shipStar.x - size,
           shipStar.y + size / 2,
-          c(0xffaa00),
+          Colors.HubOrange,
         );
         drawLine(
           shipStar.x,
           shipStar.y - size,
           shipStar.x + size,
           shipStar.y + size / 2,
-          c(0xffaa00),
+          Colors.HubOrange,
         );
         drawLine(
           shipStar.x - size,
           shipStar.y + size / 2,
           shipStar.x + size,
           shipStar.y + size / 2,
-          c(0xffaa00),
+          Colors.HubOrange,
         );
       }
 
@@ -210,7 +214,7 @@ export function drawStarmap(): void {
             shipStar.y - outlineSize / 2,
             outlineSize,
             outlineSize,
-            c(0xffffff),
+            Colors.TextWhite,
           );
         }
       }
@@ -232,26 +236,26 @@ export function drawStarmap(): void {
     if (revealPhase < 30) {
       // Expanding pulse
       const radius = (revealPhase * SCAN_RADIUS) / 30;
-      drawCircle(startStar.x, startStar.y, radius, c(0xff0000));
+      drawCircle(startStar.x, startStar.y, radius, Colors.TargetRed);
       if (revealPhase < 15 && radius > 2) {
-        drawCircle(startStar.x, startStar.y, radius - 2, c(0xff0000));
+        drawCircle(startStar.x, startStar.y, radius - 2, Colors.TargetRed);
       }
     } else if (revealPhase < 60) {
       // Fade out pulse
       const fadePhase = revealPhase - 30;
       const alpha = (255 * (30 - fadePhase)) / 30;
-      const color = toColor(255, 0, 0, alpha as u8);
+      const color = withAlpha(Colors.TargetRed, alpha as u8);
       drawCircle(startStar.x, startStar.y, SCAN_RADIUS, color);
       if (fadePhase < 15) {
         const alphaInner = (255 * (15 - fadePhase)) / 15;
-        const colorInner = toColor(255, 0, 0, alphaInner as u8);
+        const colorInner = withAlpha(Colors.TargetRed, alphaInner as u8);
         drawCircle(startStar.x, startStar.y, SCAN_RADIUS - 2, colorInner);
       }
     }
 
     // Keep the start star highlighted while reveal timer is active
-    drawCircle(startStar.x, startStar.y, 8, c(0xff0000));
-    drawCircle(startStar.x, startStar.y, 10, c(0xff3333));
+    drawCircle(startStar.x, startStar.y, 8, Colors.TargetRed);
+    drawCircle(startStar.x, startStar.y, 10, Colors.TargetLightRed);
   }
 
   // Show green scan only during first 60 frames based on detection result
@@ -273,19 +277,27 @@ export function drawStarmap(): void {
         if (scanPhase < 30) {
           // Phase 1: Expanding from center (0-29 frames)
           const radius = (scanPhase * SCAN_RADIUS) / 30;
-          drawCircle(shipStar.x, shipStar.y, radius, c(0x00ff00));
+          drawCircle(shipStar.x, shipStar.y, radius, Colors.ObjectiveGreen);
           if (scanPhase < 15) {
-            drawCircle(shipStar.x, shipStar.y, radius - 2, c(0x00ff00));
+            drawCircle(
+              shipStar.x,
+              shipStar.y,
+              radius - 2,
+              Colors.ObjectiveGreen,
+            );
           }
         } else {
           // Phase 2: Full size with alpha fade (30-59 frames)
           const fadePhase = scanPhase - 30; // 0-29
           const alpha = (255 * (30 - fadePhase)) / 30; // 255->0
-          const color = toColor(0, 255, 0, alpha as u8);
+          const color = withAlpha(Colors.ObjectiveGreen, alpha as u8);
           drawCircle(shipStar.x, shipStar.y, SCAN_RADIUS, color);
           if (fadePhase < 15) {
             const alphaInner = (255 * (15 - fadePhase)) / 15; // 255->0
-            const colorInner = toColor(0, 255, 0, alphaInner as u8);
+            const colorInner = withAlpha(
+              Colors.ObjectiveGreen,
+              alphaInner as u8,
+            );
             drawCircle(shipStar.x, shipStar.y, SCAN_RADIUS - 2, colorInner);
           }
         }
@@ -331,8 +343,8 @@ export function drawStarmap(): void {
             const alpha = (255 * (30 - animPhase)) / 30; // Fade out as it expands
             const color =
               beacon.isDetecting == 1
-                ? toColor(255, 0, 0, alpha as u8) // Red for detecting
-                : toColor(255, 221, 0, alpha as u8); // Yellow for normal
+                ? withAlpha(Colors.TargetRed, alpha as u8) // Red for detecting
+                : withAlpha(Colors.BeaconYellow, alpha as u8); // Yellow for normal
             drawCircle(beaconStar.x, beaconStar.y, radius, color);
             if (radius > 3) {
               drawCircle(beaconStar.x, beaconStar.y, radius - 2, color);
@@ -343,15 +355,15 @@ export function drawStarmap(): void {
             const alpha = (255 * (30 - fadePhase)) / 30;
             const color =
               beacon.isDetecting == 1
-                ? toColor(255, 0, 0, alpha as u8)
-                : toColor(255, 221, 0, alpha as u8);
+                ? withAlpha(Colors.TargetRed, alpha as u8)
+                : withAlpha(Colors.BeaconYellow, alpha as u8);
             drawCircle(beaconStar.x, beaconStar.y, BEACON_RANGE, color);
             if (fadePhase < 15) {
               const alphaInner = (255 * (15 - fadePhase)) / 15;
               const colorInner =
                 beacon.isDetecting == 1
-                  ? toColor(255, 0, 0, alphaInner as u8)
-                  : toColor(255, 221, 0, alphaInner as u8);
+                  ? withAlpha(Colors.TargetRed, alphaInner as u8)
+                  : withAlpha(Colors.BeaconYellow, alphaInner as u8);
               drawCircle(
                 beaconStar.x,
                 beaconStar.y,
@@ -373,10 +385,10 @@ export function drawStarmap(): void {
           }
         } else {
           // Normal beacon: yellow
-          fillCircle(beaconStar.x, beaconStar.y, 3, c(0xffdd00));
+          fillCircle(beaconStar.x, beaconStar.y, 3, Colors.BeaconYellow);
           // Draw pulsing outline
           if (beaconPulse) {
-            drawCircle(beaconStar.x, beaconStar.y, 5, c(0xffdd00));
+            drawCircle(beaconStar.x, beaconStar.y, 5, Colors.BeaconYellow);
           }
         }
       }
@@ -398,7 +410,7 @@ export function drawStarmap(): void {
         targetStar.y - boxSize / 2,
         boxSize,
         boxSize,
-        c(0xff0000),
+        Colors.TargetRed,
       );
     }
   }

@@ -50,3 +50,15 @@ export function c(rgb: u32): u32 {
 export function toColor(r: u8, g: u8, b: u8, a: u8): u32 {
   return ((a as u32) << 24) | ((b as u32) << 16) | ((g as u32) << 8) | (r as u32);
 }
+
+/**
+ * Add alpha to a transformed ABGR color value
+ *
+ * @param abgr Color in ABGR format (already transformed)
+ * @param alpha Alpha value (0-255)
+ * @returns Color in ABGR format with new alpha
+ */
+@inline
+export function withAlpha(abgr: u32, alpha: u8): u32 {
+  return (abgr & 0x00ffffff) | ((alpha as u32) << 24);
+}
