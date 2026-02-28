@@ -1,5 +1,6 @@
 import {
   ArrayObjView,
+  MemoryAllocator,
   RAM_START,
   SCREEN_HEIGHT,
   SCREEN_WIDTH,
@@ -179,71 +180,41 @@ export class GameState {
 
 // === Memory Layout ===
 
-/**
- * Memory allocator with automatic offset tracking
- * Eliminates manual offset management and size constants
- */
-class MemoryAllocator {
-  offset: usize;
-
-  constructor(start: usize) {
-    this.offset = start;
-  }
-
-  @inline
-  allocArray<T, U = u16>(elementSize: u32, capacity: U): ArrayObjView<T, U> {
-    const arr = ArrayObjView.fromAddress<T, U>(
-      this.offset,
-      elementSize,
-      capacity,
-      true,
-    );
-    this.offset += arr.alignedMemorySize;
-    return arr;
-  }
-
-  @inline
-  allocStruct<T>(size: u32): T {
-    const ptr = changetype<T>(this.offset);
-    this.offset += (size + 3) & ~3; // 4-byte align
-    return ptr;
-  }
-}
-
-const mem = new MemoryAllocator(RAM_START);
+// Allocator state stored at RAM_START, data follows after sizeof<usize> bytes
+const mem = MemoryAllocator.fromAddress(RAM_START);
 
 export type StarArray = ArrayObjView<Star>;
-export const stars = mem.allocArray<Star>(
+export const stars = mem.allocObjArray<Star>(
   offsetof<Star>("inNebula") + sizeof<u8>(),
   MAX_TOTAL_STARS as u16,
 );
 
 export type EdgeArray = ArrayObjView<Edge>;
-export const edges = mem.allocArray<Edge>(
+export const edges = mem.allocObjArray<Edge>(
   offsetof<Edge>("b") + sizeof<i32>(),
   MAX_EDGES as u16,
 );
 
 export type ClusterArray = ArrayObjView<Cluster>;
-export const clusters = mem.allocArray<Cluster>(
+export const clusters = mem.allocObjArray<Cluster>(
   offsetof<Cluster>("y") + sizeof<i32>(),
   NUM_CLUSTERS as u16,
 );
 
 export type NebulaArray = ArrayObjView<Nebula>;
-export const nebulas = mem.allocArray<Nebula>(
+export const nebulas = mem.allocObjArray<Nebula>(
   offsetof<Nebula>("radius") + sizeof<i32>(),
   MAX_NEBULAS as u16,
 );
 
 export type PlayerShipArray = ArrayObjView<PlayerShip>;
-export const playerShips = mem.allocArray<PlayerShip>(
+export const playerShips = mem.allocObjArray<PlayerShip>(
   offsetof<PlayerShip>("movesThisTurn") + sizeof<i32>(),
   MAX_PLAYER_SHIPS as u16,
 );
 
 export type BeaconArray = ArrayObjView<Beacon>;
-export const beacons = mem.allocArray<Beacon>(
+export const beacons = mem.allocObjArray<Beacon>(
   offsetof<Beacon>("pendingRangeAnim") + sizeof<u8>(),
   MAX_BEACONS as u16,
 );

@@ -1,7 +1,7 @@
 // cspell:language en,fr
 import {
-  UncheckedArrayView,
   ArrayView,
+  MemoryAllocator,
   SCREEN_HEIGHT,
   RAM_START,
   SCREEN_WIDTH,
@@ -125,42 +125,51 @@ export class Piège {
   timer: u16; // Timer pour le changement d'état
 }
 
-// === Instances en RAM ===
+// === Memory Layout ===
 
-export const jeu = changetype<Jeu>(RAM_START);
-const szVars = offsetof<Jeu>("_fin");
-const szJoueur: usize = (offsetof<Joueur>("startupDelay") + 4) & ~3;
-const szCroco: usize = (offsetof<Croco>("targetY") + 4) & ~3;
-const szViande: usize = (offsetof<Viande>("y") + 4) & ~3;
-const szTunnel: usize = (offsetof<Tunnel>("ouvert") + 4) & ~3;
-const szPiège: usize = (offsetof<Piège>("timer") + 4) & ~3;
-let offset: usize = RAM_START + szVars;
-export const joueur = changetype<Joueur>(offset);
-offset += szJoueur;
-const croco0 = changetype<Croco>(offset);
-offset += szCroco;
-const croco1 = changetype<Croco>(offset);
-offset += szCroco;
-const croco2 = changetype<Croco>(offset);
-offset += szCroco;
-const viande0 = changetype<Viande>(offset);
-offset += szViande;
-const viande1 = changetype<Viande>(offset);
-offset += szViande;
-const viande2 = changetype<Viande>(offset);
-offset += szViande;
-const tunnel0 = changetype<Tunnel>(offset);
-offset += szTunnel;
-const tunnel1 = changetype<Tunnel>(offset);
-offset += szTunnel;
-const piège0 = changetype<Piège>(offset);
-offset += szPiège;
-const piège1 = changetype<Piège>(offset);
-offset += szPiège;
-const piège2 = changetype<Piège>(offset);
-offset += szPiège;
-const piège3 = changetype<Piège>(offset);
-offset += szPiège;
+// Allocator state stored at RAM_START, data follows after sizeof<usize> bytes
+const mem = MemoryAllocator.fromAddress(RAM_START);
+
+export const jeu: Jeu = mem.allocStruct<Jeu>(offsetof<Jeu>("_fin"));
+export const joueur: Joueur = mem.allocStruct<Joueur>(
+  offsetof<Joueur>("startupDelay") + sizeof<u8>(),
+);
+const croco0: Croco = mem.allocStruct<Croco>(
+  offsetof<Croco>("targetY") + sizeof<u8>(),
+);
+const croco1: Croco = mem.allocStruct<Croco>(
+  offsetof<Croco>("targetY") + sizeof<u8>(),
+);
+const croco2: Croco = mem.allocStruct<Croco>(
+  offsetof<Croco>("targetY") + sizeof<u8>(),
+);
+const viande0: Viande = mem.allocStruct<Viande>(
+  offsetof<Viande>("y") + sizeof<u8>(),
+);
+const viande1: Viande = mem.allocStruct<Viande>(
+  offsetof<Viande>("y") + sizeof<u8>(),
+);
+const viande2: Viande = mem.allocStruct<Viande>(
+  offsetof<Viande>("y") + sizeof<u8>(),
+);
+const tunnel0: Tunnel = mem.allocStruct<Tunnel>(
+  offsetof<Tunnel>("ouvert") + sizeof<u8>(),
+);
+const tunnel1: Tunnel = mem.allocStruct<Tunnel>(
+  offsetof<Tunnel>("ouvert") + sizeof<u8>(),
+);
+const piège0: Piège = mem.allocStruct<Piège>(
+  offsetof<Piège>("timer") + sizeof<u16>(),
+);
+const piège1: Piège = mem.allocStruct<Piège>(
+  offsetof<Piège>("timer") + sizeof<u16>(),
+);
+const piège2: Piège = mem.allocStruct<Piège>(
+  offsetof<Piège>("timer") + sizeof<u16>(),
+);
+const piège3: Piège = mem.allocStruct<Piège>(
+  offsetof<Piège>("timer") + sizeof<u16>(),
+);
 
 // Helper functions to get entities by index (avoids heap-allocated arrays)
 export function donneCroco(index: i32): Croco {
@@ -197,58 +206,43 @@ export function donneCouleurCroco(index: i32): u32 {
 const MAX_CASES_CIBLES: i32 = 100; // Max target cells per croco
 const MAX_CASES_VALIDES: i32 = 200; // Max valid path cells per croco
 
-// Allocate memory for case arrays
-// SDK FixedArrayWithCount layout: [u16 length][u16 capacity][data...]
-export const casesCiblesCrocoRouge = ArrayView.fromAddress<u16>(
-  offset,
+// Allocate memory for case arrays using MemoryAllocator
+export const casesCiblesCrocoRouge = mem.allocArray<u16>(
   MAX_CASES_CIBLES as u16,
 );
-offset += casesCiblesCrocoRouge.alignedMemorySize;
-export const casesCiblesCrocoViolet = ArrayView.fromAddress<u16>(
-  offset,
+export const casesCiblesCrocoViolet = mem.allocArray<u16>(
   MAX_CASES_CIBLES as u16,
 );
-offset += casesCiblesCrocoViolet.alignedMemorySize;
-export const casesCiblesCrocoVert = ArrayView.fromAddress<u16>(
-  offset,
+export const casesCiblesCrocoVert = mem.allocArray<u16>(
   MAX_CASES_CIBLES as u16,
 );
-offset += casesCiblesCrocoVert.alignedMemorySize;
 
-export const casesValidesCrocoRouge = ArrayView.fromAddress<u16>(
-  offset,
+export const casesValidesCrocoRouge = mem.allocArray<u16>(
   MAX_CASES_VALIDES as u16,
 );
-offset += casesValidesCrocoRouge.alignedMemorySize;
-export const casesValidesCrocoViolet = ArrayView.fromAddress<u16>(
-  offset,
+export const casesValidesCrocoViolet = mem.allocArray<u16>(
   MAX_CASES_VALIDES as u16,
 );
-offset += casesValidesCrocoViolet.alignedMemorySize;
-export const casesValidesCrocoVert = ArrayView.fromAddress<u16>(
-  offset,
+export const casesValidesCrocoVert = mem.allocArray<u16>(
   MAX_CASES_VALIDES as u16,
 );
-offset += casesValidesCrocoVert.alignedMemorySize;
 
 // BFS pathfinding arrays (exported for use in pathfinding.ts)
 export const MAX_BFS_SIZE: i32 = 256;
-export const queueBFS = UncheckedArrayView.fromAddress<u16>(offset);
-offset += UncheckedArrayView.sizeInMemory<u16>(MAX_BFS_SIZE);
-export const parentsBFS = UncheckedArrayView.fromAddress<u16>(offset);
-offset += UncheckedArrayView.sizeInMemory<u16>(MAX_BFS_SIZE);
+export const queueBFS = mem.allocUncheckedArray<u16>(MAX_BFS_SIZE);
+export const parentsBFS = mem.allocUncheckedArray<u16>(MAX_BFS_SIZE);
 
 // Direction arrays for pathfinding (4 directions: up, down, left, right)
-export const directionX = UncheckedArrayView.fromAddress<i32>(offset);
-offset += UncheckedArrayView.sizeInMemory<i32>(4);
-export const directionY = UncheckedArrayView.fromAddress<i32>(offset);
-offset += UncheckedArrayView.sizeInMemory<i32>(4);
+export const directionX = mem.allocUncheckedArray<i32>(4);
+export const directionY = mem.allocUncheckedArray<i32>(4);
 
 /**
  * Initialize arrays capacities and static data
  * Call once from game init()
  */
 export function initTypeArrays(): void {
+  // Set arrays to full
+
   // Initialize direction arrays
   directionX.set(0, 0);
   directionY.set(0, -1); // UP

@@ -10,7 +10,7 @@
  * @example
  * ```ts
  * // Calculate memory requirements:
- * const size = UncheckedArrayView.sizeInMemory<u8>(100);  // 100 bytes for 100 u8 elements
+ * const size = UncheckedArrayView.getMemorySizeForCapacity<u8>(100);  // 100 bytes for 100 u8 elements
  *
  * // In your game's RAM layout:
  * @unmanaged
@@ -55,8 +55,7 @@ export class UncheckedArrayView<T> {
    * @param capacity Number of elements
    * @returns Size in bytes
    */
-  @inline
-  static sizeInMemory<T>(capacity: u32): usize {
+  static getMemorySizeForCapacity<T>(capacity: usize): usize {
     return capacity * sizeof<T>();
   }
 
@@ -65,7 +64,7 @@ export class UncheckedArrayView<T> {
    * @returns Size of each element in bytes
    */
   @inline
-  get elementSize(): u32 {
+  get elementSize(): usize {
     return sizeof<T>();
   }
 
@@ -136,8 +135,8 @@ export class UncheckedArrayView<T> {
  * @example
  * ```ts
  * // Calculate memory requirements:
- * const size1 = ArrayView.sizeInMemory<u16>(50);      // 4 + 100 = 104 bytes (u16 counters)
- * const size2 = ArrayView.sizeInMemory<u16, u8>(20);  // 2 + 40 = 42 bytes (u8 counters)
+ * const size1 = ArrayView.getMemorySizeForCapacity<u16>(50);      // 4 + 100 = 104 bytes (u16 counters)
+ * const size2 = ArrayView.getMemorySizeForCapacity<u16, u8>(20);  // 2 + 40 = 42 bytes (u8 counters)
  *
  * // Using fromAddress helper:
  * const items = ArrayView.fromAddress<u16>(RAM_START + 100);
@@ -178,7 +177,6 @@ export class ArrayView<T, U = u16> {
    * @param address Memory address of the pre-allocated array
    * @param elementSize Optional, size of each element in bytes (not used for ArrayView but included for consistency with ArrayObjView)
    * @param capacity Optional, maximum number of elements (sets capacity in memory)
-   * @param align Optional, if true, aligns elementSize to 4-byte boundary (not used for ArrayView but included for consistency)
    * @returns ArrayView instance
    */
   @inline
@@ -201,8 +199,8 @@ export class ArrayView<T, U = u16> {
    * @returns Size in bytes
    */
   @inline
-  static sizeInMemory<T, U = u16>(capacity: U): usize {
-    return sizeof<U>() * 2 + capacity * sizeof<T>();
+  static getMemorySizeForCapacity<T, U = u16>(capacity: U): usize {
+    return sizeof<U>() * 2 + (capacity as usize) * sizeof<T>();
   }
 
   /**
@@ -210,7 +208,7 @@ export class ArrayView<T, U = u16> {
    * @returns Size of each element in bytes
    */
   @inline
-  get elementSize(): u32 {
+  get elementSize(): usize {
     return sizeof<T>();
   }
 
@@ -249,18 +247,17 @@ export class ArrayView<T, U = u16> {
    * @returns Memory address where array elements start
    */
   @inline
-  get dataStart(): usize {
+  get dataPtr(): usize {
     return changetype<usize>(this) + sizeof<U>() * 2;
   }
 
   /**
-   * Get memory size with automatic 4-byte alignment
+   * Get total memory size required for this array at full capacity (metadata + data)
    * @returns Size in bytes
    */
   @inline
-  get alignedMemorySize(): usize {
-    const elemSize = this.elementSize;
-    return (sizeof<U>() * 2 + elemSize * (this.capacity as i32) + 3) & ~3;
+  get memorySize(): usize {
+    return ArrayView.getMemorySizeForCapacity<T, U>(this.capacity);
   }
 
   /**
@@ -270,9 +267,8 @@ export class ArrayView<T, U = u16> {
    */
   @inline
   get(index: i32): T {
-    this.checkIndex(index);
     const baseAddr = changetype<usize>(this);
-    return load<T>(this.dataStart + index * sizeof<T>());
+    return load<T>(this.dataPtr + this.checkIndex(index) * sizeof<T>());
   }
 
   /**
@@ -282,9 +278,8 @@ export class ArrayView<T, U = u16> {
    */
   @inline
   set(index: i32, value: T): void {
-    this.checkIndex(index);
     const baseAddr = changetype<usize>(this);
-    store<T>(this.dataStart + index * sizeof<T>(), value);
+    store<T>(this.dataPtr + this.checkIndex(index) * sizeof<T>(), value);
   }
 
   /**
@@ -308,18 +303,16 @@ export class ArrayView<T, U = u16> {
   /**
    * Append element to end of array if not at capacity
    * @param value Value to append
-   * @return true if element was added, false if at capacity
    */
   @inline
-  push(value: T): boolean {
-    const len = this.length;
-    const cap = this.capacity;
-    if ((len as i32) >= (cap as i32)) {
-      return false;
+  push(value: T): void {
+    const len = this.length as i32;
+    const cap = this.capacity as i32;
+    if (len >= cap) {
+      throw new Error("ArrayView: Cannot push, at capacity");
     }
-    this.set(len as i32, value);
-    this.length = ((len as i32) + 1) as U;
-    return true;
+    this.length = (len + 1) as U;
+    this.set(len, value);
   }
 
   /**
@@ -335,7 +328,7 @@ export class ArrayView<T, U = u16> {
     if (len >= cap) {
       throw new Error("ArrayView: Cannot grow, at capacity");
     }
-    this.length = (len + 1) as U;
+    this.length = len + 1;
     return this.get(len);
   }
 
@@ -390,13 +383,14 @@ export class ArrayView<T, U = u16> {
     return -1;
   }
 
-  private checkIndex(index: i32): void {
+  private checkIndex(index: i32): usize {
     if (index < 0) {
       throw new Error("ArrayView: Index cannot be negative");
     }
     if (index >= (this.length as i32)) {
       throw new Error("ArrayView: Index exceeds length");
     }
+    return index as usize;
   }
 }
 
@@ -429,7 +423,7 @@ export class ArrayView<T, U = u16> {
  * const enemySizeAligned = (enemySize + 3) & ~3;  // 12 bytes (already aligned)
  *
  * // Calculate memory requirements:
- * const size = UncheckedArrayObjView.sizeInMemory(50, enemySizeAligned);  // 4 + 600 = 604 bytes
+ * const size = UncheckedArrayObjView.getMemorySizeForCapacity(50, enemySizeAligned);  // 4 + 600 = 604 bytes
  *
  * // In your game's RAM layout:
  * enum Var {
@@ -460,40 +454,34 @@ export class UncheckedArrayObjView<T> {
    * Create a UncheckedArrayObjView instance and initialize element size
    * @param address Memory address of the pre-allocated array
    * @param elementSize Optional, size of each element in bytes (otherwise must be set manually in memory)
-   * @param align Optional, if true, aligns elementSize to 4-byte boundary
    * @returns UncheckedArrayObjView instance
    */
   @inline
   static fromAddress<T>(
     address: usize,
     elementSize: u32 = 0,
-    align: bool = false,
   ): UncheckedArrayObjView<T> {
     const arr = changetype<UncheckedArrayObjView<T>>(address);
     if (elementSize) {
-      const size = align ? (elementSize + 3) & ~3 : elementSize;
-      store<u32>(address, size);
+      store<u32>(address, elementSize);
     }
     return arr;
   }
-
   /**
    * Calculate memory size required for array with given capacity
    * @param capacity Number of elements
-   * @param elementSize Size of each element in bytes
-   * @returns Size in bytes (4 bytes for metadata + capacity * elementSize)
+   * @returns Size in bytes
    */
-  @inline
-  static sizeInMemory(capacity: U, elementSize: u32): usize {
+  static getMemorySizeForCapacity(elementSize: usize, capacity: usize): usize {
     return 4 + capacity * elementSize;
   }
 
   /**
-   * Get element size (possibly 4-bytes aligned)
+   * Get element size
    * @returns Size of each element in bytes
    */
   @inline
-  get elementSize(): u32 {
+  get elementSize(): usize {
     const baseAddr = changetype<usize>(this);
     return load<u32>(baseAddr);
   }
@@ -503,7 +491,7 @@ export class UncheckedArrayObjView<T> {
    * @returns Memory address where array elements start
    */
   @inline
-  get dataStart(): usize {
+  get dataPtr(): usize {
     return changetype<usize>(this) + 4;
   }
 
@@ -514,7 +502,7 @@ export class UncheckedArrayObjView<T> {
    */
   @inline
   get(index: i32): T {
-    return changetype<T>(this.dataStart + index * this.elementSize);
+    return changetype<T>(this.dataPtr + index * this.elementSize);
   }
 
   /**
@@ -524,7 +512,7 @@ export class UncheckedArrayObjView<T> {
    */
   set(index: i32, value: T): void {
     const elemSize = this.elementSize;
-    const destAddr = this.dataStart + index * elemSize;
+    const destAddr = this.dataPtr + index * elemSize;
     const srcAddr = changetype<usize>(value);
     memory.copy(destAddr, srcAddr, elemSize);
   }
@@ -575,7 +563,7 @@ export class UncheckedArrayObjView<T> {
  * const enemySize = offsetof<Enemy>("health") + sizeof<i32>();  // 12 bytes
  *
  * // Calculate memory requirements:
- * const size = ArrayObjView.sizeInMemory(50, enemySize);  // 4 + 4 + 600 = 608 bytes (with u16 counters)
+ * const size = ArrayObjView.getMemorySizeForCapacity(50, enemySize);  // 4 + 4 + 600 = 608 bytes (with u16 counters)
  *
  * // Create array and initialize:
  * const enemies = ArrayObjView.fromAddress<Enemy>(RAM_START + 100, enemySize);
@@ -608,7 +596,6 @@ export class ArrayObjView<T, U = u16> {
    * @param address Memory address of the pre-allocated array
    * @param elementSize Optional, size of each element in bytes (otherwise must be set manually in memory)
    * @param capacity Optional, maximum number of elements (sets capacity in memory)
-   * @param align Optional, if true, aligns elementSize to 4-byte boundary
    * @returns ArrayObjView instance
    */
   @inline
@@ -616,12 +603,10 @@ export class ArrayObjView<T, U = u16> {
     address: usize,
     elementSize: u32 = 0,
     capacity: U = 0 as U,
-    align: bool = false,
   ): ArrayObjView<T, U> {
     const instance = changetype<ArrayObjView<T, U>>(address);
     if (elementSize) {
-      const size = align ? (elementSize + 3) & ~3 : elementSize;
-      store<u32>(address, size);
+      store<u32>(address, elementSize);
     }
     if (capacity) {
       store<U>(address + 4, 0 as U);
@@ -632,14 +617,16 @@ export class ArrayObjView<T, U = u16> {
 
   /**
    * Calculate memory size required for array with given capacity
-   * Includes metadata (elementSize + length + capacity) and data storage
-   * @param capacity Number of elements
-   * @param elementSize Size of each element in bytes
-   * @returns Size in bytes (4 bytes for elementSize + 2*sizeof<U> for counters + capacity * elementSize)
+   * Includes metadata (length + capacity) and data storage
+   * @param capacity Maximum number of elements
+   * @returns Size in bytes
    */
   @inline
-  static sizeInMemory<U = u16>(capacity: U, elementSize: u32): usize {
-    return 4 + sizeof<U>() * 2 + capacity * elementSize;
+  static getMemorySizeForCapacity<U = u16>(
+    elementSize: usize,
+    capacity: U,
+  ): usize {
+    return 4 + sizeof<U>() * 2 + (capacity as usize) * elementSize;
   }
 
   /**
@@ -647,7 +634,7 @@ export class ArrayObjView<T, U = u16> {
    * @returns Size of each element in bytes
    */
   @inline
-  get elementSize(): u32 {
+  get elementSize(): usize {
     const baseAddr = changetype<usize>(this);
     return load<u32>(baseAddr);
   }
@@ -687,18 +674,19 @@ export class ArrayObjView<T, U = u16> {
    * @returns Memory address where array elements start
    */
   @inline
-  get dataStart(): usize {
+  get dataPtr(): usize {
     return changetype<usize>(this) + 4 + sizeof<U>() * 2;
   }
 
   /**
-   * Get memory size with automatic 4-byte alignment
+   * Get total memory size required for this array at full capacity (metadata + data)
    * @returns Size in bytes
    */
   @inline
-  get alignedMemorySize(): usize {
-    return (
-      (4 + sizeof<U>() * 2 + this.elementSize * (this.capacity as i32) + 3) & ~3
+  get memorySize(): usize {
+    return ArrayObjView.getMemorySizeForCapacity(
+      this.elementSize,
+      this.capacity,
     );
   }
 
@@ -709,8 +697,9 @@ export class ArrayObjView<T, U = u16> {
    */
   @inline
   get(index: i32): T {
-    this.checkIndex(index);
-    return changetype<T>(this.dataStart + index * this.elementSize);
+    return changetype<T>(
+      this.dataPtr + this.checkIndex(index) * this.elementSize,
+    );
   }
 
   /**
@@ -719,10 +708,9 @@ export class ArrayObjView<T, U = u16> {
    * @param value Object to copy into the array
    */
   set(index: i32, value: T): void {
-    this.checkIndex(index);
     const baseAddr = changetype<usize>(this);
     const elemSize = load<u32>(baseAddr);
-    const destAddr = this.dataStart + index * this.elementSize;
+    const destAddr = this.dataPtr + this.checkIndex(index) * this.elementSize;
     const srcAddr = changetype<usize>(value);
     memory.copy(destAddr, srcAddr, elemSize);
   }
@@ -751,12 +739,13 @@ export class ArrayObjView<T, U = u16> {
    * @param value Object to append (will be copied)
    */
   push(value: T): void {
-    const len = this.length;
-    const cap = this.capacity;
-    if ((len as i32) < (cap as i32)) {
-      this.set(len as i32, value);
-      this.length = ((len as i32) + 1) as U;
+    const len = this.length as i32;
+    const cap = this.capacity as i32;
+    if (len >= cap) {
+      throw new Error("ArrayObjView: Cannot push, at capacity");
     }
+    this.length = (len + 1) as U;
+    this.set(len, value);
   }
 
   /**
@@ -772,7 +761,7 @@ export class ArrayObjView<T, U = u16> {
     if (len >= cap) {
       throw new Error("ArrayObjView: Cannot grow, at capacity");
     }
-    this.length = (len + 1) as U;
+    this.length = len + 1;
     return this.get(len);
   }
 
@@ -793,12 +782,12 @@ export class ArrayObjView<T, U = u16> {
     if (index >= 0 && index < len) {
       const baseAddr = changetype<usize>(this);
       const elemSize = load<u32>(baseAddr);
-      const dataStart = this.dataStart;
+      const dataPtr = this.dataPtr;
 
       // Shift elements left
       for (let i = index; i < len - 1; i++) {
-        const destAddr = dataStart + i * this.elementSize;
-        const srcAddr = dataStart + (i + 1) * this.elementSize;
+        const destAddr = dataPtr + i * this.elementSize;
+        const srcAddr = dataPtr + (i + 1) * this.elementSize;
         memory.copy(destAddr, srcAddr, elemSize);
       }
       this.length = (len - 1) as U;
@@ -821,12 +810,13 @@ export class ArrayObjView<T, U = u16> {
     return -1;
   }
 
-  private checkIndex(index: i32): void {
+  private checkIndex(index: i32): usize {
     if (index < 0) {
       throw new Error("ArrayObjView: Index cannot be negative");
     }
     if (index >= (this.length as i32)) {
       throw new Error("ArrayObjView: Index exceeds length");
     }
+    return index as usize;
   }
 }
