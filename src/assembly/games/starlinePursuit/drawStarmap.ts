@@ -78,10 +78,12 @@ export function drawStarmap(): void {
 
   // Draw subtle markers for all possible target stars
   // These are stars the target might currently occupy based on movement history
-  for (let i: i32 = 0; i < numStars; i++) {
-    const star = stars.get(i);
-    if (star.isPossibleTarget == 1) {
-      fillCircle(star.x, star.y, 7, withAlpha(Colors.StarBlue, 0x40)); // Semi-transparent blue
+  if (gameState.showTrackingOverlay == 1) {
+    for (let i: i32 = 0; i < numStars; i++) {
+      const star = stars.get(i);
+      if (star.isPossibleTarget == 1) {
+        fillCircle(star.x, star.y, 7, withAlpha(Colors.StarBlue, 0x40)); // Semi-transparent blue
+      }
     }
   }
 
@@ -128,6 +130,14 @@ export function drawStarmap(): void {
     }
   }
 
+  // Draw command base marker
+  const baseIndex = gameState.commandBaseStarIndex;
+  if (baseIndex >= 0 && baseIndex < numStars) {
+    const baseStar = stars.get(baseIndex);
+    drawCircle(baseStar.x, baseStar.y, 9, Colors.BriefingBorder);
+    drawRect(baseStar.x - 2, baseStar.y - 2, 5, 5, Colors.TextWhite);
+  }
+
   // Draw player ships with distinct visuals
   const activeIndex = gameState.activeShipIndex;
   const frameCounter = gameState.frameCounter;
@@ -158,6 +168,37 @@ export function drawStarmap(): void {
           size,
           Colors.TextWhite,
         );
+      } else if (ship.shipType == ShipType.SCOUT) {
+        // Scout: Light-blue diamond
+        drawLine(
+          shipStar.x,
+          shipStar.y - 4,
+          shipStar.x + 4,
+          shipStar.y,
+          Colors.StarBlue,
+        );
+        drawLine(
+          shipStar.x + 4,
+          shipStar.y,
+          shipStar.x,
+          shipStar.y + 4,
+          Colors.StarBlue,
+        );
+        drawLine(
+          shipStar.x,
+          shipStar.y + 4,
+          shipStar.x - 4,
+          shipStar.y,
+          Colors.StarBlue,
+        );
+        drawLine(
+          shipStar.x - 4,
+          shipStar.y,
+          shipStar.x,
+          shipStar.y - 4,
+          Colors.StarBlue,
+        );
+        fillCircle(shipStar.x, shipStar.y, 1, Colors.TextWhite);
       } else if (ship.shipType == ShipType.SURVEY_CRUISER) {
         // Survey Cruiser: Purple hollow circle
         drawCircle(shipStar.x, shipStar.y, 4, Colors.ClusterPurpleShip);
@@ -224,39 +265,6 @@ export function drawStarmap(): void {
   // Draw scan radius effect if scan just performed
   const scanTimer = gameState.scanTimer;
   const scanResult = gameState.scanResult;
-
-  // Show initial target location reveal animation at game start
-  if (
-    gameState.initialRevealTimer > 0 &&
-    targetShip.currentStarIndex < numStars
-  ) {
-    const startStar = stars.get(targetShip.currentStarIndex);
-    const revealPhase = 180 - gameState.initialRevealTimer;
-
-    if (revealPhase < 30) {
-      // Expanding pulse
-      const radius = (revealPhase * SCAN_RADIUS) / 30;
-      drawCircle(startStar.x, startStar.y, radius, Colors.TargetRed);
-      if (revealPhase < 15 && radius > 2) {
-        drawCircle(startStar.x, startStar.y, radius - 2, Colors.TargetRed);
-      }
-    } else if (revealPhase < 60) {
-      // Fade out pulse
-      const fadePhase = revealPhase - 30;
-      const alpha = (255 * (30 - fadePhase)) / 30;
-      const color = withAlpha(Colors.TargetRed, alpha as u8);
-      drawCircle(startStar.x, startStar.y, SCAN_RADIUS, color);
-      if (fadePhase < 15) {
-        const alphaInner = (255 * (15 - fadePhase)) / 15;
-        const colorInner = withAlpha(Colors.TargetRed, alphaInner as u8);
-        drawCircle(startStar.x, startStar.y, SCAN_RADIUS - 2, colorInner);
-      }
-    }
-
-    // Keep the start star highlighted while reveal timer is active
-    drawCircle(startStar.x, startStar.y, 8, Colors.TargetRed);
-    drawCircle(startStar.x, startStar.y, 10, Colors.TargetLightRed);
-  }
 
   // Show green scan only during first 60 frames based on detection result
   // Target detected (starts at 180): show green from 180-121
@@ -396,7 +404,11 @@ export function drawStarmap(): void {
   }
 
   // Draw target ship (enemy ship - red hollow square)
-  if (targetShip.isActive != 0) {
+  if (
+    targetShip.isActive != 0 &&
+    gameState.scanResult >= 0 &&
+    gameState.scanTimer > 0
+  ) {
     const targetStarIndex = targetShip.currentStarIndex;
 
     // Bounds check

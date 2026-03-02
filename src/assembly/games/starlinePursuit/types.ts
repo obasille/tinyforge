@@ -27,10 +27,10 @@ export const MAX_SENSOR_ENERGY: i32 = 10;
 export const SE_REGEN_PER_TURN: i32 = 3;
 export const STARTING_COMMAND_POINTS: i32 = 3;
 export const MAX_COMMAND_POINTS: i32 = 3;
-export const STARTING_DEPLOYMENT_KITS: i32 = 3;
+export const STARTING_DEPLOYMENT_KITS: i32 = 2;
 
 // Fleet constants
-export const MAX_PLAYER_SHIPS: i32 = 3;
+export const MAX_PLAYER_SHIPS: i32 = 4;
 
 // Detection constants
 export const MAX_BEACONS: i32 = 10;
@@ -166,6 +166,8 @@ export class PlayerShip {
   shipType: i32 = 0; // ShipType enum value
   currentStarIndex: i32 = 0; // Current star location
   movesThisTurn: i32 = 0; // Number of jumps used this turn
+  isLaunched: u8 = 0; // 1 if ship has launched from command base
+  launchTurn: i32 = 0; // Turn index when ship launched (cannot move on that turn)
 }
 
 /**
@@ -190,11 +192,13 @@ export class GameState {
   phase: u8 = 0; // GamePhase enum value
   targetType: u8 = 0; // TargetType enum value
   scannerPhase: u8 = 0; // 0=sweep down, 1=sweep up, 2=done
+  showTrackingOverlay: u8 = 0; // 1 when possible-target overlay should be visible
   // 1 byte padding for alignment
   sensorEnergy: i32 = 0;
   commandPoints: i32 = 0;
   deploymentKits: i32 = 0;
   activeShipIndex: i32 = 0;
+  commandBaseStarIndex: i32 = -1; // Home star where all ships begin docked
   frameCounter: i32 = 0;
   scanResult: i32 = -2; // Target star index if detected, -1 if no contact, -2 if no active scan
   scanTimer: i32 = 0; // Countdown frames for displaying scan result
@@ -235,7 +239,7 @@ export const nebulas = mem.allocObjArray<Nebula>(
 
 export type PlayerShipArray = ArrayObjView<PlayerShip>;
 export const playerShips = mem.allocObjArray<PlayerShip>(
-  offsetof<PlayerShip>("movesThisTurn") + sizeof<i32>(),
+  offsetof<PlayerShip>("launchTurn") + sizeof<i32>(),
   MAX_PLAYER_SHIPS as u16,
 );
 

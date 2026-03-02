@@ -2,6 +2,16 @@ import { UncheckedArrayView } from "../../sdk";
 import { edges, playerShips, stars, TEMP_MEM_START } from "./types";
 
 /**
+ * Initialize star tracking to fully unknown state (all stars possible)
+ */
+export function initializeUnknownStarTracking(): void {
+  const numStars = stars.length as i32;
+  for (let i: i32 = 0; i < numStars; i++) {
+    stars.get(i).isPossibleTarget = 1;
+  }
+}
+
+/**
  * Initialize star tracking with single star (used at game start)
  */
 export function initializeStarTracking(starIndex: i32): void {

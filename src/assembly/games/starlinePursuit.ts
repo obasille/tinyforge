@@ -24,6 +24,7 @@ import {
   clearStarTrackingByBeacon,
   clearStarTrackingByScan,
   initializeStarTracking,
+  initializeUnknownStarTracking,
   updateStarTracking,
 } from "./starlinePursuit/starTracking";
 import {
@@ -37,6 +38,9 @@ import {
   MAX_COMMAND_POINTS,
   MAX_EDGES,
   MAX_SENSOR_ENERGY,
+  MAP_HEIGHT,
+  MAP_OFFSET_Y,
+  MAP_WIDTH,
   nebulas,
   playerShips,
   SCAN_COST,
@@ -53,6 +57,9 @@ import {
 } from "./starlinePursuit/types";
 import { starsDist2 } from "./starlinePursuit/utils";
 
+const MIN_BASE_EXIT_JUMPS: i32 = 4;
+const ACTION_CP_COST: i32 = 1;
+
 // === Helper Functions ===
 
 /**
@@ -62,7 +69,6 @@ function getShipMoveLimit(shipType: i32): i32 {
   if (shipType == ShipType.INTERCEPTOR) return 3;
   if (shipType == ShipType.SCOUT) return 2;
   if (shipType == ShipType.SURVEY_CRUISER) return 1;
-  if (shipType == ShipType.BEACON_TENDER) return 1;
   return 1;
 }
 
@@ -72,9 +78,117 @@ function getShipMoveLimit(shipType: i32): i32 {
 function getShipTypeName(shipType: i32): string {
   if (shipType == ShipType.INTERCEPTOR) return "INTERCEPTOR";
   if (shipType == ShipType.SCOUT) return "SCOUT";
-  if (shipType == ShipType.SURVEY_CRUISER) return "SURVEY";
-  if (shipType == ShipType.BEACON_TENDER) return "BEACON";
+  if (shipType == ShipType.SURVEY_CRUISER) return "DEEP SCAN";
   return "UNKNOWN";
+}
+
+function areStarsConnected(starA: i32, starB: i32): bool {
+  const numEdges = edges.length as i32;
+  for (let i: i32 = 0; i < numEdges; i++) {
+    const edge = edges.get(i);
+    if (
+      (edge.a == starA && edge.b == starB) ||
+      (edge.a == starB && edge.b == starA)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function getJumpDistance(startStar: i32, endStar: i32): i32 {
+  if (startStar == endStar) return 0;
+
+  const numStars = stars.length as i32;
+  const visited = UncheckedArrayView.fromAddress<i32>(TEMP_MEM_START);
+  const queue = UncheckedArrayView.fromAddress<i32>(TEMP_MEM_START + 256);
+  const depth = UncheckedArrayView.fromAddress<i32>(TEMP_MEM_START + 512);
+
+  for (let i: i32 = 0; i < numStars; i++) {
+    visited[i] = 0;
+  }
+
+  let head: i32 = 0;
+  let tail: i32 = 0;
+  queue[tail] = startStar;
+  depth[tail] = 0;
+  tail++;
+  visited[startStar] = 1;
+
+  while (head < tail) {
+    const current = queue[head];
+    const currentDepth = depth[head];
+    head++;
+
+    if (current == endStar) {
+      return currentDepth;
+    }
+
+    for (let n: i32 = 0; n < numStars; n++) {
+      if (visited[n] == 0 && areStarsConnected(current, n)) {
+        visited[n] = 1;
+        queue[tail] = n;
+        depth[tail] = currentDepth + 1;
+        tail++;
+      }
+    }
+  }
+
+  return 9999;
+}
+
+function getMinJumpsToAnyExit(starIndex: i32): i32 {
+  const numStars = stars.length as i32;
+  let minJumps: i32 = 9999;
+
+  for (let i: i32 = 0; i < numStars; i++) {
+    if (stars.get(i).isExit != 0) {
+      const jumps = getJumpDistance(starIndex, i);
+      if (jumps < minJumps) {
+        minJumps = jumps;
+      }
+    }
+  }
+
+  return minJumps;
+}
+
+function pickCommandBaseStar(): i32 {
+  const numStars = stars.length as i32;
+  const centerX = MAP_WIDTH / 2;
+  const centerY = MAP_OFFSET_Y + MAP_HEIGHT / 2;
+
+  let bestIndex: i32 = -1;
+  let bestScore: i32 = -999999;
+
+  for (let i: i32 = 0; i < numStars; i++) {
+    const star = stars.get(i);
+    if (star.isExit != 0 || star.inNebula != 0) continue;
+
+    const minExitJumps = getMinJumpsToAnyExit(i);
+    if (minExitJumps < MIN_BASE_EXIT_JUMPS) continue;
+
+    const dx = star.x - centerX;
+    const dy = star.y - centerY;
+    const manhattan = (dx < 0 ? -dx : dx) + (dy < 0 ? -dy : dy);
+
+    const score = 1200 - manhattan * 5 + star.degree * 12 + randomRange(7);
+    if (score > bestScore) {
+      bestScore = score;
+      bestIndex = i;
+    }
+  }
+
+  if (bestIndex >= 0) return bestIndex;
+
+  for (let i: i32 = 0; i < numStars; i++) {
+    const star = stars.get(i);
+    if (star.isExit == 0 && star.inNebula == 0) {
+      return i;
+    }
+  }
+
+  return 0;
 }
 
 /**
@@ -241,97 +355,78 @@ export function init(): void {
 
   const numStars = stars.length as i32;
 
-  // Initialize target ship at a random star position
+  // Pick command base near center and away from exits/nebulas
+  const commandBase = pickCommandBaseStar();
+  gameState.commandBaseStarIndex = commandBase;
+
+  // Initialize target ship at a random star that is not the command base
   targetShip.currentStarIndex = randomRange(numStars);
+  while (targetShip.currentStarIndex == commandBase) {
+    targetShip.currentStarIndex = randomRange(numStars);
+  }
   targetShip.isActive = 1;
 
-  // Initialize player fleet (3 ships at random different positions)
-  // Use temporary memory for tracking used stars during initialization
-  const usedStars = UncheckedArrayView.fromAddress<i32>(TEMP_MEM_START);
-  usedStars[0] = targetShip.currentStarIndex;
-  let usedCount: i32 = 1;
+  // Initialize player fleet at command base (docked, not launched)
+  const scoutA = playerShips.grow();
+  scoutA.shipType = ShipType.SCOUT;
+  scoutA.currentStarIndex = commandBase;
+  scoutA.movesThisTurn = 0;
+  scoutA.isLaunched = 0;
+  scoutA.launchTurn = 0;
 
-  // Ship 0: Interceptor
-  let starIndex: i32;
-  do {
-    starIndex = randomRange(numStars);
-    let valid = true;
-    for (let i: i32 = 0; i < usedCount; i++) {
-      if (usedStars[i] == starIndex) {
-        valid = false;
-        break;
-      }
-    }
-    if (valid) break;
-  } while (true);
-  usedStars[usedCount++] = starIndex;
+  const scoutB = playerShips.grow();
+  scoutB.shipType = ShipType.SCOUT;
+  scoutB.currentStarIndex = commandBase;
+  scoutB.movesThisTurn = 0;
+  scoutB.isLaunched = 0;
+  scoutB.launchTurn = 0;
 
   const interceptor = playerShips.grow();
   interceptor.shipType = ShipType.INTERCEPTOR;
-  interceptor.currentStarIndex = starIndex;
+  interceptor.currentStarIndex = commandBase;
   interceptor.movesThisTurn = 0;
+  interceptor.isLaunched = 0;
+  interceptor.launchTurn = 0;
 
-  // Ship 1: Survey Cruiser
-  do {
-    starIndex = randomRange(numStars);
-    let valid = true;
-    for (let i: i32 = 0; i < usedCount; i++) {
-      if (usedStars[i] == starIndex) {
-        valid = false;
-        break;
-      }
-    }
-    if (valid) break;
-  } while (true);
-  usedStars[usedCount++] = starIndex;
-
-  const survey = playerShips.grow();
-  survey.shipType = ShipType.SURVEY_CRUISER;
-  survey.currentStarIndex = starIndex;
-  survey.movesThisTurn = 0;
-
-  // Ship 2: Beacon Tender
-  do {
-    starIndex = randomRange(numStars);
-    let valid = true;
-    for (let i: i32 = 0; i < usedCount; i++) {
-      if (usedStars[i] == starIndex) {
-        valid = false;
-        break;
-      }
-    }
-    if (valid) break;
-  } while (true);
-
-  const beacon = playerShips.grow();
-  beacon.shipType = ShipType.BEACON_TENDER;
-  beacon.currentStarIndex = starIndex;
-  beacon.movesThisTurn = 0;
+  const scanner = playerShips.grow();
+  scanner.shipType = ShipType.SURVEY_CRUISER;
+  scanner.currentStarIndex = commandBase;
+  scanner.movesThisTurn = 0;
+  scanner.isLaunched = 0;
+  scanner.launchTurn = 0;
 
   // Initialize shared resources
   gameState.sensorEnergy = STARTING_SENSOR_ENERGY;
   gameState.commandPoints = STARTING_COMMAND_POINTS;
   gameState.deploymentKits = STARTING_DEPLOYMENT_KITS;
-  gameState.activeShipIndex = 0; // Start with interceptor
+  gameState.activeShipIndex = 0; // Start with first scout
   gameState.frameCounter = 0;
   gameState.scanResult = -2; // No active scan
   gameState.scanTimer = 0;
-  gameState.initialRevealTimer = 0; // Don't start reveal yet - wait for briefing dismissal
+  gameState.initialRevealTimer = 0;
   gameState.scannerY = -1; // Scanner inactive
   gameState.scannerPhase = 0;
   gameState.turnNumber = 1; // Initialize turn counter
+  gameState.showTrackingOverlay = 0;
 
   // Select random target type (0-4 for now, excluding advanced types)
   gameState.targetType = randomRange(5) as u8; // SMUGGLER, PIRATE, GHOST, COURIER, DECOY_MASTER
   // TODO: Add REBEL_COMMANDER (5) and SLEEPER_AGENT (6) when their behaviors are fully implemented
   gameState.missionBriefingDismissed = 0; // Show briefing, wait for START press
 
-  // Initialize star tracking with target's starting position
-  initializeStarTracking(targetShip.currentStarIndex);
+  // Initialize star tracking to full uncertainty (target hidden)
+  initializeUnknownStarTracking();
 
-  // Clear tracking for player-occupied stars (we know target isn't there)
+  // Clear tracking for player-occupied stars (we know target isn't docked at base)
   for (let i: i32 = 0; i < (playerShips.length as i32); i++) {
     stars.get(playerShips.get(i).currentStarIndex).isPossibleTarget = 0;
+  }
+
+  // Hidden head start: target moves 1-2 turns before player acts
+  const hiddenHeadStartTurns = 1 + randomRange(2);
+  for (let i: i32 = 0; i < hiddenHeadStartTurns; i++) {
+    moveTarget();
+    updateStarTracking();
   }
 
   // Initialize all beacons to inactive
@@ -360,7 +455,6 @@ export function update(): void {
     // Briefing is still visible, wait for START press to dismiss
     if (buttonPressed(Button.START)) {
       gameState.missionBriefingDismissed = 1;
-      gameState.initialRevealTimer = 180; // Start reveal animation (3 seconds)
       log("Mission briefing acknowledged");
     }
     // Don't process game logic while briefing is visible
@@ -433,8 +527,44 @@ export function update(): void {
 
   // A button: Ship-specific actions
   if (buttonPressed(Button.A)) {
-    // Beacon Tender: Deploy beacon
-    if (activeShip.shipType == ShipType.BEACON_TENDER) {
+    // Launch docked ships (consumes a turn-equivalent action)
+    if (activeShip.isLaunched == 0) {
+      if (gameState.commandPoints < ACTION_CP_COST) {
+        log("Insufficient Command Points");
+        return;
+      }
+
+      activeShip.isLaunched = 1;
+      activeShip.launchTurn = gameState.turnNumber;
+      activeShip.movesThisTurn = getShipMoveLimit(activeShip.shipType);
+      gameState.commandPoints -= ACTION_CP_COST;
+      logi(
+        "Ship launched from base at star {}",
+        activeShip.currentStarIndex,
+        0,
+        0,
+      );
+      return;
+    }
+
+    if (
+      activeShip.launchTurn == gameState.turnNumber ||
+      activeShip.movesThisTurn > 0
+    ) {
+      log("Ship already committed this turn");
+      return;
+    }
+
+    // Scouts and Interceptor can deploy beacons (buoys)
+    if (
+      activeShip.shipType == ShipType.SCOUT ||
+      activeShip.shipType == ShipType.INTERCEPTOR
+    ) {
+      if (gameState.commandPoints < ACTION_CP_COST) {
+        log("Insufficient Command Points");
+        return;
+      }
+
       if (gameState.deploymentKits > 0) {
         // Check if beacon already exists at this star
         let alreadyDeployed = false;
@@ -473,10 +603,14 @@ export function update(): void {
                 clearStarTrackingByBeacon(beacon.starIndex, BEACON_RANGE);
               }
 
+              gameState.showTrackingOverlay = 1;
+
               // Mark for range animation (will start after scanner completes)
               beacon.pendingRangeAnim = 1;
 
               gameState.deploymentKits--;
+              gameState.commandPoints -= ACTION_CP_COST;
+              activeShip.movesThisTurn = getShipMoveLimit(activeShip.shipType);
               logi(
                 "Beacon deployed at star {}",
                 activeShip.currentStarIndex,
@@ -499,7 +633,13 @@ export function update(): void {
 
     // Survey Cruiser: Active scan
     if (activeShip.shipType == ShipType.SURVEY_CRUISER) {
+      if (gameState.commandPoints < ACTION_CP_COST) {
+        log("Insufficient Command Points");
+        return;
+      }
+
       if (gameState.sensorEnergy >= SCAN_COST) {
+        gameState.commandPoints -= ACTION_CP_COST;
         gameState.sensorEnergy -= SCAN_COST;
 
         // Check if target is within scan radius
@@ -515,12 +655,16 @@ export function update(): void {
           gameState.scanTimer = 180; // Show for 3 seconds (60 fps)
           // Lock tracking to known target location after positive scan
           initializeStarTracking(targetShip.currentStarIndex);
+          gameState.showTrackingOverlay = 1;
+          activeShip.movesThisTurn = getShipMoveLimit(activeShip.shipType);
           logi("TARGET DETECTED by scan");
         } else {
           // No contact - clear stars within scan radius from tracking
           gameState.scanResult = -1;
           gameState.scanTimer = 120; // Show for 2 seconds
           clearStarTrackingByScan(activeShip.currentStarIndex, SCAN_RADIUS);
+          gameState.showTrackingOverlay = 1;
+          activeShip.movesThisTurn = getShipMoveLimit(activeShip.shipType);
           log("Scan complete - No contact");
         }
       } else {
@@ -589,7 +733,11 @@ export function update(): void {
 
   // Handle movement input (D-pad for direction selection)
   const moveLimit = getShipMoveLimit(activeShip.shipType);
-  if (activeShip.movesThisTurn < moveLimit) {
+  if (
+    activeShip.isLaunched == 1 &&
+    activeShip.launchTurn < gameState.turnNumber &&
+    activeShip.movesThisTurn < moveLimit
+  ) {
     let targetStarIndex: i32 = -1;
 
     if (buttonPressed(Button.UP)) {
@@ -705,7 +853,13 @@ export function draw(): void {
   print(1 + shipTypeName.length * 6, 229, ":", Colors.TextWhite);
 
   const moveLimit = getShipMoveLimit(activeShip.shipType);
-  const movesRemaining = moveLimit - activeShip.movesThisTurn;
+  let movesRemaining = moveLimit - activeShip.movesThisTurn;
+  if (
+    activeShip.isLaunched == 0 ||
+    activeShip.launchTurn == gameState.turnNumber
+  ) {
+    movesRemaining = 0;
+  }
 
   print(85, 229, "MOVES:", Colors.TextWhite);
   printNumber(121, 229, movesRemaining, Colors.TextBlue);
@@ -714,13 +868,18 @@ export function draw(): void {
 
   // Show ship-specific action
   if (state == GamePhase.PLAYING) {
-    if (activeShip.shipType == ShipType.BEACON_TENDER) {
-      print(170, 229, "A:DEPLOY BEACON", Colors.TextYellow);
+    if (activeShip.isLaunched == 0) {
+      print(170, 229, "A:LAUNCH (1CP)", Colors.TextYellow);
+    } else if (
+      activeShip.shipType == ShipType.SCOUT ||
+      activeShip.shipType == ShipType.INTERCEPTOR
+    ) {
+      print(170, 229, "A:DEPLOY BUOY", Colors.TextYellow);
     } else if (activeShip.shipType == ShipType.SURVEY_CRUISER) {
-      print(170, 229, "A:SCAN", Colors.ObjectiveGreen);
-      print(212, 229, "(", Colors.TextDarkGray);
-      printNumber(218, 229, SCAN_COST, Colors.TextDarkGray);
-      print(226, 229, "SE)", Colors.TextDarkGray);
+      print(170, 229, "A:DEEP SCAN", Colors.ObjectiveGreen);
+      print(236, 229, "(", Colors.TextDarkGray);
+      printNumber(242, 229, SCAN_COST, Colors.TextDarkGray);
+      print(250, 229, "SE)", Colors.TextDarkGray);
     }
   }
 
