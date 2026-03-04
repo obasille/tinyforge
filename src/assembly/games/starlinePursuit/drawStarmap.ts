@@ -78,12 +78,10 @@ export function drawStarmap(): void {
 
   // Draw subtle markers for all possible target stars
   // These are stars the target might currently occupy based on movement history
-  if (gameState.showTrackingOverlay == 1) {
-    for (let i: i32 = 0; i < numStars; i++) {
-      const star = stars.get(i);
-      if (star.isPossibleTarget == 1) {
-        fillCircle(star.x, star.y, 7, withAlpha(Colors.StarBlue, 0x40)); // Semi-transparent blue
-      }
+  for (let i: i32 = 0; i < numStars; i++) {
+    const star = stars.get(i);
+    if (star.isPossibleTarget == 1) {
+      fillCircle(star.x, star.y, 7, withAlpha(Colors.StarBlue, 0x40)); // Semi-transparent blue
     }
   }
 

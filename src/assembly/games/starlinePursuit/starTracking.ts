@@ -2,22 +2,12 @@ import { UncheckedArrayView } from "../../sdk";
 import { edges, playerShips, stars, TEMP_MEM_START } from "./types";
 
 /**
- * Initialize star tracking to fully unknown state (all stars possible)
- */
-export function initializeUnknownStarTracking(): void {
-  const numStars = stars.length as i32;
-  for (let i: i32 = 0; i < numStars; i++) {
-    stars.get(i).isPossibleTarget = 1;
-  }
-}
-
-/**
  * Initialize star tracking with single star (used at game start)
  */
 export function initializeStarTracking(starIndex: i32): void {
   const numStars = stars.length as i32;
   // Clear all tracking
-  for (let i: i32 = 0; i < numStars; i++) {
+  for (let i = 0; i < numStars; i++) {
     stars.get(i).isPossibleTarget = 0;
   }
   // Mark only the target's starting location
@@ -36,27 +26,27 @@ export function updateStarTracking(): void {
   const tempWork = UncheckedArrayView.fromAddress<i32>(TEMP_MEM_START);
 
   // Get list of player-occupied stars (forbidden locations)
-  let forbiddenCount: i32 = 0;
-  for (let i: i32 = 0; i < (playerShips.length as i32); i++) {
+  let forbiddenCount = 0;
+  for (let i = 0; i < (playerShips.length as i32); i++) {
     const ship = playerShips.get(i);
     tempWork[i] = ship.currentStarIndex;
     forbiddenCount++;
   }
 
   // Create new possibility map in temp memory (starting after forbidden list)
-  const newTrackingOffset = playerShips.length as i32;
-  for (let i: i32 = 0; i < numStars; i++) {
+  const newTrackingOffset = forbiddenCount;
+  for (let i = 0; i < numStars; i++) {
     tempWork[newTrackingOffset + i] = 0;
   }
 
   // For each currently possible star, mark it AND its neighbors as possible
-  for (let starIdx: i32 = 0; starIdx < numStars; starIdx++) {
+  for (let starIdx = 0; starIdx < numStars; starIdx++) {
     if (stars.get(starIdx).isPossibleTarget == 1) {
       // This star is currently a possible target location
 
       // First, check if the target could stay at this star (not forbidden)
       let currentStarForbidden = false;
-      for (let f: i32 = 0; f < forbiddenCount; f++) {
+      for (let f = 0; f < forbiddenCount; f++) {
         if (tempWork[f] == starIdx) {
           currentStarForbidden = true;
           break;
@@ -69,7 +59,7 @@ export function updateStarTracking(): void {
       }
 
       // Add all its neighbors to the new possibility map
-      for (let edgeIdx: i32 = 0; edgeIdx < numEdges; edgeIdx++) {
+      for (let edgeIdx = 0; edgeIdx < numEdges; edgeIdx++) {
         const edge = edges.get(edgeIdx);
         let neighborIdx: i32 = -1;
 
@@ -82,7 +72,7 @@ export function updateStarTracking(): void {
         if (neighborIdx >= 0) {
           // Check if this neighbor is forbidden (player-occupied)
           let isForbidden = false;
-          for (let f: i32 = 0; f < forbiddenCount; f++) {
+          for (let f = 0; f < forbiddenCount; f++) {
             if (tempWork[f] == neighborIdx) {
               isForbidden = true;
               break;
@@ -99,7 +89,7 @@ export function updateStarTracking(): void {
   }
 
   // Copy new tracking back to Star objects
-  for (let i: i32 = 0; i < numStars; i++) {
+  for (let i = 0; i < numStars; i++) {
     stars.get(i).isPossibleTarget = tempWork[newTrackingOffset + i] as u8;
   }
 }
@@ -116,7 +106,7 @@ export function clearStarTrackingByScan(
   const scanCenter = stars.get(scanCenterStarIndex);
   const radius2 = scanRadius * scanRadius;
 
-  for (let i: i32 = 0; i < numStars; i++) {
+  for (let i = 0; i < numStars; i++) {
     const star = stars.get(i);
     if (star.isPossibleTarget == 1) {
       // Check if this possible star is within scan radius
@@ -144,7 +134,7 @@ export function clearStarTrackingByBeacon(
   const beaconStar = stars.get(beaconStarIndex);
   const range2 = beaconRange * beaconRange;
 
-  for (let i: i32 = 0; i < numStars; i++) {
+  for (let i = 0; i < numStars; i++) {
     const star = stars.get(i);
     if (star.isPossibleTarget == 1) {
       // Check if this possible star is within beacon range

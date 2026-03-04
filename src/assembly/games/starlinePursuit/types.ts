@@ -192,7 +192,6 @@ export class GameState {
   phase: u8 = 0; // GamePhase enum value
   targetType: u8 = 0; // TargetType enum value
   scannerPhase: u8 = 0; // 0=sweep down, 1=sweep up, 2=done
-  showTrackingOverlay: u8 = 0; // 1 when possible-target overlay should be visible
   // 1 byte padding for alignment
   sensorEnergy: i32 = 0;
   commandPoints: i32 = 0;

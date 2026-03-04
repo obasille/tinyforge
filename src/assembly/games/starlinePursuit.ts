@@ -16,7 +16,7 @@ import {
   UncheckedArrayView,
 } from "../sdk";
 
-import { toColor, withAlpha } from "../sdk/color";
+import { withAlpha } from "../sdk/color";
 import { drawStarmap } from "./starlinePursuit/drawStarmap";
 import { generateStarmap } from "./starlinePursuit/generateStarmap";
 import { moveTarget } from "./starlinePursuit/moveTarget";
@@ -24,7 +24,6 @@ import {
   clearStarTrackingByBeacon,
   clearStarTrackingByScan,
   initializeStarTracking,
-  initializeUnknownStarTracking,
   updateStarTracking,
 } from "./starlinePursuit/starTracking";
 import {
@@ -359,11 +358,8 @@ export function init(): void {
   const commandBase = pickCommandBaseStar();
   gameState.commandBaseStarIndex = commandBase;
 
-  // Initialize target ship at a random star that is not the command base
-  targetShip.currentStarIndex = randomRange(numStars);
-  while (targetShip.currentStarIndex == commandBase) {
-    targetShip.currentStarIndex = randomRange(numStars);
-  }
+  // Initialize target ship at the command base (same system as player)
+  targetShip.currentStarIndex = commandBase;
   targetShip.isActive = 1;
 
   // Initialize player fleet at command base (docked, not launched)
@@ -407,23 +403,17 @@ export function init(): void {
   gameState.scannerY = -1; // Scanner inactive
   gameState.scannerPhase = 0;
   gameState.turnNumber = 1; // Initialize turn counter
-  gameState.showTrackingOverlay = 0;
 
   // Select random target type (0-4 for now, excluding advanced types)
   gameState.targetType = randomRange(5) as u8; // SMUGGLER, PIRATE, GHOST, COURIER, DECOY_MASTER
   // TODO: Add REBEL_COMMANDER (5) and SLEEPER_AGENT (6) when their behaviors are fully implemented
   gameState.missionBriefingDismissed = 0; // Show briefing, wait for START press
 
-  // Initialize star tracking to full uncertainty (target hidden)
-  initializeUnknownStarTracking();
+  // Initialize star tracking from the known start system, then propagate through hidden head-start moves
+  initializeStarTracking(commandBase);
 
-  // Clear tracking for player-occupied stars (we know target isn't docked at base)
-  for (let i: i32 = 0; i < (playerShips.length as i32); i++) {
-    stars.get(playerShips.get(i).currentStarIndex).isPossibleTarget = 0;
-  }
-
-  // Hidden head start: target moves 1-2 turns before player acts
-  const hiddenHeadStartTurns = 1 + randomRange(2);
+  // Hidden head start: target moves 2-3 turns before player acts
+  const hiddenHeadStartTurns = 2 + randomRange(2);
   for (let i: i32 = 0; i < hiddenHeadStartTurns; i++) {
     moveTarget();
     updateStarTracking();
@@ -603,8 +593,6 @@ export function update(): void {
                 clearStarTrackingByBeacon(beacon.starIndex, BEACON_RANGE);
               }
 
-              gameState.showTrackingOverlay = 1;
-
               // Mark for range animation (will start after scanner completes)
               beacon.pendingRangeAnim = 1;
 
@@ -655,7 +643,6 @@ export function update(): void {
           gameState.scanTimer = 180; // Show for 3 seconds (60 fps)
           // Lock tracking to known target location after positive scan
           initializeStarTracking(targetShip.currentStarIndex);
-          gameState.showTrackingOverlay = 1;
           activeShip.movesThisTurn = getShipMoveLimit(activeShip.shipType);
           logi("TARGET DETECTED by scan");
         } else {
@@ -663,7 +650,6 @@ export function update(): void {
           gameState.scanResult = -1;
           gameState.scanTimer = 120; // Show for 2 seconds
           clearStarTrackingByScan(activeShip.currentStarIndex, SCAN_RADIUS);
-          gameState.showTrackingOverlay = 1;
           activeShip.movesThisTurn = getShipMoveLimit(activeShip.shipType);
           log("Scan complete - No contact");
         }
