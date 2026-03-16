@@ -4,6 +4,7 @@ import {
   BEACON_RANGE,
   ShipType,
   TEMP_MEM_START,
+  TRAIL_MAX_AGE,
   TargetType,
   beacons,
   edges,
@@ -13,6 +14,11 @@ import {
   targetShip,
 } from "./types";
 import { starsDist2 } from "./utils";
+
+function stampTrail(starIndex: i32): void {
+  const star = stars.get(starIndex);
+  star.trailAge = TRAIL_MAX_AGE;
+}
 
 /**
  * Check if a star is within detection range of any active beacon
@@ -229,6 +235,7 @@ export function moveTarget(): void {
   // Execute move to best neighbor
   if (bestNeighbor >= 0) {
     targetShip.currentStarIndex = bestNeighbor;
+    stampTrail(bestNeighbor);
     logi("Target moved to star {}", bestNeighbor, 0, 0);
 
     // Safety check: warn if target moved onto an Interceptor (should never happen)
@@ -265,6 +272,7 @@ export function moveTarget(): void {
 
         if (secondBestNeighbor >= 0) {
           targetShip.currentStarIndex = secondBestNeighbor;
+          stampTrail(secondBestNeighbor);
           log("Courier made double move!");
         }
       }

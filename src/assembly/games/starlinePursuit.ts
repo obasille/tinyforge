@@ -22,7 +22,6 @@ import { generateStarmap } from "./starlinePursuit/generateStarmap";
 import { moveTarget } from "./starlinePursuit/moveTarget";
 import {
   clearStarTrackingByBeacon,
-  clearStarTrackingByScan,
   initializeStarTracking,
   updateStarTracking,
 } from "./starlinePursuit/starTracking";
@@ -51,6 +50,7 @@ import {
   STARTING_DEPLOYMENT_KITS,
   STARTING_SENSOR_ENERGY,
   targetShip,
+  TRAIL_MAX_AGE,
   TargetType,
   TEMP_MEM_START,
 } from "./starlinePursuit/types";
@@ -81,6 +81,116 @@ function getShipTypeName(shipType: i32): string {
   return "UNKNOWN";
 }
 
+function resetTrails(): void {
+  const numStars = stars.length as i32;
+  for (let i: i32 = 0; i < numStars; i++) {
+    const star = stars.get(i);
+    star.trailAge = 0;
+    star.trailKnown = 0;
+  }
+}
+
+function decayTrails(): void {
+  const numStars = stars.length as i32;
+  for (let i: i32 = 0; i < numStars; i++) {
+    const star = stars.get(i);
+    if (star.trailAge > 0) {
+      star.trailAge--;
+      if (star.trailAge == 0) {
+        star.trailKnown = 0;
+      }
+    }
+  }
+}
+
+function revealTrailAtStar(starIndex: i32): u8 {
+  if (starIndex < 0 || starIndex >= (stars.length as i32)) return 0;
+  const star = stars.get(starIndex);
+  if (star.trailAge > 0) {
+    star.trailKnown = 1;
+    return star.trailAge;
+  }
+  return 0;
+}
+
+function investigateStarAndNeighbors(centerStarIndex: i32): u8 {
+  let strongest: u8 = revealTrailAtStar(centerStarIndex);
+  const numEdges = edges.length as i32;
+
+  for (let i: i32 = 0; i < numEdges && i < MAX_EDGES; i++) {
+    const edge = edges.get(i);
+    let neighborIndex: i32 = -1;
+
+    if (edge.a == centerStarIndex) {
+      neighborIndex = edge.b;
+    } else if (edge.b == centerStarIndex) {
+      neighborIndex = edge.a;
+    }
+
+    if (neighborIndex >= 0) {
+      const age = revealTrailAtStar(neighborIndex);
+      if (age > strongest) strongest = age;
+    }
+  }
+
+  return strongest;
+}
+
+function scoutPassiveEchoSweep(): void {
+  const numShips = playerShips.length as i32;
+  let foundEcho = false;
+
+  for (let i: i32 = 0; i < numShips; i++) {
+    const ship = playerShips.get(i);
+    if (ship.shipType != ShipType.SCOUT || ship.isLaunched == 0) continue;
+
+    const numEdges = edges.length as i32;
+    for (let e: i32 = 0; e < numEdges && e < MAX_EDGES; e++) {
+      const edge = edges.get(e);
+      let neighborIndex: i32 = -1;
+
+      if (edge.a == ship.currentStarIndex) {
+        neighborIndex = edge.b;
+      } else if (edge.b == ship.currentStarIndex) {
+        neighborIndex = edge.a;
+      }
+
+      if (neighborIndex >= 0) {
+        const age = revealTrailAtStar(neighborIndex);
+        if (age > 0) {
+          foundEcho = true;
+        }
+      }
+    }
+  }
+
+  if (foundEcho) {
+    log("Signal residue detected nearby");
+  }
+}
+
+function revealTrailsInRange(centerStarIndex: i32, range: i32): i32 {
+  const numStars = stars.length as i32;
+  const center = stars.get(centerStarIndex);
+  const range2 = range * range;
+  let found: i32 = 0;
+
+  for (let i: i32 = 0; i < numStars; i++) {
+    const star = stars.get(i);
+    const dx = star.x - center.x;
+    const dy = star.y - center.y;
+    const d2 = dx * dx + dy * dy;
+
+    if (d2 <= range2) {
+      if (revealTrailAtStar(i) > 0) {
+        found++;
+      }
+    }
+  }
+
+  return found;
+}
+
 function areStarsConnected(starA: i32, starB: i32): bool {
   const numEdges = edges.length as i32;
   for (let i: i32 = 0; i < numEdges; i++) {
@@ -99,6 +209,8 @@ function getJumpDistance(startStar: i32, endStar: i32): i32 {
   if (startStar == endStar) return 0;
 
   const numStars = stars.length as i32;
+
+  resetTrails();
   const visited = UncheckedArrayView.fromAddress<i32>(TEMP_MEM_START);
   const queue = UncheckedArrayView.fromAddress<i32>(TEMP_MEM_START + 256);
   const depth = UncheckedArrayView.fromAddress<i32>(TEMP_MEM_START + 512);
@@ -352,8 +464,6 @@ export function init(): void {
   // Generate the starmap
   generateStarmap();
 
-  const numStars = stars.length as i32;
-
   // Pick command base near center and away from exits/nebulas
   const commandBase = pickCommandBaseStar();
   gameState.commandBaseStarIndex = commandBase;
@@ -361,6 +471,7 @@ export function init(): void {
   // Initialize target ship at the command base (same system as player)
   targetShip.currentStarIndex = commandBase;
   targetShip.isActive = 1;
+  stars.get(commandBase).trailAge = TRAIL_MAX_AGE;
 
   // Initialize player fleet at command base (docked, not launched)
   const scoutA = playerShips.grow();
@@ -415,6 +526,7 @@ export function init(): void {
   // Hidden head start: target moves 2-3 turns before player acts
   const hiddenHeadStartTurns = 2 + randomRange(2);
   for (let i: i32 = 0; i < hiddenHeadStartTurns; i++) {
+    decayTrails();
     moveTarget();
     updateStarTracking();
   }
@@ -545,11 +657,33 @@ export function update(): void {
       return;
     }
 
-    // Scouts and Interceptor can deploy beacons (buoys)
-    if (
-      activeShip.shipType == ShipType.SCOUT ||
-      activeShip.shipType == ShipType.INTERCEPTOR
-    ) {
+    // Scout: Investigate current system and nearby lanes for trails
+    if (activeShip.shipType == ShipType.SCOUT) {
+      if (gameState.commandPoints < ACTION_CP_COST) {
+        log("Insufficient Command Points");
+        return;
+      }
+
+      const strongestTrail = investigateStarAndNeighbors(
+        activeShip.currentStarIndex,
+      );
+      gameState.commandPoints -= ACTION_CP_COST;
+      activeShip.movesThisTurn = getShipMoveLimit(activeShip.shipType);
+
+      if (strongestTrail >= 4) {
+        log("Scout report: Fresh trail");
+      } else if (strongestTrail >= 2) {
+        log("Scout report: Fading trail");
+      } else if (strongestTrail == 1) {
+        log("Scout report: Cold trail");
+      } else {
+        log("Scout report: No activity detected");
+      }
+      return;
+    }
+
+    // Interceptor: Deploy beacon buoy
+    if (activeShip.shipType == ShipType.INTERCEPTOR) {
       if (gameState.commandPoints < ACTION_CP_COST) {
         log("Insufficient Command Points");
         return;
@@ -630,28 +764,19 @@ export function update(): void {
         gameState.commandPoints -= ACTION_CP_COST;
         gameState.sensorEnergy -= SCAN_COST;
 
-        // Check if target is within scan radius
-        const range2 = SCAN_RADIUS * SCAN_RADIUS;
-        const distance2 = starsDist2(
+        const revealedTrailCount = revealTrailsInRange(
           activeShip.currentStarIndex,
-          targetShip.currentStarIndex,
+          SCAN_RADIUS,
         );
 
-        if (distance2 <= range2) {
-          // Store scan result for visual display
-          gameState.scanResult = targetShip.currentStarIndex;
-          gameState.scanTimer = 180; // Show for 3 seconds (60 fps)
-          // Lock tracking to known target location after positive scan
-          initializeStarTracking(targetShip.currentStarIndex);
-          activeShip.movesThisTurn = getShipMoveLimit(activeShip.shipType);
-          logi("TARGET DETECTED by scan");
+        gameState.scanResult = -1;
+        gameState.scanTimer = 120;
+        activeShip.movesThisTurn = getShipMoveLimit(activeShip.shipType);
+
+        if (revealedTrailCount > 0) {
+          logi("Scan: trail signatures {}", revealedTrailCount, 0, 0);
         } else {
-          // No contact - clear stars within scan radius from tracking
-          gameState.scanResult = -1;
-          gameState.scanTimer = 120; // Show for 2 seconds
-          clearStarTrackingByScan(activeShip.currentStarIndex, SCAN_RADIUS);
-          activeShip.movesThisTurn = getShipMoveLimit(activeShip.shipType);
-          log("Scan complete - No contact");
+          log("Scan complete - No trail signatures");
         }
       } else {
         log("Insufficient Sensor Energy");
@@ -680,6 +805,9 @@ export function update(): void {
     gameState.scannerY = 10; // Start at top of map area
     gameState.scannerPhase = 0; // Begin sweep down
 
+    // Decay old trails before target movement this turn
+    decayTrails();
+
     // Update target AI
     moveTarget();
 
@@ -700,6 +828,9 @@ export function update(): void {
           clearStarTrackingByBeacon(beacon.starIndex, BEACON_RANGE);
         }
 
+        // Beacon-monitored corridor reveals any trail signatures in range
+        revealTrailsInRange(beacon.starIndex, BEACON_RANGE);
+
         // Mark for range animation (will start after scanner completes)
         beacon.pendingRangeAnim = 1;
       }
@@ -712,6 +843,9 @@ export function update(): void {
 
     // Increment turn counter
     gameState.turnNumber++;
+
+    // Passive scout echo pass after target movement
+    scoutPassiveEchoSweep();
 
     log("Turn ended - resources refreshed");
     return;
@@ -754,6 +888,18 @@ export function update(): void {
 
       // If target not found at this star, mark it as impossible location
       stars.get(targetStarIndex).isPossibleTarget = 0;
+
+      // Scouts automatically investigate systems they enter
+      if (activeShip.shipType == ShipType.SCOUT) {
+        const strongestTrail = investigateStarAndNeighbors(targetStarIndex);
+        if (strongestTrail >= 4) {
+          log("Scout picked up fresh trail");
+        } else if (strongestTrail >= 2) {
+          log("Scout found fading trail");
+        } else if (strongestTrail == 1) {
+          log("Scout found cold trail");
+        }
+      }
     }
   }
 }
@@ -856,10 +1002,9 @@ export function draw(): void {
   if (state == GamePhase.PLAYING) {
     if (activeShip.isLaunched == 0) {
       print(170, 229, "A:LAUNCH (1CP)", Colors.TextYellow);
-    } else if (
-      activeShip.shipType == ShipType.SCOUT ||
-      activeShip.shipType == ShipType.INTERCEPTOR
-    ) {
+    } else if (activeShip.shipType == ShipType.SCOUT) {
+      print(170, 229, "A:INVESTIGATE", Colors.TextYellow);
+    } else if (activeShip.shipType == ShipType.INTERCEPTOR) {
       print(170, 229, "A:DEPLOY BUOY", Colors.TextYellow);
     } else if (activeShip.shipType == ShipType.SURVEY_CRUISER) {
       print(170, 229, "A:DEEP SCAN", Colors.ObjectiveGreen);

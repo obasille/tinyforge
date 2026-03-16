@@ -25,10 +25,13 @@ import {
   targetShip,
 } from "./types";
 
-/**
- * Draw cluster centers for debugging
-       Colors.HubOrange,
+const DEBUG_ALWAYS_SHOW_TARGET_AND_TRAILS = false;
+const POSSIBLE_TARGET_RADIUS = 7; // Radius for possible target markers
+
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
+/**
+ * Draw cluster centers for debugging.
+ */
 function drawClusterCenters(): void {
   for (let i: i32 = 0; i < NUM_CLUSTERS; i++) {
     const cluster = clusters.get(i);
@@ -37,8 +40,72 @@ function drawClusterCenters(): void {
     fillCircle(cluster.x, cluster.y, 8, Colors.ClusterMagenta); // Magenta center
 
     // Draw cross hairs
-    drawLine(cluster.x - 15, cluster.y, cluster.x + 15, cluster.y, Colors.ClusterMagenta);
-    drawLine(cluster.x, cluster.y - 15, cluster.x, cluster.y + 15, Colors.ClusterMagenta);
+    drawLine(
+      cluster.x - 15,
+      cluster.y,
+      cluster.x + 15,
+      cluster.y,
+      Colors.ClusterMagenta,
+    );
+    drawLine(
+      cluster.x,
+      cluster.y - 15,
+      cluster.x,
+      cluster.y + 15,
+      Colors.ClusterMagenta,
+    );
+  }
+}
+
+function drawTrails(numStars: i32): void {
+  for (let i: i32 = 0; i < numStars; i++) {
+    const star = stars.get(i);
+    if (star.trailAge == 0) continue;
+    if (!DEBUG_ALWAYS_SHOW_TARGET_AND_TRAILS && star.trailKnown == 0) continue;
+
+    const ringRadius = POSSIBLE_TARGET_RADIUS;
+
+    if (star.trailAge >= 4) {
+      drawCircle(
+        star.x,
+        star.y,
+        ringRadius,
+        withAlpha(Colors.TextYellow, 0xd0),
+      );
+      drawCircle(
+        star.x,
+        star.y,
+        ringRadius + 1,
+        withAlpha(Colors.TextYellow, 0xb0),
+      );
+    } else if (star.trailAge == 3) {
+      drawCircle(
+        star.x,
+        star.y,
+        ringRadius,
+        withAlpha(Colors.TextYellow, 0x90),
+      );
+      drawCircle(
+        star.x,
+        star.y,
+        ringRadius + 1,
+        withAlpha(Colors.TextYellow, 0x70),
+      );
+    } else if (star.trailAge == 2) {
+      drawCircle(
+        star.x,
+        star.y,
+        ringRadius,
+        withAlpha(Colors.TextYellow, 0xa0),
+      );
+    } else {
+      drawCircle(
+        star.x,
+        star.y,
+        ringRadius,
+        withAlpha(Colors.TextYellow, 0x50),
+      );
+    }
   }
 }
 
@@ -49,6 +116,7 @@ export function drawStarmap(): void {
   const numStars = stars.length as i32;
   const numEdges = edges.length as i32;
   const numNebulas = nebulas.length as i32;
+  const frameCounter = gameState.frameCounter;
 
   // Draw nebulas first (background layer)
   for (let i: i32 = 0; i < numNebulas; i++) {
@@ -81,7 +149,12 @@ export function drawStarmap(): void {
   for (let i: i32 = 0; i < numStars; i++) {
     const star = stars.get(i);
     if (star.isPossibleTarget == 1) {
-      fillCircle(star.x, star.y, 7, withAlpha(Colors.StarBlue, 0x40)); // Semi-transparent blue
+      fillCircle(
+        star.x,
+        star.y,
+        POSSIBLE_TARGET_RADIUS,
+        withAlpha(Colors.StarBlue, 0x40),
+      ); // Semi-transparent blue
     }
   }
 
@@ -128,6 +201,9 @@ export function drawStarmap(): void {
     }
   }
 
+  // Draw trails after stars so markers stay visible above star fills.
+  drawTrails(numStars);
+
   // Draw command base marker
   const baseIndex = gameState.commandBaseStarIndex;
   if (baseIndex >= 0 && baseIndex < numStars) {
@@ -138,7 +214,6 @@ export function drawStarmap(): void {
 
   // Draw player ships with distinct visuals
   const activeIndex = gameState.activeShipIndex;
-  const frameCounter = gameState.frameCounter;
 
   for (let i: i32 = 0; i < (playerShips.length as i32); i++) {
     const ship = playerShips.get(i);
@@ -404,8 +479,8 @@ export function drawStarmap(): void {
   // Draw target ship (enemy ship - red hollow square)
   if (
     targetShip.isActive != 0 &&
-    gameState.scanResult >= 0 &&
-    gameState.scanTimer > 0
+    (DEBUG_ALWAYS_SHOW_TARGET_AND_TRAILS ||
+      (gameState.scanResult >= 0 && gameState.scanTimer > 0))
   ) {
     const targetStarIndex = targetShip.currentStarIndex;
 
