@@ -37,7 +37,7 @@ export const MAX_BEACONS: i32 = 10;
 export const BEACON_RANGE: i32 = 45; // Detection radius in pixels
 export const SCAN_RADIUS: i32 = 70; // Survey Cruiser active scan range
 export const SCAN_COST: i32 = 2; // Sensor Energy cost for active scan
-export const TRAIL_MAX_AGE: u8 = 4; // Fresh=4, Fading=3/2, Cold=1
+export const TRAIL_MAX_HEAT: u8 = 4; // Fresh/hot=4, Fading=3/2, Cold=1
 
 // Visual constants
 
@@ -114,7 +114,7 @@ export class Star {
   isExit: u8 = 0; // 1 if exit, 0 otherwise
   isPossibleTarget: u8 = 0; // 1 if target might be at this star, 0 otherwise
   inNebula: u8 = 0; // 1 if star is within a nebula cloud, 0 otherwise
-  trailAge: u8 = 0; // 4=fresh, 3/2=fading, 1=cold, 0=none
+  trailHeat: u8 = 0; // 4=fresh/hot, 3/2=fading, 1=cold, 0=none
   trailKnown: u8 = 0; // 1 if player has discovered this trail
 }
 

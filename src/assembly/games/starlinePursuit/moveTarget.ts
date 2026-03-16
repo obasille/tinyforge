@@ -4,7 +4,7 @@ import {
   BEACON_RANGE,
   ShipType,
   TEMP_MEM_START,
-  TRAIL_MAX_AGE,
+  TRAIL_MAX_HEAT,
   TargetType,
   beacons,
   edges,
@@ -17,7 +17,7 @@ import { starsDist2 } from "./utils";
 
 function stampTrail(starIndex: i32): void {
   const star = stars.get(starIndex);
-  star.trailAge = TRAIL_MAX_AGE;
+  star.trailHeat = TRAIL_MAX_HEAT;
 }
 
 /**

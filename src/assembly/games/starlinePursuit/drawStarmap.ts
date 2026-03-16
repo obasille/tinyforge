@@ -60,12 +60,12 @@ function drawClusterCenters(): void {
 function drawTrails(numStars: i32): void {
   for (let i: i32 = 0; i < numStars; i++) {
     const star = stars.get(i);
-    if (star.trailAge == 0) continue;
+    if (star.trailHeat == 0) continue;
     if (!DEBUG_ALWAYS_SHOW_TARGET_AND_TRAILS && star.trailKnown == 0) continue;
 
     const ringRadius = POSSIBLE_TARGET_RADIUS;
 
-    if (star.trailAge >= 4) {
+    if (star.trailHeat >= 4) {
       drawCircle(
         star.x,
         star.y,
@@ -78,7 +78,7 @@ function drawTrails(numStars: i32): void {
         ringRadius + 1,
         withAlpha(Colors.TextYellow, 0xb0),
       );
-    } else if (star.trailAge == 3) {
+    } else if (star.trailHeat == 3) {
       drawCircle(
         star.x,
         star.y,
@@ -91,7 +91,7 @@ function drawTrails(numStars: i32): void {
         ringRadius + 1,
         withAlpha(Colors.TextYellow, 0x70),
       );
-    } else if (star.trailAge == 2) {
+    } else if (star.trailHeat == 2) {
       drawCircle(
         star.x,
         star.y,

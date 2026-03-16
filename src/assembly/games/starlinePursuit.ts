@@ -50,7 +50,7 @@ import {
   STARTING_DEPLOYMENT_KITS,
   STARTING_SENSOR_ENERGY,
   targetShip,
-  TRAIL_MAX_AGE,
+  TRAIL_MAX_HEAT,
   TargetType,
   TEMP_MEM_START,
 } from "./starlinePursuit/types";
@@ -85,7 +85,7 @@ function resetTrails(): void {
   const numStars = stars.length as i32;
   for (let i: i32 = 0; i < numStars; i++) {
     const star = stars.get(i);
-    star.trailAge = 0;
+    star.trailHeat = 0;
     star.trailKnown = 0;
   }
 }
@@ -94,9 +94,9 @@ function decayTrails(): void {
   const numStars = stars.length as i32;
   for (let i: i32 = 0; i < numStars; i++) {
     const star = stars.get(i);
-    if (star.trailAge > 0) {
-      star.trailAge--;
-      if (star.trailAge == 0) {
+    if (star.trailHeat > 0) {
+      star.trailHeat--;
+      if (star.trailHeat == 0) {
         star.trailKnown = 0;
       }
     }
@@ -106,9 +106,9 @@ function decayTrails(): void {
 function revealTrailAtStar(starIndex: i32): u8 {
   if (starIndex < 0 || starIndex >= (stars.length as i32)) return 0;
   const star = stars.get(starIndex);
-  if (star.trailAge > 0) {
+  if (star.trailHeat > 0) {
     star.trailKnown = 1;
-    return star.trailAge;
+    return star.trailHeat;
   }
   return 0;
 }
@@ -471,7 +471,7 @@ export function init(): void {
   // Initialize target ship at the command base (same system as player)
   targetShip.currentStarIndex = commandBase;
   targetShip.isActive = 1;
-  stars.get(commandBase).trailAge = TRAIL_MAX_AGE;
+  stars.get(commandBase).trailHeat = TRAIL_MAX_HEAT;
 
   // Initialize player fleet at command base (docked, not launched)
   const scoutA = playerShips.grow();
