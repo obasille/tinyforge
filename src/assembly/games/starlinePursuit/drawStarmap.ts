@@ -5,6 +5,8 @@ import {
   drawRect,
   fillCircle,
   fillRect,
+  pset,
+  UncheckedArrayView,
   withAlpha,
 } from "../../sdk";
 
@@ -23,6 +25,7 @@ import {
   STAR_RADIUS,
   stars,
   targetShip,
+  TEMP_MEM_START,
 } from "./types";
 
 const DEBUG_ALWAYS_SHOW_TARGET_AND_TRAILS = false;
@@ -57,6 +60,38 @@ function drawClusterCenters(): void {
   }
 }
 
+// --- Helper: Draw 9x9 monochrome icon for each ship type ---
+function drawPlayerShipIcon7x7(x: i32, y: i32, shipType: i32): void {
+  // Centered at (x, y), 7x7
+  const color = Colors.TextWhite;
+  if (shipType == ShipType.INTERCEPTOR) {
+    // Interceptor: 7x7 filled square with border
+    fillRect(x - 3, y - 3, 7, 7, Colors.BriefingBorder);
+    drawRect(x - 3, y - 3, 7, 7, color);
+  } else if (shipType == ShipType.SCOUT) {
+    // Scout: 7x7 diamond
+    for (let dy: i32 = -3; dy <= 3; dy++) {
+      const w = 3 - (dy >= 0 ? dy : -dy);
+      drawLine(x - w, y + dy, x + w, y + dy, Colors.StarBlue);
+    }
+    pset(x, y, color);
+  } else if (shipType == ShipType.SURVEY_CRUISER) {
+    // Survey Cruiser: 7x7 hollow circle
+    drawCircle(x, y, 3, Colors.ClusterPurpleShip);
+    drawCircle(x, y, 2, Colors.ClusterPurpleShip);
+  } else if (shipType == ShipType.BEACON_TENDER) {
+    // Beacon Tender: 7x7 filled triangle (point up)
+    for (let dy: i32 = 0; dy < 4; dy++) {
+      const w = dy;
+      drawLine(x - w, y + 3 - dy, x + w, y + 3 - dy, Colors.HubOrange);
+    }
+    // Outline
+    drawLine(x, y - 3, x - 3, y + 3, Colors.HubOrange);
+    drawLine(x, y - 3, x + 3, y + 3, Colors.HubOrange);
+    drawLine(x - 3, y + 3, x + 3, y + 3, Colors.HubOrange);
+  }
+}
+//
 function drawTrails(numStars: i32): void {
   for (let i: i32 = 0; i < numStars; i++) {
     const star = stars.get(i);
@@ -212,291 +247,60 @@ export function drawStarmap(): void {
     drawRect(baseStar.x - 2, baseStar.y - 2, 5, 5, Colors.TextWhite);
   }
 
-  // Draw player ships with distinct visuals
+  // Draw player ships as 9x9 monochrome icons arranged around their star
   const activeIndex = gameState.activeShipIndex;
 
-  for (let i: i32 = 0; i < (playerShips.length as i32); i++) {
-    const ship = playerShips.get(i);
-    const shipStarIndex = ship.currentStarIndex;
-
-    if (shipStarIndex >= 0 && shipStarIndex < numStars) {
-      const shipStar = stars.get(shipStarIndex);
-      const isActive = i == activeIndex;
-
-      // Draw ship based on type
-      if (ship.shipType == ShipType.INTERCEPTOR) {
-        // Interceptor: Blue filled square
-        const size: i32 = 6;
-        fillRect(
-          shipStar.x - size / 2,
-          shipStar.y - size / 2,
-          size,
-          size,
-          Colors.BriefingBorder,
-        );
-        drawRect(
-          shipStar.x - size / 2,
-          shipStar.y - size / 2,
-          size,
-          size,
-          Colors.TextWhite,
-        );
-      } else if (ship.shipType == ShipType.SCOUT) {
-        // Scout: Light-blue diamond
-        drawLine(
-          shipStar.x,
-          shipStar.y - 4,
-          shipStar.x + 4,
-          shipStar.y,
-          Colors.StarBlue,
-        );
-        drawLine(
-          shipStar.x + 4,
-          shipStar.y,
-          shipStar.x,
-          shipStar.y + 4,
-          Colors.StarBlue,
-        );
-        drawLine(
-          shipStar.x,
-          shipStar.y + 4,
-          shipStar.x - 4,
-          shipStar.y,
-          Colors.StarBlue,
-        );
-        drawLine(
-          shipStar.x - 4,
-          shipStar.y,
-          shipStar.x,
-          shipStar.y - 4,
-          Colors.StarBlue,
-        );
-        fillCircle(shipStar.x, shipStar.y, 1, Colors.TextWhite);
-      } else if (ship.shipType == ShipType.SURVEY_CRUISER) {
-        // Survey Cruiser: Purple hollow circle
-        drawCircle(shipStar.x, shipStar.y, 4, Colors.ClusterPurpleShip);
-        drawCircle(shipStar.x, shipStar.y, 3, Colors.ClusterPurpleShip);
-      } else if (ship.shipType == ShipType.BEACON_TENDER) {
-        // Beacon Tender: Yellow filled triangle (approximated with lines)
-        const size: i32 = 5;
-        // Draw filled triangle by drawing multiple horizontal lines
-        for (let dy: i32 = 0; dy < size; dy++) {
-          const width = ((((dy * 2) as f32) / (size as f32)) *
-            (size as f32)) as i32;
-          drawLine(
-            shipStar.x - width / 2,
-            shipStar.y - size / 2 + dy,
-            shipStar.x + width / 2,
-            shipStar.y - size / 2 + dy,
-            Colors.HubOrange,
-          );
-        }
-        // Draw triangle outline
-        drawLine(
-          shipStar.x,
-          shipStar.y - size,
-          shipStar.x - size,
-          shipStar.y + size / 2,
-          Colors.HubOrange,
-        );
-        drawLine(
-          shipStar.x,
-          shipStar.y - size,
-          shipStar.x + size,
-          shipStar.y + size / 2,
-          Colors.HubOrange,
-        );
-        drawLine(
-          shipStar.x - size,
-          shipStar.y + size / 2,
-          shipStar.x + size,
-          shipStar.y + size / 2,
-          Colors.HubOrange,
-        );
+  // 1. Group ships by star index
+  // For up to MAX_PLAYER_SHIPS, this is efficient enough
+  for (let starIdx: i32 = 0; starIdx < numStars; starIdx++) {
+    // Collect all ships at this star (zero-allocation, UncheckedArrayView)
+    const stationed = UncheckedArrayView.fromAddress<i32>(TEMP_MEM_START);
+    let stationedCount: i32 = 0;
+    for (let i: i32 = 0; i < (playerShips.length as i32); i++) {
+      const ship = playerShips.get(i);
+      if (ship.currentStarIndex == starIdx) {
+        stationed.set(stationedCount, i);
+        stationedCount++;
       }
+    }
+    if (stationedCount == 0) continue;
 
-      // Draw pulsing outline for active ship
-      if (isActive) {
-        // Pulse between frames 0-30
+    // Arrange icons in a circle around the star
+    const star = stars.get(starIdx);
+    const cx = star.x;
+    const cy = star.y;
+    const radius: f32 = 9.0; // Distance from star center to icon center (moved 1px closer)
+    for (let k: i32 = 0; k < stationedCount; k++) {
+      // Compute angle for this ship
+      let angle: f32 = 0.0;
+      if (stationedCount == 1) {
+        angle = -Mathf.PI / 2.0; // 12 o'clock
+      } else {
+        angle =
+          -Mathf.PI / 2.0 + (2.0 * Mathf.PI * <f32>k) / <f32>stationedCount;
+      }
+      const iconX = cx + <i32>Mathf.round(radius * Mathf.cos(angle));
+      const iconY = cy + <i32>Mathf.round(radius * Mathf.sin(angle));
+      const shipIdx = stationed.get(k);
+      const ship = playerShips.get(shipIdx);
+      // Draw the 7x7 icon for this ship type
+      drawPlayerShipIcon7x7(iconX, iconY, ship.shipType);
+
+      if (shipIdx == activeIndex) {
+        const frameCounter = gameState.frameCounter;
         const pulsePhase = frameCounter % 30;
-        const shouldDraw = pulsePhase < 15; // Draw for first half of cycle
-
+        const shouldDraw = pulsePhase < 15;
         if (shouldDraw) {
-          const outlineSize: i32 = 10;
+          const outlineSize: i32 = 11;
           drawRect(
-            shipStar.x - outlineSize / 2,
-            shipStar.y - outlineSize / 2,
+            iconX - outlineSize / 2,
+            iconY - outlineSize / 2,
             outlineSize,
             outlineSize,
             Colors.TextWhite,
           );
         }
       }
-    }
-  }
-
-  // Draw scan radius effect if scan just performed
-  const scanTimer = gameState.scanTimer;
-  const scanResult = gameState.scanResult;
-
-  // Show green scan only during first 60 frames based on detection result
-  // Target detected (starts at 180): show green from 180-121
-  // No contact (starts at 120): show green from 120-61
-  const justScanned =
-    (scanResult >= 0 && scanTimer > 120) ||
-    (scanResult == -1 && scanTimer > 60);
-  if (justScanned) {
-    // Show scan radius expanding (30 frames) then fading (30 frames) = 1 second total
-    const activeShip = playerShips.get(activeIndex);
-    if (activeShip.shipType == ShipType.SURVEY_CRUISER) {
-      const shipStarIndex = activeShip.currentStarIndex;
-      if (shipStarIndex >= 0 && shipStarIndex < numStars) {
-        const shipStar = stars.get(shipStarIndex);
-        // Calculate animation phase (0-59) based on which timer range
-        const scanPhase = scanResult >= 0 ? 180 - scanTimer : 120 - scanTimer;
-
-        if (scanPhase < 30) {
-          // Phase 1: Expanding from center (0-29 frames)
-          const radius = (scanPhase * SCAN_RADIUS) / 30;
-          drawCircle(shipStar.x, shipStar.y, radius, Colors.ObjectiveGreen);
-          if (scanPhase < 15) {
-            drawCircle(
-              shipStar.x,
-              shipStar.y,
-              radius - 2,
-              Colors.ObjectiveGreen,
-            );
-          }
-        } else {
-          // Phase 2: Full size with alpha fade (30-59 frames)
-          const fadePhase = scanPhase - 30; // 0-29
-          const alpha = (255 * (30 - fadePhase)) / 30; // 255->0
-          const color = withAlpha(Colors.ObjectiveGreen, alpha as u8);
-          drawCircle(shipStar.x, shipStar.y, SCAN_RADIUS, color);
-          if (fadePhase < 15) {
-            const alphaInner = (255 * (15 - fadePhase)) / 15; // 255->0
-            const colorInner = withAlpha(
-              Colors.ObjectiveGreen,
-              alphaInner as u8,
-            );
-            drawCircle(shipStar.x, shipStar.y, SCAN_RADIUS - 2, colorInner);
-          }
-        }
-      }
-    }
-  }
-
-  // Highlight target star if scan detected it (after pulse animation)
-  if (scanTimer > 0 && scanTimer <= 120) {
-    if (scanResult >= 0 && scanResult < numStars) {
-      const targetStar = stars.get(scanResult);
-      // Pulsing ring effect (period: 40 frames)
-      const highlightPhase = (120 - scanTimer) % 40;
-      const pulseExpand = highlightPhase < 20;
-      const baseRadius = pulseExpand
-        ? 8 + highlightPhase / 2
-        : 8 + (40 - highlightPhase) / 2;
-      // Draw red pulsing rings
-      drawCircle(targetStar.x, targetStar.y, baseRadius, c(0xff0000));
-      drawCircle(targetStar.x, targetStar.y, baseRadius + 2, c(0xff0000));
-      drawCircle(targetStar.x, targetStar.y, baseRadius + 4, c(0xff3333));
-    }
-  }
-
-  // Draw beacons (deployed sensors)
-  const pulsePhase = frameCounter % 30;
-  const beaconPulse = pulsePhase < 15; // Alternate flash
-
-  for (let i = 0; i < (beacons.length as i32); i++) {
-    const beacon = beacons.get(i);
-    if (beacon.isActive == 1) {
-      const beaconStarIndex = beacon.starIndex;
-      if (beaconStarIndex >= 0 && beaconStarIndex < numStars) {
-        const beaconStar = stars.get(beaconStarIndex);
-
-        // Draw beacon range animation if timer is active
-        if (beacon.rangeAnimTimer > 0) {
-          const animPhase = 60 - (beacon.rangeAnimTimer as i32);
-
-          if (animPhase < 30) {
-            // Expanding pulse (0-30 frames)
-            const radius = (animPhase * BEACON_RANGE) / 30;
-            const alpha = (255 * (30 - animPhase)) / 30; // Fade out as it expands
-            const color =
-              beacon.isDetecting == 1
-                ? withAlpha(Colors.TargetRed, alpha as u8) // Red for detecting
-                : withAlpha(Colors.BeaconYellow, alpha as u8); // Yellow for normal
-            drawCircle(beaconStar.x, beaconStar.y, radius, color);
-            if (radius > 3) {
-              drawCircle(beaconStar.x, beaconStar.y, radius - 2, color);
-            }
-          } else if (animPhase < 60) {
-            // Static full range with fade (30-60 frames)
-            const fadePhase = animPhase - 30;
-            const alpha = (255 * (30 - fadePhase)) / 30;
-            const color =
-              beacon.isDetecting == 1
-                ? withAlpha(Colors.TargetRed, alpha as u8)
-                : withAlpha(Colors.BeaconYellow, alpha as u8);
-            drawCircle(beaconStar.x, beaconStar.y, BEACON_RANGE, color);
-            if (fadePhase < 15) {
-              const alphaInner = (255 * (15 - fadePhase)) / 15;
-              const colorInner =
-                beacon.isDetecting == 1
-                  ? withAlpha(Colors.TargetRed, alphaInner as u8)
-                  : withAlpha(Colors.BeaconYellow, alphaInner as u8);
-              drawCircle(
-                beaconStar.x,
-                beaconStar.y,
-                BEACON_RANGE - 2,
-                colorInner,
-              );
-            }
-          }
-        }
-
-        // Draw beacon icon
-        if (beacon.isDetecting == 1) {
-          // Target detected: red alert beacon
-          fillCircle(beaconStar.x, beaconStar.y, 3, c(0xff0000));
-          // Draw red alert ring
-          drawCircle(beaconStar.x, beaconStar.y, 5, c(0xff0000));
-          if (beaconPulse) {
-            drawCircle(beaconStar.x, beaconStar.y, 7, c(0xff0000));
-          }
-        } else {
-          // Normal beacon: yellow
-          fillCircle(beaconStar.x, beaconStar.y, 3, Colors.BeaconYellow);
-          // Draw pulsing outline
-          if (beaconPulse) {
-            drawCircle(beaconStar.x, beaconStar.y, 5, Colors.BeaconYellow);
-          }
-        }
-      }
-    }
-  }
-
-  // Draw target ship (enemy ship - red hollow square)
-  if (
-    targetShip.isActive != 0 &&
-    (DEBUG_ALWAYS_SHOW_TARGET_AND_TRAILS ||
-      (gameState.scanResult >= 0 && gameState.scanTimer > 0))
-  ) {
-    const targetStarIndex = targetShip.currentStarIndex;
-
-    // Bounds check
-    if (targetStarIndex >= 0 && targetStarIndex < numStars) {
-      const targetStar = stars.get(targetStarIndex);
-
-      // Draw target as a red square around the star
-      const boxSize: i32 = 8;
-      drawRect(
-        targetStar.x - boxSize / 2,
-        targetStar.y - boxSize / 2,
-        boxSize,
-        boxSize,
-        Colors.TargetRed,
-      );
     }
   }
 }
