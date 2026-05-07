@@ -100,6 +100,12 @@ export enum TargetType {
   SLEEPER_AGENT = 6, // Hidden behavior, delayed reveal
 }
 
+// Popup menu state for ambiguous star click
+export enum PopupState {
+  NONE = 0,
+  STAR_ACTION = 1,
+}
+
 // === @unmanaged Structures ===
 
 /**
@@ -208,6 +214,9 @@ export class GameState {
   scannerY: i32 = -1; // Vertical scanner position (-1 = inactive)
   missionBriefingDismissed: i32 = 0; // 0 = show briefing, 1 = briefing dismissed
   turnNumber: i32 = 0; // Current turn number (starts at 1)
+  popupState: u8 = 0; // PopupState enum value
+  // 3 bytes padding for alignment
+  popupStarIndex: i32 = 0; // Star index for popup menu
 }
 
 // === Memory Layout ===
@@ -256,7 +265,7 @@ export const targetShip: TargetShip = mem.allocStruct<TargetShip>(
 );
 
 export const gameState: GameState = mem.allocStruct<GameState>(
-  offsetof<GameState>("turnNumber") + sizeof<i32>(),
+  offsetof<GameState>("popupStarIndex") + sizeof<i32>(),
 );
 
 export const TEMP_MEM_START: usize = mem.offset;

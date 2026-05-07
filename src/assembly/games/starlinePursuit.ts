@@ -55,6 +55,7 @@ import {
   STARTING_SENSOR_ENERGY,
   targetShip,
   TargetType,
+  PopupState,
   TEMP_MEM_START,
   TRAIL_MAX_HEAT,
 } from "./starlinePursuit/types";
@@ -550,6 +551,42 @@ export function update(): void {
   // --- Mouse-based star and ship selection ---
   // Only allow selection if game is playing and mission briefing is dismissed
   if (state == GamePhase.PLAYING && gameState.missionBriefingDismissed == 1) {
+    // Handle popup menu if open
+    if (gameState.popupState == (PopupState.STAR_ACTION as u8)) {
+      if (mousePressed(MouseButton.LEFT)) {
+        const mx = mouseX();
+        const my = mouseY();
+        const starIdx: i32 = gameState.popupStarIndex;
+        gameState.popupState = PopupState.NONE as u8;
+        // Popup box: x=80..240, options at y: MOVE=110, SELECT=130, CANCEL=150 (±10px)
+        if (mx >= 80 && mx < 240) {
+          if (my >= 100 && my < 122) {
+            // MOVE SHIP
+            const ship = playerShips.get(gameState.activeShipIndex);
+            ship.currentStarIndex = starIdx;
+            ship.movesThisTurn++;
+            logi("Ship {} moved to star {}", gameState.activeShipIndex, starIdx);
+          } else if (my >= 122 && my < 144) {
+            // SELECT SHIP
+            const foundShips = UncheckedArrayView.fromAddress<i32>(TEMP_MEM_START);
+            let foundCount: i32 = 0;
+            for (let i: i32 = 0; i < (playerShips.length as i32); i++) {
+              if (playerShips.get(i).currentStarIndex == starIdx) {
+                foundShips.set(foundCount, i);
+                foundCount++;
+              }
+            }
+            if (foundCount > 0) {
+              gameState.activeShipIndex = foundShips.get(0);
+              logi("Selected ship {} at star {}", foundShips.get(0), starIdx);
+            }
+          }
+          // CANCEL or outside options: popupState already cleared, do nothing
+        }
+      }
+      return; // Block other input while popup is open
+    }
+
     if (mousePressed(MouseButton.LEFT)) {
       const mx = mouseX();
       const my = mouseY();
@@ -609,12 +646,22 @@ export function update(): void {
                 break;
               }
             }
-            if (
-              isNeighbor &&
+            const canMove: bool = isNeighbor &&
               activeShip.isLaunched == 1 &&
               activeShip.launchTurn < gameState.turnNumber &&
-              activeShip.movesThisTurn < getShipMoveLimit(activeShip.shipType)
-            ) {
+              activeShip.movesThisTurn < getShipMoveLimit(activeShip.shipType);
+
+            let shipsAtStar: i32 = 0;
+            for (let i: i32 = 0; i < (playerShips.length as i32); i++) {
+              if (playerShips.get(i).currentStarIndex == foundStar) shipsAtStar++;
+            }
+            const canSelect: bool = shipsAtStar > 0;
+
+            if (canMove && canSelect) {
+              // Ambiguous: show popup menu
+              gameState.popupState = PopupState.STAR_ACTION as u8;
+              gameState.popupStarIndex = foundStar;
+            } else if (canMove) {
               activeShip.currentStarIndex = foundStar;
               activeShip.movesThisTurn++;
               logi(
@@ -623,7 +670,7 @@ export function update(): void {
                 foundStar,
               );
             } else {
-              // If not a neighbor, just select the ship at that star if any
+              // Select the ship at that star if any
               const foundShips =
                 UncheckedArrayView.fromAddress<i32>(TEMP_MEM_START);
               let foundCount: i32 = 0;

@@ -5,14 +5,13 @@ import {
   drawRect,
   fillCircle,
   fillRect,
+  print,
   pset,
   UncheckedArrayView,
   withAlpha,
 } from "../../sdk";
 
 import {
-  BEACON_RANGE,
-  beacons,
   Colors,
   edges,
   EXIT_RADIUS,
@@ -20,11 +19,10 @@ import {
   HUB_RADIUS,
   nebulas,
   playerShips,
-  SCAN_RADIUS,
+  PopupState,
   ShipType,
   STAR_RADIUS,
   stars,
-  targetShip,
   TEMP_MEM_START,
 } from "./types";
 
@@ -141,6 +139,32 @@ function drawTrails(numStars: i32): void {
         withAlpha(Colors.TextYellow, 0x50),
       );
     }
+  }
+}
+
+function drawPopupMenu(): void {
+  if (gameState.popupState == (PopupState.STAR_ACTION as u8)) {
+    // Box: x=80..240, y=80..160 (matches click zones in update)
+    const bx: i32 = 80;
+    const by: i32 = 80;
+    const bw: i32 = 160;
+    const bh: i32 = 80;
+    fillRect(bx, by, bw, bh, Colors.BriefingBox);
+    drawRect(bx, by, bw, bh, Colors.BriefingBorder);
+    // Title row
+    print(bx + 12, by + 8, "CHOOSE ACTION", Colors.TextWhite);
+    // Divider between title and options
+    drawLine(bx + 4, by + 20, bx + bw - 4, by + 20, Colors.TextDarkGray);
+    // MOVE SHIP: click zone y 100-121, center ~110, label at y=107
+    print(bx + 12, by + 27, "[MOVE SHIP]", Colors.TextYellow);
+    // Divider
+    drawLine(bx + 4, by + 42, bx + bw - 4, by + 42, Colors.TextDarkGray);
+    // SELECT SHIP: click zone y 122-143, center ~132, label at y=129
+    print(bx + 12, by + 49, "[SELECT SHIP]", Colors.TextYellow);
+    // Divider
+    drawLine(bx + 4, by + 64, bx + bw - 4, by + 64, Colors.TextDarkGray);
+    // CANCEL: below select zone
+    print(bx + 12, by + 69, "[CANCEL]", Colors.TextGray);
   }
 }
 
@@ -303,4 +327,6 @@ export function drawStarmap(): void {
       }
     }
   }
+  // Draw popup menu if needed
+  drawPopupMenu();
 }
