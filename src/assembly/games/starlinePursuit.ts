@@ -9,6 +9,10 @@ import {
   fillRect,
   log,
   logi,
+  MouseButton,
+  mousePressed,
+  mouseX,
+  mouseY,
   print,
   printNumber,
   pset,
@@ -33,12 +37,12 @@ import {
   edges,
   GamePhase,
   gameState,
-  MAX_COMMAND_POINTS,
-  MAX_EDGES,
-  MAX_SENSOR_ENERGY,
   MAP_HEIGHT,
   MAP_OFFSET_Y,
   MAP_WIDTH,
+  MAX_COMMAND_POINTS,
+  MAX_EDGES,
+  MAX_SENSOR_ENERGY,
   nebulas,
   playerShips,
   SCAN_COST,
@@ -50,9 +54,9 @@ import {
   STARTING_DEPLOYMENT_KITS,
   STARTING_SENSOR_ENERGY,
   targetShip,
-  TRAIL_MAX_HEAT,
   TargetType,
   TEMP_MEM_START,
+  TRAIL_MAX_HEAT,
 } from "./starlinePursuit/types";
 import { starsDist2 } from "./starlinePursuit/utils";
 
@@ -542,6 +546,108 @@ export function init(): void {
 
 export function update(): void {
   const state = gameState.phase;
+
+  // --- Mouse-based star and ship selection ---
+  // Only allow selection if game is playing and mission briefing is dismissed
+  if (state == GamePhase.PLAYING && gameState.missionBriefingDismissed == 1) {
+    if (mousePressed(MouseButton.LEFT)) {
+      const mx = mouseX();
+      const my = mouseY();
+      if (mx >= 0 && my >= 0) {
+        // Find nearest star within threshold (e.g. 14px)
+        let minDist2: i32 = 14 * 14;
+        let foundStar: i32 = -1;
+        const numStars = stars.length as i32;
+        for (let i: i32 = 0; i < numStars; i++) {
+          const star = stars.get(i);
+          const dx = star.x - mx;
+          const dy = star.y - my;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < minDist2) {
+            minDist2 = d2;
+            foundStar = i;
+          }
+        }
+        if (foundStar >= 0) {
+          const activeShip = playerShips.get(gameState.activeShipIndex);
+          const currentStar = activeShip.currentStarIndex;
+          if (foundStar == currentStar) {
+            // Cycle to next ship on this star
+            const foundShips =
+              UncheckedArrayView.fromAddress<i32>(TEMP_MEM_START);
+            let foundCount: i32 = 0;
+            for (let i: i32 = 0; i < (playerShips.length as i32); i++) {
+              if (playerShips.get(i).currentStarIndex == foundStar) {
+                foundShips.set(foundCount, i);
+                foundCount++;
+              }
+            }
+            if (foundCount > 1) {
+              let idx = 0;
+              for (let k = 0; k < foundCount; k++) {
+                if (foundShips.get(k) == gameState.activeShipIndex) {
+                  idx = k;
+                  break;
+                }
+              }
+              const nextShip = foundShips.get((idx + 1) % foundCount);
+              gameState.activeShipIndex = nextShip;
+              logi("Selected ship {} at star {}", nextShip, foundStar);
+            }
+            return;
+          } else {
+            // Check if foundStar is a neighbor of currentStar
+            let isNeighbor = false;
+            const numEdges = edges.length as i32;
+            for (let e: i32 = 0; e < numEdges; e++) {
+              const edge = edges.get(e);
+              if (
+                (edge.a == currentStar && edge.b == foundStar) ||
+                (edge.b == currentStar && edge.a == foundStar)
+              ) {
+                isNeighbor = true;
+                break;
+              }
+            }
+            if (
+              isNeighbor &&
+              activeShip.isLaunched == 1 &&
+              activeShip.launchTurn < gameState.turnNumber &&
+              activeShip.movesThisTurn < getShipMoveLimit(activeShip.shipType)
+            ) {
+              activeShip.currentStarIndex = foundStar;
+              activeShip.movesThisTurn++;
+              logi(
+                "Ship {} moved to neighbor star {}",
+                gameState.activeShipIndex,
+                foundStar,
+              );
+            } else {
+              // If not a neighbor, just select the ship at that star if any
+              const foundShips =
+                UncheckedArrayView.fromAddress<i32>(TEMP_MEM_START);
+              let foundCount: i32 = 0;
+              for (let i: i32 = 0; i < (playerShips.length as i32); i++) {
+                if (playerShips.get(i).currentStarIndex == foundStar) {
+                  foundShips.set(foundCount, i);
+                  foundCount++;
+                }
+              }
+              if (foundCount > 0) {
+                gameState.activeShipIndex = foundShips.get(0);
+                logi(
+                  "Selected ship {} at star {}",
+                  foundShips.get(0),
+                  foundStar,
+                );
+              }
+            }
+            return;
+          }
+        }
+      }
+    }
+  }
 
   // Restart game on START button if won/lost
   if (state != GamePhase.PLAYING && buttonPressed(Button.START)) {
