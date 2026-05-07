@@ -917,7 +917,7 @@ The cartridge uses `--runtime stub` which provides **zero heap allocation**.
 
 **What you CANNOT use:**
 
-- `new Array()`, `new String()`, `new Object()`
+- `new Array()`, `new String()`, `new Object()` or `new StaticArray()`
 - String concatenation or manipulation
 - Closures that capture variables
 - Any standard library function that allocates

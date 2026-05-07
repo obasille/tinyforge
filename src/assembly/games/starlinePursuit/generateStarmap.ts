@@ -282,8 +282,8 @@ function applyClusterBias(
 
   // Step 2.2: Pull stars toward nearest cluster
   const influenceR2 = INFLUENCE_RADIUS * INFLUENCE_RADIUS;
-  const numStars = stars.length as i32;
-  const numClusters = clusters.length as i32;
+  const numStars: i32 = stars.length;
+  const numClusters: i32 = clusters.length;
 
   for (let i = 0; i < numStars; i++) {
     const star = stars.get(i);
@@ -304,18 +304,18 @@ function applyClusterBias(
     // Apply pull if within influence radius
     if (nearestCluster >= 0 && nearestDist2 < influenceR2) {
       const cluster = clusters.get(nearestCluster);
-      const dist = i32(Mathf.sqrt(nearestDist2 as f32));
+      const dist = Mathf.sqrt(nearestDist2 as f32);
 
       // Calculate pull strength: (1 - d / influenceRadius) * randomFactor
-      const basePull = 1.0 - (dist as f32) / (INFLUENCE_RADIUS as f32);
-      const randomFactor = 0.8 + (randomRange(400) as f32) / 1000.0; // 0.8 to 1.2
-      const pullStrength = basePull * randomFactor * strength;
+      const basePull: f32 = 1.0 - dist / (INFLUENCE_RADIUS as f32);
+      const randomFactor: f32 = 0.8 + (randomRange(400) as f32) / 1000.0; // 0.8 to 1.2
+      const pullStrength: f32 = basePull * randomFactor * strength;
 
       // Pull toward cluster center
       const dx = cluster.x - star.x;
       const dy = cluster.y - star.y;
-      const moveX = i32((dx as f32) * pullStrength);
-      const moveY = i32((dy as f32) * pullStrength);
+      const moveX = i32(<f32>dx * pullStrength);
+      const moveY = i32(<f32>dy * pullStrength);
 
       star.x += moveX;
       star.y += moveY;

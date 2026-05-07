@@ -285,11 +285,45 @@ ballX = (WIDTH - BALL_SIZE) as f32;
 
 **When in doubt, add parentheses** around expressions before casting.
 
-#### 9. Type Strictness in Arithmetic Operations
+#### 9. Variable Type Declaration Rule
+
+**ALWAYS specify the value type when declaring a number variable, except if the expression on the right side is a single numeric value.**
+
+**Examples:**
+
+```ts
+// ✅ Allowed: single numeric value, type inferrence is obvious
+const i = 0;
+const f = 1.0;
+
+// ✅ Required: specify type for expressions
+const val1: i32 = i;
+const val2: i32 = a + 2;
+const val3: f32 = Mathf.abs(val2);
+const val4: f32 = val3 + 5.0;
+```
+
+**Rule:**
+
+- If the right side is a single literal or variable, type inference is allowed.
+- If the right side is an expression (operation, function call, etc.), always specify the type explicitly.
+
+#### 10. Type Strictness, Mathf, and Casting Rules in AssemblyScript
 
 **AssemblyScript is strict about mixing numeric types in operations:**
 
 Unlike TypeScript, AssemblyScript does not allow arithmetic operations between different numeric types (e.g., `f32` and `i32`) without explicit casting. This prevents accidental precision loss and ensures type safety.
+
+**ALWAYS use `Mathf` for math operations:**
+
+- Use `Mathf` functions (e.g., `Mathf.abs`, `Mathf.min`, `Mathf.max`, `Mathf.clamp`, `Mathf.sqrt`, etc.) for all math operations instead of JavaScript/TypeScript `Math` or custom math helpers.
+- Do not use `Math` or define your own math functions—always prefer the built-in `Mathf` for all numeric operations in AssemblyScript.
+
+**ALWAYS favor explicit casts, using the angle-bracket syntax:**
+
+- Prefer `<type>value` for casting, e.g., `<f32>WIDTH`, `<i32>someFloat`, instead of `as` syntax.
+- If parentheses are needed for grouping (even without the cast), always use the form `<type>(expression)` to ensure correct precedence. For example, use `<f32>(WIDTH / 2)` rather than `<f32>WIDTH / 2` when the division should be grouped before casting.
+- Use casts at the point of use, not at declaration.
 
 **Common scenarios requiring casts:**
 
@@ -304,24 +338,24 @@ const paddleY: f32 = 0;
 ballX = paddleX + WIDTH / 2;
 
 // ✅ CORRECT - cast integer to f32 first
-ballX = paddleX + ((WIDTH / 2) as f32);
+ballX = paddleX + <f32>WIDTH / 2.0;
 
 // ❌ WRONG - cannot subtract i32 from f32
-ballY = (paddleY - BALL_SIZE) as f32;
+ballY = <f32>(paddleY - BALL_SIZE);
 
 // ✅ CORRECT - perform subtraction first, then cast
-ballY = (paddleX - BALL_SIZE) as f32;
+ballY = <f32>(paddleX - BALL_SIZE);
 ```
 
 **2. Comparisons between different types:**
 
 ```ts
 // ❌ WRONG - comparing f32 with i32 result
-if (ballY + (BALL_SIZE as f32) <= PADDLE_Y + PADDLE_HEIGHT) {
+if (ballY + <f32>BALL_SIZE <= PADDLE_Y + PADDLE_HEIGHT) {
 }
 
 // ✅ CORRECT - cast the entire right side
-if (ballY + (BALL_SIZE as f32) <= ((PADDLE_Y + PADDLE_HEIGHT) as f32)) {
+if (ballY + <f32>BALL_SIZE <= <f32>(PADDLE_Y + PADDLE_HEIGHT)) {
 }
 ```
 
@@ -329,10 +363,10 @@ if (ballY + (BALL_SIZE as f32) <= ((PADDLE_Y + PADDLE_HEIGHT) as f32)) {
 
 ```ts
 // ❌ WRONG - multiple type mismatches
-const hitPos = (((ballX + SIZE / 2) as f32) - paddleX) / (WIDTH as f32);
+const hitPos = (<f32>(ballX + SIZE / 2) - paddleX) / <f32>WIDTH;
 
 // ✅ CORRECT - wrap each operation properly
-const hitPos = (ballX + ((SIZE / 2) as f32) - paddleX) / (WIDTH as f32);
+const hitPos = (ballX + <f32>(SIZE / 2) - paddleX) / <f32>WIDTH;
 ```
 
 **4. Division and multiplication:**
@@ -342,15 +376,16 @@ const hitPos = (ballX + ((SIZE / 2) as f32) - paddleX) / (WIDTH as f32);
 const half: i32 = WIDTH / 2; // i32
 
 // Float division needs explicit types
-const half: f32 = (WIDTH as f32) / 2.0; // f32
+const half: f32 = <f32>WIDTH / 2.0; // f32
 ```
 
 **Best practices:**
 
+- Use `Mathf` for all math operations (abs, min, max, clamp, sqrt, etc.)
+- Use angle-bracket casts: `<type>value` (e.g., `<f32>WIDTH`)
 - Cast constants at the point of use, not at declaration
 - Use parentheses liberally to group operations before casting
 - When in doubt, cast each subexpression individually
-- Prefer `((expr) as f32)` over `expr as f32` for clarity
 
 **Error messages to watch for:**
 
@@ -358,9 +393,9 @@ const half: f32 = (WIDTH as f32) / 2.0; // f32
 - `Operator '-' cannot be applied to types 'f32' and 'i32'`
 - `Operator '<=' cannot be applied to types 'f32' and 'i32'`
 
-These errors mean you need to cast one side to match the other type.
+These errors mean you need to cast one side to match the other type, and use `Mathf` for math operations.
 
-#### 10. Arithmetic Right-Shift vs Integer Division - CRITICAL
+#### 11. Arithmetic Right-Shift vs Integer Division - CRITICAL
 
 **NEVER use arithmetic right-shift (`>>`) as a substitute for integer division when working with potentially negative numbers:**
 
@@ -398,7 +433,7 @@ let err = (dx > dy ? dx : -dy) / 2;
 - Only use `>>` when you're certain the value is non-negative
 - When in doubt, use division (`/`)
 
-#### 11. Common Patterns
+#### 12. Common Patterns
 
 **Cursor/player movement with bounds:**
 
@@ -508,7 +543,7 @@ function spawnItem(itemType: i32): void {
 - `warnf()` for floating-point values (positions, velocities)
 - `warn()` for simple messages without dynamic values
 
-#### 12. Build Configuration
+#### 13. Build Configuration
 
 **Update package.json when creating new games:**
 
@@ -539,7 +574,7 @@ function spawnItem(itemType: i32): void {
   ```
 - This saves time by avoiding unnecessary recompilation of unchanged games.
 
-#### 13. Compilation Error Patterns
+#### 14. Compilation Error Patterns
 
 **Decorator errors (`@inline`):**
 
@@ -568,7 +603,7 @@ function spawnItem(itemType: i32): void {
 - Some TS tooling doesn't include AssemblyScript's WebAssembly types
 - Add a minimal local `WebAssembly` namespace with a `Memory` class in `src/assembly/sdk/memory.ts`
 
-#### 14. Logging and Debugging
+#### 15. Logging and Debugging
 
 **Basic logging (string literals only):**
 
@@ -603,7 +638,7 @@ logf("Position: ({}, {})", playerX, playerY);
 - Use interpolation functions to log dynamic values without allocation
 - All messages are timestamped in the console panel
 
-#### 15. Zero-Allocation Utilities
+#### 16. Zero-Allocation Utilities
 
 **CRITICAL: Never use dynamic allocation** - the runtime uses `--runtime stub` with zero heap.
 
@@ -882,37 +917,3 @@ const items = ArrayView.fromAddress<u16>(RAM_START + Var.ITEMS_START);
     - Game transitions to GAME_OVER state
     - "PRESS START" message displays
     - START button calls `init()` to restart
-
-### Reference Game Summaries
-
-**minesweeper.ts** (283 lines):
-
-- Grid-based reveal logic with flood fill
-- Bit flags enum for cell states (MINE, FLAGGED, REVEALED)
-- Cursor-based navigation
-- Win/lose conditions with colored messages
-- Helper function for game over screen
-
-**pong.ts** (268 lines):
-
-- Floating-point physics for ball and paddles
-- Two-player competitive (top vs bottom paddles)
-- Score tracking with max score win condition
-- Ball collision with paddles and walls
-- Restart on START from game over
-
-**snake.ts** (312 lines):
-
-- Direction enum with invalid reverse detection
-- Food spawning and collision
-- Snake body tracking in grid array
-- Growth mechanic with score
-- Movement timer for speed control
-
-All three games follow identical patterns for:
-
-- GameState enum usage
-- Memory-based state storage
-- Button press detection
-- Game over screen with restart
-- Drawing optimization with clearFramebuffer

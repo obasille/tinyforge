@@ -4,7 +4,6 @@ import {
   UncheckedArrayObjView,
   UncheckedArrayView,
 } from "./arrayViews";
-import { logi } from "./logging";
 
 /**
  * Memory allocator with automatic offset tracking
