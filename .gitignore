@@ -9,3 +9,4 @@ test-results/
 playwright-report/
 # Junction/symlink to ../../assets made by scripts/link-classic-assets.cmd
 /apps/classic/assets
+__pycache__/
