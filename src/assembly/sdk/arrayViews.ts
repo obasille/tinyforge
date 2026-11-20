@@ -512,7 +512,7 @@ export class UncheckedArrayObjView<T> {
    */
   set(index: i32, value: T): void {
     const elemSize = this.elementSize;
-    const destAddr = this.dataPtr + index * elemSize;
+    const destAddr = this.dataPtr + (index as usize) * elemSize;
     const srcAddr = changetype<usize>(value);
     memory.copy(destAddr, srcAddr, elemSize);
   }

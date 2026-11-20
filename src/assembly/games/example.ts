@@ -134,9 +134,9 @@ export function draw(): void {
 
   drawSpriteScaled(s("level1"), 0, 0, 16, 16);
 
-  const speed = 0.3;
-  const i = <u32>Mathf.floor((vars.animFrame * speed) / 2) % 9;
-  const o = <u32>Mathf.floor(vars.animFrame * speed) % 350;
+  const speed: f32 = 0.3;
+  const i = <u32>Mathf.floor((<f32>vars.animFrame * speed) / 2) % 9;
+  const o = <u32>Mathf.floor(<f32>vars.animFrame * speed) % 350;
   drawSprite(s("dino", i as i32, 0), -30 + o, 10, true, true); // draw sprite at (10,10)
   drawNumber(1, 30, i, c(0x0000ff)); // draw animation frame count
 

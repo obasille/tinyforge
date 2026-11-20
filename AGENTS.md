@@ -26,12 +26,12 @@ This section provides detailed instructions for AI agents tasked with creating g
 
 Every game follows this structure:
 
-- **Import helpers from console.ts**: All drawing functions and system APIs
+- **Import helpers from the SDK** (`src/assembly/sdk/`, imported as `"../sdk"`): All drawing functions and system APIs
 - **Define constants**: Grid sizes, speeds, scores using `@inline` or `const`
 - **Define enums**: Game states, directions, flags for type safety
 - **Define RAM layout**: Memory addresses for all game state via `enum Var`
 - **Implement helper functions**: Game-specific logic (collision, scoring, etc.)
-- **Export lifecycle functions**: `init()`, `update(input, prevInput)`, `draw()`
+- **Export lifecycle functions**: `init()`, `update()`, `draw()` (no arguments; read input with `buttonDown()` / `buttonPressed()`)
 
 #### 2. Memory Management - Critical Rules
 
@@ -132,7 +132,7 @@ enum CellFlag {
 
 #### 4. Drawing System
 
-**Always import drawing helpers from console.ts:**
+**Always import drawing helpers from the SDK:**
 
 ```ts
 import {
@@ -143,30 +143,33 @@ import {
   fillCircle,
   drawString,
   drawNumber,
-} from "./console";
+  c,
+} from "../sdk";
 ```
 
-**NEVER define local drawing helpers** - they belong in console.ts.
+**NEVER define local drawing helpers** - they belong in the SDK (`src/assembly/sdk/drawing.ts` and friends).
 
-**Color format: 0xAABBGGRR (with alpha forced to 0xFF):**
+**Color format: the framebuffer uses 0xAABBGGRR. Always write colors as 0xRRGGBB and wrap them in `c()`:**
 
 ```ts
-clearFramebuffer(0x000000); // Black background
-pset(x, y, 0xff0000); // Red pixel
-fillRect(10, 10, 50, 50, 0x00ff00); // Green rectangle
+clearFramebuffer(c(0x000000)); // Black background
+pset(x, y, c(0xff0000)); // Red pixel
+fillRect(10, 10, 50, 50, c(0x00ff00)); // Green rectangle
 ```
+
+A raw literal such as `0xff0000` has alpha 0, so drawing functions treat it as fully transparent and draw nothing (and the channel order would be wrong anyway). `clearFramebuffer()` forces full alpha, but still expects ABGR order, so use `c()` there too.
 
 **Text rendering limitations:**
 
 ```ts
 // ✅ CORRECT - drawString() only supports uppercase letters, numbers, and some punctuation
-drawString(10, 10, "SCORE: 1000", 0xffffff);
-drawString(10, 20, "PRESS START", 0xffaa00);
-drawString(10, 30, "LEVEL: 5", 0x00ff00);
+drawString(10, 10, "SCORE: 1000", c(0xffffff));
+drawString(10, 20, "PRESS START", c(0xffaa00));
+drawString(10, 30, "LEVEL: 5", c(0x00ff00));
 
 // ❌ WRONG - lowercase letters will not render correctly
-drawString(10, 10, "Score: 1000", 0xffffff); // "core" won't display properly
-drawString(10, 20, "Press Start", 0xffaa00); // "ress tart" won't display properly
+drawString(10, 10, "Score: 1000", c(0xffffff)); // "core" won't display properly
+drawString(10, 20, "Press Start", c(0xffaa00)); // "ress tart" won't display properly
 ```
 
 **CRITICAL: Always use UPPERCASE for all text in drawString().**
@@ -177,7 +180,7 @@ Lowercase letters are not in the font and will render incorrectly or as blank sp
 
 ```ts
 export function draw(): void {
-  clearFramebuffer(0x0a0a0a); // Always clear first
+  clearFramebuffer(c(0x0a0a0a)); // Always clear first
   // ... draw game
 }
 ```
@@ -186,14 +189,16 @@ export function draw(): void {
 
 **Button press detection (not hold):**
 
-```ts
-export function update(input: i32, prevInput: i32): void {
-  const pressed = input & ~prevInput; // Detect new presses
+The host writes input state to memory before each `update()`. `update()` takes no arguments; use the SDK helpers:
 
-  if (pressed & Button.A) {
+```ts
+import { Button, buttonDown, buttonPressed } from "../sdk";
+
+export function update(): void {
+  if (buttonPressed(Button.A)) {
     /* A just pressed */
   }
-  if (pressed & Button.START) {
+  if (buttonPressed(Button.START)) {
     /* START just pressed */
   }
 }
@@ -202,12 +207,12 @@ export function update(input: i32, prevInput: i32): void {
 **Button hold detection:**
 
 ```ts
-if (input & Button.LEFT) {
+if (buttonDown(Button.LEFT)) {
   /* LEFT is held down */
 }
 ```
 
-**Always declare `pressed` once at the start** to avoid duplicate declarations.
+**Mouse:** `mouseX()`, `mouseY()` (-1 when outside the canvas), `mouseDown(MouseButton.LEFT)`, `mousePressed(MouseButton.LEFT)`.
 
 #### 6. Game State Management
 
@@ -222,12 +227,11 @@ export function init(): void {
   log("Game initialized");
 }
 
-export function update(input: i32, prevInput: i32): void {
+export function update(): void {
   const state = getU8(Var.GAME_STATE);
-  const pressed = input & ~prevInput;
 
   // Handle restart from game over
-  if (state != GameState.PLAYING && pressed & Button.START) {
+  if (state != GameState.PLAYING && buttonPressed(Button.START)) {
     init();
     return;
   }
@@ -675,7 +679,7 @@ warni("Player {} at ({}, {})", id, x, y);
 **2. Use UncheckedArrayView for static-size arrays:**
 
 ```ts
-import { UncheckedArrayView, RAM_START } from "./console";
+import { UncheckedArrayView, RAM_START } from "../sdk";
 
 // Calculate memory size needed
 const GRID_SIZE = 100;
@@ -704,7 +708,7 @@ const val = grid[10];
 **3. Use ArrayView for dynamic-length tracking:**
 
 ```ts
-import { ArrayView, RAM_START } from "./console";
+import { ArrayView, RAM_START } from "../sdk";
 
 // Calculate memory size (includes length/capacity metadata)
 const CAPACITY = 50;
@@ -738,7 +742,7 @@ const x = items[0];
 **4. Use Vec2i.fromAddress() for coordinate pairs (NEVER use new Vec2i()):**
 
 ```ts
-import { Vec2i, RAM_START } from "./console";
+import { Vec2i, RAM_START } from "../sdk";
 
 // Vec2i is @unmanaged but 'new' STILL ALLOCATES!
 // ❌ WRONG - Triggers __alloc even with @unmanaged
@@ -800,6 +804,11 @@ const items = ArrayView.fromAddress<u16>(RAM_START + Var.ITEMS_START);
    import {
      clearFramebuffer,
      Button,
+     buttonDown,
+     buttonPressed,
+     c,
+     drawStartMessageBox,
+     log,
      logi,
      getI32,
      setI32,
@@ -812,7 +821,7 @@ const items = ArrayView.fromAddress<u16>(RAM_START + Var.ITEMS_START);
      UncheckedArrayView,
      ArrayView,
      RAM_START,
-   } from "./console";
+   } from "../sdk";
    ```
 
 3. **Define constants and enums**:
@@ -859,11 +868,10 @@ const items = ArrayView.fromAddress<u16>(RAM_START + Var.ITEMS_START);
      log("Game ready");
    }
 
-   export function update(input: i32, prevInput: i32): void {
+   export function update(): void {
      const state = getU8(Var.GAME_STATE);
-     const pressed = input & ~prevInput;
 
-     if (state != GameState.PLAYING && pressed & Button.START) {
+     if (state != GameState.PLAYING && buttonPressed(Button.START)) {
        init();
        return;
      }
@@ -874,12 +882,12 @@ const items = ArrayView.fromAddress<u16>(RAM_START + Var.ITEMS_START);
    }
 
    export function draw(): void {
-     clearFramebuffer(0x000000);
+     clearFramebuffer(c(0x000000));
      // Draw game...
 
      const state = getU8(Var.GAME_STATE);
      if (state == GameState.GAME_OVER) {
-       drawGameOverMessage("GAME OVER", 110, 0xaa5500, 0xffaa00);
+       drawStartMessageBox("GAME OVER", c(0xaa5500), c(0xffaa00));
      }
    }
    ```

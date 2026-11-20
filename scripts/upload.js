@@ -6,12 +6,18 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const { FTP_HOST, FTP_USER, FTP_PASS } = process.env;
+const { FTP_HOST, FTP_USER, FTP_PASS, FTP_SECURE, FTP_PORT } = process.env;
 
 if (!FTP_HOST || !FTP_USER || !FTP_PASS) {
   console.error('Missing FTP_HOST, FTP_USER, or FTP_PASS in .env');
   process.exit(1);
 }
+
+// Always connect over TLS so credentials and files are never sent in clear text.
+// FTP_SECURE=implicit selects implicit FTPS (usually port 990); anything else
+// (or unset) uses explicit FTPS (AUTH TLS on port 21). Plain FTP is not supported.
+const secure = FTP_SECURE === 'implicit' ? 'implicit' : true;
+const port = FTP_PORT ? Number(FTP_PORT) : secure === 'implicit' ? 990 : 21;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -97,9 +103,10 @@ client.ftp.verbose = false;
 try {
   await client.access({
     host: FTP_HOST,
+    port,
     user: FTP_USER,
     password: FTP_PASS,
-    secure: false,
+    secure,
   });
 
   await uploadRootFiles(client);
