@@ -6,13 +6,19 @@ import tseslint from "typescript-eslint";
 
 export default defineConfig([
   {
-    ...eslint.configs.recommended,
-    ignores: ["dist/**"],
+    // The new editor packages are linted and formatted by Biome (biome.json).
+    ignores: [
+      "**/dist/**",
+      "apps/editor/**",
+      "packages/editor-core/**",
+      "packages/runtime/**",
+      "packages/engine/tooling/**",
+    ],
   },
+  eslint.configs.recommended,
   ...tseslint.configs.recommended.map((config) => ({
     ...config,
-    files: ["src/**/*.ts"],
-    ignores: ["src/assembly/sdk/**"],
+    files: ["apps/classic/src/**/*.ts"],
   })),
   {
     files: ["scripts/*.js"],
@@ -23,11 +29,13 @@ export default defineConfig([
         require: true,
         module: true,
         __dirname: true,
+        URL: true,
+        WebAssembly: true,
       },
     },
   },
   {
-    files: ["sw.js"],
+    files: ["apps/classic/sw.js"],
     languageOptions: {
       globals: {
         self: true,

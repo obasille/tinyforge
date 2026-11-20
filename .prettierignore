@@ -1,0 +1,6 @@
+# Formatted by Biome (biome.json)
+apps/editor/
+packages/editor-core/
+packages/runtime/
+packages/engine/tooling/
+pnpm-lock.yaml

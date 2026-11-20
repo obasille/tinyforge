@@ -1,0 +1,24 @@
+{
+  "name": "@tinyforge/editor-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Editor logic in plain TypeScript: store, undoable commands, and the bridge to the game Worker. Never imports React.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./game-worker": "./src/game-worker.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tinyforge/engine": "workspace:*",
+    "@tinyforge/runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "^5.9.3",
+    "vitest": "5.1.1"
+  }
+}

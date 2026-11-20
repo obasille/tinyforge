@@ -1,0 +1,23 @@
+{
+  "name": "@tinyforge/runtime",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Plain-TypeScript host runtime for TinyForge cartridges: imports, memory-mapped input, sprite table, fixed-step clock. No DOM, so it runs in a Worker or in Node.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tinyforge/engine": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "assemblyscript": "^0.28.9",
+    "typescript": "^5.9.3",
+    "vitest": "5.1.1"
+  }
+}

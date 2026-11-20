@@ -7,9 +7,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..');
 
-const gamesDir = path.join(repoRoot, 'src', 'assembly', 'games');
-const sdkDir = path.join(repoRoot, 'src', 'assembly', 'sdk');
-const memoryMap = path.join(repoRoot, 'src', 'memory-map.ts');
+const gamesDir = path.join(repoRoot, 'packages', 'engine', 'assembly', 'games');
+const sdkDir = path.join(repoRoot, 'packages', 'engine', 'assembly', 'sdk');
+const memoryMap = path.join(repoRoot, 'packages', 'engine', 'memory-map.ts');
 
 let running = false;
 let queued = null;

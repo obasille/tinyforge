@@ -8,17 +8,16 @@ This section provides detailed instructions for AI agents tasked with creating g
 
 ### Project Layout (Current)
 
-- `index.html`, `memory-viewer.html` live at the repo root
-- `styles.css` and `stylesVC.css` are at the repo root
-- `icons/` holds favicon/app icons
-- `src/web/` contains host/runtime TypeScript
-- `src/assembly/sdk/` contains the AssemblyScript SDK
-- `src/assembly/games/` contains game cartridges (AssemblyScript)
-- `src/memory-map.ts` is the shared memory map source
-- `dist/web/` contains built host JS
-- `dist/memory-map.js` is the built memory map module
-- `assets/` holds sprites, sfx, and music
-- `assets/cartridges/` contains built WASM cartridges
+- pnpm workspace: `packages/*` and `apps/*`
+- `packages/engine/assembly/sdk/` contains the AssemblyScript SDK
+- `packages/engine/assembly/games/` contains game cartridges (AssemblyScript) and `asconfig.json`
+- `packages/engine/memory-map.ts` is the shared memory map source
+- `packages/runtime/` is the plain-TS host runtime (no DOM) used by the new editor
+- `packages/editor-core/` and `apps/editor/` are the new editor (see `CLAUDE.md`)
+- `apps/classic/` is the classic host: `index.html`, `memory-viewer.html`, styles, `icons/`, `src/` (host TypeScript)
+- `apps/classic/dist/` contains the built host JS (generated)
+- `assets/` holds sprites, sfx, and music, shared by both hosts
+- `assets/cartridges/` contains built WASM cartridges for the classic host
 
 ### Core Architecture Patterns
 
@@ -26,7 +25,7 @@ This section provides detailed instructions for AI agents tasked with creating g
 
 Every game follows this structure:
 
-- **Import helpers from the SDK** (`src/assembly/sdk/`, imported as `"../sdk"`): All drawing functions and system APIs
+- **Import helpers from the SDK** (`packages/engine/assembly/sdk/`, imported as `"../sdk"`): All drawing functions and system APIs
 - **Define constants**: Grid sizes, speeds, scores using `@inline` or `const`
 - **Define enums**: Game states, directions, flags for type safety
 - **Define RAM layout**: Memory addresses for all game state via `enum Var`
@@ -147,7 +146,7 @@ import {
 } from "../sdk";
 ```
 
-**NEVER define local drawing helpers** - they belong in the SDK (`src/assembly/sdk/drawing.ts` and friends).
+**NEVER define local drawing helpers** - they belong in the SDK (`packages/engine/assembly/sdk/drawing.ts` and friends).
 
 **Color format: the framebuffer uses 0xAABBGGRR. Always write colors as 0xRRGGBB and wrap them in `c()`:**
 
@@ -554,21 +553,21 @@ function spawnItem(itemType: i32): void {
 ```json
 {
   "scripts": {
-    "build:debug": "asc src/assembly/games/gameName.ts -o assets/cartridges/gameName.wasm ..."
+    "build:debug": "asc packages/engine/assembly/games/gameName.ts -o assets/cartridges/gameName.wasm ..."
   }
 }
 ```
 
-**Or use asconfig.json targets** in the src/assembly/games/ directory.
+**Or use asconfig.json targets** in the packages/engine/assembly/games/ directory.
 
 **Build optimization - selective rebuilds:**
 
-- When modifying a **game file** (e.g., `src/assembly/games/dinoWorld.ts`), rebuild only that game:
+- When modifying a **game file** (e.g., `packages/engine/assembly/games/dinoWorld.ts`), rebuild only that game:
   ```bash
   npm run build:games gameName
   # Example: npm run build:games dinoWorld
   ```
-- When modifying an **SDK file** (e.g., `src/assembly/sdk/drawing.ts`, `src/assembly/sdk/input.ts`), rebuild all games:
+- When modifying an **SDK file** (e.g., `packages/engine/assembly/sdk/drawing.ts`, `packages/engine/assembly/sdk/input.ts`), rebuild all games:
   ```bash
   npm run build:games
   ```
@@ -605,7 +604,7 @@ function spawnItem(itemType: i32): void {
 **"Cannot find name 'WebAssemblyMemory'" / "Cannot find namespace 'WebAssembly'":**
 
 - Some TS tooling doesn't include AssemblyScript's WebAssembly types
-- Add a minimal local `WebAssembly` namespace with a `Memory` class in `src/assembly/sdk/memory.ts`
+- Add a minimal local `WebAssembly` namespace with a `Memory` class in `packages/engine/assembly/sdk/memory.ts`
 
 #### 15. Logging and Debugging
 
@@ -796,7 +795,7 @@ const items = ArrayView.fromAddress<u16>(RAM_START + Var.ITEMS_START);
 
 ### Complete Workflow for Creating a New Game
 
-1. **Create game file**: `src/assembly/games/gameName.ts`
+1. **Create game file**: `packages/engine/assembly/games/gameName.ts`
 
 2. **Import required APIs**:
 

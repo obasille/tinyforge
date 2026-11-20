@@ -87,33 +87,38 @@ It only sees memory and exported functions.
 
 ## Project Structure
 
+The repo is a pnpm workspace. The engine (SDK, games, memory map) is shared by
+two hosts that live side by side: the classic host that is deployed today, and
+the new editor.
+
 ```
 tinyforge/
-├─ index.html           # Canvas and page shell
-├─ memory-viewer.html   # Memory inspector UI
-├─ styles.css           # Host styling
-├─ stylesVC.css         # Virtual console controls styling (mobile and WPA)
-├─ icons/
-│  └─ favicon.svg
+├─ packages/
+│  ├─ engine/                 # Shared by both hosts
+│  │  ├─ assembly/
+│  │  │  ├─ sdk/              # Game SDK (AssemblyScript)
+│  │  │  ├─ games/            # Game cartridges + asconfig.json (build settings)
+│  │  │  └─ tsconfig.json     # AssemblyScript config
+│  │  ├─ memory-map.ts        # Shared memory constants
+│  │  └─ tooling/             # compile-game.ts: asc JS API wrapper (editor, tests)
+│  ├─ runtime/                # Host runtime in plain TS, no DOM (Worker/Node)
+│  └─ editor-core/            # Editor logic, no React: store, commands, game Worker bridge
 │
-├─ src/
-│  ├─ web/              # Host runtime (TypeScript)
-│  ├─ assembly/
-│  │  ├─ sdk/           # Game SDK (AssemblyScript)
-│  │  ├─ games/         # Game cartridges (AssemblyScript)
-│  │  └─ tsconfig.json  # AssemblyScript config
-│  └─ memory-map.ts     # Shared memory constants
+├─ apps/
+│  ├─ classic/                # The current host, deployed to the site root
+│  │  ├─ index.html, memory-viewer.html, styles.css, stylesVC.css, sw.js, manifest.json
+│  │  ├─ icons/
+│  │  ├─ src/                 # Host runtime (TypeScript)
+│  │  └─ dist/                # Compiled host JS (generated)
+│  └─ editor/                 # The new editor (Vite + React + Dockview)
 │
-├─ dist/
-│  ├─ web/              # Compiled host JS
-│  └─ memory-map.js
-├─ assets/
-│  └─ cartridges/       # Compiled WASM files
-│
-└─ package.json         # Build scripts and dependencies
+├─ assets/                    # Sprites, sfx, music (shared by both hosts)
+│  └─ cartridges/             # Compiled WASM files for the classic host (generated)
+├─ scripts/                   # Build, watch, serve, upload
+└─ package.json               # Workspace scripts
 ```
 
-### `src/web/`
+### `apps/classic/src/`
 
 Owns everything that would be considered _hardware_ on a real console:
 
@@ -130,7 +135,7 @@ listing and extracting `.wasm` filenames. This is meant for local dev servers
 that expose directory indexes. If your hosting setup hides directory listings,
 add a fallback list or provide a manifest endpoint.
 
-### `src/assembly/games/`
+### `packages/engine/assembly/games/`
 
 Contains only game code:
 
@@ -153,7 +158,7 @@ For complex games that need multiple modules, place supporting scripts in a subf
 Example structure:
 
 ```
-src/assembly/games/
+packages/engine/assembly/games/
 ├─ crocodiles.ts           # Main game file
 ├─ crocodiles/             # Supporting files
 │  ├─ player.ts
@@ -274,7 +279,7 @@ Address        Size        Description
 - The framebuffer region should be treated as write-only by the cartridge
 - Input/mouse regions are read-only for the cartridge (written by host)
 - Sprite data is managed by the host (cartridge uses sprite IDs)
-- All addresses are defined in `src/memory-map.ts` and shared between host and SDK
+- All addresses are defined in `packages/engine/memory-map.ts` and shared between host and SDK
 
 ---
 
@@ -644,7 +649,7 @@ This also enables:
 
 A cartridge is a **pure AssemblyScript module** that:
 
-- Imports the SDK (`src/assembly/sdk/`, imported as `"../sdk"` from a game file)
+- Imports the SDK (`packages/engine/assembly/sdk/`, imported as `"../sdk"` from a game file)
 - Exports a small, fixed API: `init()`, `update()` and `draw()`, all with no arguments
 - Writes directly to the framebuffer
 - Stores game state in RAM (not module variables)
@@ -735,15 +740,15 @@ All interaction happens through memory and exported functions.
 
 ### Prerequisites
 
-- Node.js
-- AssemblyScript
+- Node.js 20+
+- pnpm (`corepack enable` installs the version pinned in `package.json`)
 
 ### Install Dependencies
 
 From the project root:
 
 ```
-npm install
+pnpm install
 ```
 
 ### Build
@@ -751,19 +756,19 @@ npm install
 **Build everything (games + host):**
 
 ```
-npm run build
+pnpm build
 ```
 
 **Build all games (WASM only):**
 
 ```
-npm run build:games
+pnpm build:games
 ```
 
 **Build a single game (WASM only):**
 
 ```
-npm run build:games gameName
+pnpm build:games gameName
 ```
 
 `gameName` must be the exact `.ts` filename without the extension.
@@ -771,13 +776,13 @@ npm run build:games gameName
 **Build all games (debug):**
 
 ```
-npm run build:debug
+pnpm build:debug
 ```
 
 **Build host only (web runtime):**
 
 ```
-npm run build:host
+pnpm build:host
 ```
 
 ### Watch (build on save)
@@ -785,46 +790,54 @@ npm run build:host
 **Web runtime:**
 
 ```
-npm run watch:host
+pnpm watch:host
 ```
 
 **WASM games:**
 
 ```
-npm run watch:games
+pnpm watch:games
 ```
 
 ### Available Scripts
 
 **Build scripts:**
 
-- `npm run build` - Build everything (host + all games), then upload
-- `npm run build:host` - Build only the web runtime (TypeScript → JavaScript), then upload
-- `npm run build:games` - Build all games (AssemblyScript → WASM), then upload
-- `npm run build:games <gameName>` - Build a single game by name (e.g., `npm run build:games snake`)
-- `npm run build:debug` - Build all games with debug symbols and source maps
+- `pnpm build` - Build everything (host + all games), then upload
+- `pnpm build:host` - Build only the web runtime (TypeScript → JavaScript), then upload
+- `pnpm build:games` - Build all games (AssemblyScript → WASM), then upload
+- `pnpm build:games <gameName>` - Build a single game by name (e.g., `pnpm build:games snake`)
+- `pnpm build:debug` - Build all games with debug symbols and source maps
 
 **Watch scripts:**
 
-- `npm run watch:host` - Auto-rebuild host on file changes
-- `npm run watch:games` - Auto-rebuild games on file changes
+- `pnpm watch:host` - Auto-rebuild host on file changes
+- `pnpm watch:games` - Auto-rebuild games on file changes
 
 **Development scripts:**
 
-- `npm run serve` - Start local HTTP server on port 8080
-- `npm run dev` - Build everything, then start server
+- `pnpm serve` - Serve the classic host on http://localhost:8080 (with directory listings)
+- `pnpm dev:classic` - Build the classic host and all games, then serve it
+- `pnpm dev` - Start the new editor (see [The Editor](#the-editor))
+
+**Test scripts:**
+
+- `pnpm test` - Unit tests (Vitest) for the runtime and editor-core, including every game booting
+- `pnpm test:e2e` - Playwright smoke tests of the editor
+- `pnpm test:sdk` - AssemblyScript SDK unit tests (`utility.spec.ts`)
+- `pnpm typecheck`, `pnpm lint`
 
 **Utility scripts:**
 
-- `npm run upload` - Manually trigger FTP upload to remote server
-- `npm run check:alloc <gameName>` - Check a game for memory allocation symbols
+- `pnpm upload` - Manually trigger FTP upload to remote server
+- `pnpm check:alloc <gameName>` - Check a game for memory allocation symbols
 
 ### Checking for Memory Allocation
 
 The `check:alloc` script helps verify that your game doesn't contain any dynamic memory allocation:
 
 ```bash
-npm run check:alloc <gameName>
+pnpm check:alloc <gameName>
 ```
 
 **What it does:**
@@ -842,10 +855,10 @@ npm run check:alloc <gameName>
 **Example usage:**
 
 ```bash
-npm run check:alloc snake
+pnpm check:alloc snake
 # Output: "No allocation symbols found." (good!)
 
-npm run check:alloc myGame
+pnpm check:alloc myGame
 # Output: "Found allocation symbol: __new" (bad - fix allocation code!)
 ```
 
@@ -877,18 +890,57 @@ You must serve the project over **HTTP** (not `file://`).
 From the project root:
 
 ```
-python -m http.server 8080
+pnpm dev:classic
 ```
 
-Then open:
+Then open http://localhost:8080/. `pnpm serve` alone serves without rebuilding.
+It maps `/` to `apps/classic/` and `/assets/` to the shared `assets/` folder,
+the same layout as the deployed site.
 
-```
-http://localhost:8080/index.html
-```
+#### VS Code Live Server
 
-A VS Code Live Server or any static server also works.
+`.vscode/settings.json` sets Live Server's root to `/apps/classic`. Live Server
+can only serve files under that root, so link the shared `assets/` folder into
+it once:
+
+- Windows: run `scripts\link-classic-assets.cmd` (creates a directory junction
+  with `mklink /J`; no admin rights needed).
+- macOS/Linux: `ln -s ../../assets apps/classic/assets`
+
+The link is gitignored. Build first (`pnpm build:classic`), then use
+"Go Live" and open the page Live Server shows.
 
 ---
+
+## The Editor
+
+`apps/editor` is the new editor. It runs the same cartridges with the same
+engine API (`init`/`update`/`draw`, the memory map and the `env` imports).
+
+```
+pnpm dev
+```
+
+Then open the URL Vite prints (http://localhost:5173/).
+
+- **The game runs in a Web Worker** with an `OffscreenCanvas`, so heavy gameplay
+  code cannot stall the editor. Audio is played on the main thread
+  (`AudioContext` does not exist in Workers). If a game hangs in an infinite
+  loop, the editor notices within 3 s and offers to stop and reload it.
+- **Hot reload:** saving a file under `packages/engine/` recompiles the affected
+  games (debug build, using `asconfig.json`) and reloads the running one with
+  its memory, so game state is kept. Compile errors show in Vite's overlay and
+  in the Console panel. Changing the layout of a game's state struct can still
+  leave old state in memory; use Restart.
+- **Debugging:** debug builds ship source maps, so Chrome DevTools can set
+  breakpoints in the AssemblyScript source.
+- **Panels:** Game, Run (pause, single step, restart, save/load state, seed),
+  Memory (hex view of the visible range, refreshed every frame), Console.
+  The layout is saved in the browser.
+- **Dev hook:** in development, `window.__tf` exposes the editor, the project
+  and session stores, and `snapshot()`, for tests and agents.
+
+The classic host and its deployment are unchanged by the editor.
 
 ## FTP Upload
 
@@ -925,7 +977,7 @@ The remote `/dist`, `/assets` and `/icons` directories are deleted and re-upload
 ### Manual Upload
 
 ```
-npm run upload
+pnpm upload
 ```
 
 ---

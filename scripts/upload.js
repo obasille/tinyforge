@@ -22,9 +22,13 @@ const port = FTP_PORT ? Number(FTP_PORT) : secure === 'implicit' ? 990 : 21;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..');
-const distPath = path.join(repoRoot, 'dist');
+// The classic host is deployed at the site root, with the shared game assets
+// next to it, so the remote layout stays the same as before the repo moved
+// the host into apps/classic.
+const classicRoot = path.join(repoRoot, 'apps', 'classic');
+const distPath = path.join(classicRoot, 'dist');
 const assetsPath = path.join(repoRoot, 'assets');
-const iconsPath = path.join(repoRoot, 'icons');
+const iconsPath = path.join(classicRoot, 'icons');
 
 async function fileExists(filePath) {
   try {
@@ -84,13 +88,13 @@ async function uploadDirectory(
 async function uploadRootFiles(client) {
   const rootFiles = ['manifest.json', 'sw.js'];
   const patterns = [/\.html$/i, /\.css$/i];
-  const entries = await fs.readdir(repoRoot, { withFileTypes: true });
+  const entries = await fs.readdir(classicRoot, { withFileTypes: true });
   for (const entry of entries) {
     if (!entry.isFile()) continue;
     const name = entry.name;
     if (rootFiles.includes(name) || patterns.some((re) => re.test(name))) {
       await client.uploadFrom(
-        path.join(repoRoot, name),
+        path.join(classicRoot, name),
         path.posix.join('/', name),
       );
     }
