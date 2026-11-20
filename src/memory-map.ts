@@ -109,5 +109,5 @@ export const SDK_RNG_SEED_SIZE = 4;
 /** Game RAM start address */
 export const RAM_START = SDK_RNG_SEED_ADDR + SDK_RNG_SEED_SIZE;
 
-/** Game RAM size in bytes (256 KB) */
+/** Game RAM size in bytes (~72 KB: from RAM_START up to the cartridge memoryBase at 0x80000) */
 export const RAM_SIZE = 0x80000 - RAM_START;

@@ -202,11 +202,12 @@ Address        Size        Description
 0x04B000       2 B         Keyboard Input (current + previous buttons)
 0x04B008       6 B         Mouse Input (x, y, current + previous buttons)
 0x04B010       16 B        Sprite Table Header
-0x04B020       N entries   Sprite Name Lookup (N × 32 bytes)
-...           N entries   Sprite Info Table (N × 16 bytes)
-...           ~128 KB      Sprite Pixel Data (RGBA)
-0x06B810       4 B         SDK RNG Seed (i32)
-0x06B814       ~82 KB      Game RAM (available for game state)
+0x04B020       N entries   Sprite Name Lookup (N × 32 bytes, room for 256)
+...            N entries   Sprite Info Table (N × 16 bytes, room for 256)
+0x04E020       128 KB      Sprite Pixel Data (RGBA)
+0x06E020       4 B         SDK RNG Seed (u32)
+0x06E024       ~72 KB      Game RAM (73,692 B, up to 0x07FFFF)
+0x080000       ...         Cartridge static data (AssemblyScript memoryBase)
 ```
 
 **Detailed Layout:**
@@ -245,17 +246,19 @@ Address        Size        Description
   - `+12`: u8 cols
   - `+13`: u8 rows
 
-**Sprite Pixel Data (follows info table):**
+**Sprite Pixel Data (0x04E020 - 0x06E01F):**
 
+- Starts after space reserved for the maximum-size tables (256 entries), not directly after the current info table
+- 128 KB shared by all sprites in `assets/sprites/`
 - RGBA8888 (4 bytes per pixel)
 - Managed by host, loaded from `assets/sprites/`
 
-**SDK RNG Seed (0x06B810 - 0x06B813):**
+**SDK RNG Seed (0x06E020 - 0x06E023):**
 
 - 4-byte u32 seed used by SDK `random()` and `randomRange()`
 - Initialized by the host and editable in devtools
 
-**Game RAM (0x06B814+):**
+**Game RAM (0x06E024 - 0x07FFFF):**
 
 - Available for game state, variables, and data structures
 - Use `RAM_START` constant from SDK
@@ -265,6 +268,7 @@ Address        Size        Description
 **Notes:**
 
 - Memory is allocated by the **host (JS)** at 1 MB total (16 pages)
+- Cartridges are compiled with `memoryBase: 524288`, so their static data (string literals, etc.) starts at 0x080000, right after game RAM
 - Memory size is fixed at startup
 - Memory does **not** grow at runtime
 - The framebuffer region should be treated as write-only by the cartridge
@@ -280,13 +284,13 @@ Input is **snapshot‑based**, not event‑based.
 
 - The host collects keyboard state
 - State is packed into a bitmask
-- Both current and previous frame masks are passed to the cartridge
-- This allows detecting button press vs. hold
+- Before each `update()`, the host writes the current and previous frame masks to input memory (`INPUT_ADDR`)
+- The SDK reads them for you, which allows detecting button press vs. hold
 
-The `Button` enum is provided by the console SDK:
+The `Button` enum is provided by the SDK:
 
 ```ts
-import { Button } from "./console";
+import { Button, buttonDown, buttonPressed } from "../sdk";
 
 // Button values:
 // UP = 1 << 0, DOWN = 1 << 1, LEFT = 1 << 2, RIGHT = 1 << 3
@@ -296,13 +300,17 @@ import { Button } from "./console";
 Detecting button press (not hold):
 
 ```ts
-export function update(input: i32, prevInput: i32): void {
-  const pressed = input & ~prevInput;
-  if (pressed & Button.A) {
+export function update(): void {
+  if (buttonPressed(Button.A)) {
     // A was just pressed this frame
+  }
+  if (buttonDown(Button.LEFT)) {
+    // LEFT is held
   }
 }
 ```
+
+Mouse input works the same way with `mouseX()`, `mouseY()`, `mouseDown(MouseButton.LEFT)` and `mousePressed(MouseButton.LEFT)`.
 
 The cartridge never sees individual key events.
 
@@ -310,12 +318,12 @@ The cartridge never sees individual key events.
 
 ## Console Logging
 
-The console SDK provides logging functions that output to the HTML console panel.
+The SDK provides logging functions that output to the HTML console panel.
 
 ### Basic Logging (String Literals Only)
 
 ```ts
-import { log, warn, error } from "./console";
+import { log, warn, error } from "../sdk";
 
 log("Player initialized"); // Blue entry [LOG]
 warn("Health low"); // Yellow entry [WARN]
@@ -327,7 +335,7 @@ error("Invalid state"); // Red entry [ERROR]
 To log dynamic values without string concatenation, use the interpolation variants:
 
 ```ts
-import { logi, logf, warni, warnf, errori, errorf } from "./console";
+import { logi, logf, warni, warnf, errori, errorf } from "../sdk";
 
 // Integer parameters (i64)
 logi("Score: {}, Lives: {}", score, lives);
@@ -362,7 +370,7 @@ export function init(): void {
   logi("Level: {}", currentLevel);
 }
 
-export function update(input: i32, prevInput: i32): void {
+export function update(): void {
   if (playerHealth < 20) {
     warni("Low health: {}", playerHealth);
   }
@@ -406,7 +414,7 @@ Only the ID is required, and it must be ≤ 16 characters.
 ### Audio API
 
 ```ts
-import { playSfx, playMusic, stopMusic } from './console';
+import { playSfx, playMusic, stopMusic } from "../sdk";
 
 // Play a sound effect
 playSfx(sfxId: string, volume: f32);  // volume: 0.0 - 1.0
@@ -436,9 +444,9 @@ export function init(): void {
   playMusic("gameplay", 0.7); // Will fail silently
 }
 
-// ✅ CORRECT - Called after user clicks start button
-export function update(input: i32, prevInput: i32): void {
-  if (startButtonPressed) {
+// ✅ CORRECT - Called after the user presses a button
+export function update(): void {
+  if (buttonPressed(Button.START)) {
     playMusic("gameplay", 0.7); // Works!
   }
 }
@@ -454,28 +462,29 @@ export function update(input: i32, prevInput: i32): void {
 ### Example Usage
 
 ```ts
-import { playSfx, playMusic, stopMusic } from "./console";
+import { Button, buttonPressed, playSfx, playMusic, stopMusic, RAM_START } from "../sdk";
 
 // Audio IDs
 const SFX_JUMP = "jump";
-const SFX_COIN = "coin";
 const SFX_HIT = "hit";
-
 const MUSIC_GAMEPLAY = "gameplay";
-const MUSIC_GAME_OVER = "game_over";
 
-let gameStarted = false;
+// Game state lives in RAM, not in module variables
+@unmanaged
+class Vars {
+  gameStarted: bool;
+}
+const vars = changetype<Vars>(RAM_START);
 
-export function update(input: i32, prevInput: i32): void {
+export function update(): void {
   // Start music after user presses start
-  if (!gameStarted && input & Button.START) {
-    gameStarted = true;
+  if (!vars.gameStarted && buttonPressed(Button.START)) {
+    vars.gameStarted = true;
     playMusic(MUSIC_GAMEPLAY, 0.6);
   }
 
   // Play sound effects during gameplay
-  const pressed = input & ~prevInput;
-  if (pressed & Button.A) {
+  if (buttonPressed(Button.A)) {
     playSfx(SFX_JUMP, 0.5);
   }
 
@@ -543,7 +552,7 @@ Each sprite: 32×32 pixels
 ### Sprite API
 
 ```ts
-import { drawSprite, s } from './console';
+import { drawSprite, s } from "../sdk";
 
 // Resolve sprite by name (and optional sheet coords)
 s(name: string, x: i32 = 0, y: i32 = 0): i32;
@@ -567,7 +576,7 @@ All pixels written to the framebuffer have alpha = 255 (fully opaque).
 ### Example Usage
 
 ```ts
-import { drawSprite, s } from "./console";
+import { drawSprite, s } from "../sdk";
 
 // Draw a single sprite
 drawSprite(s("flag"), 100, 100);
@@ -583,7 +592,7 @@ drawSprite(s("shadow"), 200, 150); // Shadow sprite with alpha = 128
 
 - Sprites are loaded at startup from `assets/sprites/`
 - Maximum sprite entries: 256
-- Sprite data is stored after the sprite tables in shared memory
+- Sprite data is stored after the sprite tables in shared memory (128 KB shared by all sprites)
 - Transparency is handled automatically
 - Alpha blending works with any alpha value (0-255)
 
@@ -599,7 +608,8 @@ Flow:
 
 ```
 while accumulator >= dt:
-  update(input)
+  write input state to memory
+  update()
 
 draw()
 blit framebuffer
@@ -634,22 +644,30 @@ This also enables:
 
 A cartridge is a **pure AssemblyScript module** that:
 
-- Imports the console SDK (`console.ts`)
-- Exports a small, fixed API (`init`, `update`, `draw`, `WIDTH`, `HEIGHT`)
+- Imports the SDK (`src/assembly/sdk/`, imported as `"../sdk"` from a game file)
+- Exports a small, fixed API: `init()`, `update()` and `draw()`, all with no arguments
 - Writes directly to the framebuffer
 - Stores game state in RAM (not module variables)
 
 The SDK provides:
 
 - Memory declarations and memory map constants
-- Display constants (WIDTH, HEIGHT)
-- Input constants (Button enum)
+- Display constants (`SCREEN_WIDTH`, `SCREEN_HEIGHT`)
+- Input constants and helpers (`Button`, `buttonDown`, `buttonPressed`)
 - Console logging functions (log, warn, error)
 
 ### Minimal cartridge
 
 ```ts
-import { clearFramebuffer, pset, Button, RAM_START } from "./console";
+import {
+  Button,
+  buttonDown,
+  c,
+  clearFramebuffer,
+  log,
+  pset,
+  RAM_START,
+} from "../sdk";
 
 // Game state persisted in RAM using @unmanaged struct
 @unmanaged
@@ -672,12 +690,12 @@ export function init(): void {
   log("Starting!");
 }
 
-export function update(input: i32, prevInput: i32): void {
-  // Movement logic - use buttonDown() for continuous movement
-  if (input & Button.LEFT) vars.x--;
-  if (input & Button.RIGHT) vars.x++;
-  if (input & Button.UP) vars.y--;
-  if (input & Button.DOWN) vars.y++;
+export function update(): void {
+  // Movement logic - buttonDown() for continuous movement
+  if (buttonDown(Button.LEFT)) vars.x--;
+  if (buttonDown(Button.RIGHT)) vars.x++;
+  if (buttonDown(Button.UP)) vars.y--;
+  if (buttonDown(Button.DOWN)) vars.y++;
 }
 
 export function draw(): void {
@@ -874,7 +892,9 @@ A VS Code Live Server or any static server also works.
 
 ## FTP Upload
 
-Builds trigger an FTP sync via the `postbuild`, `postbuild:games`, and `postbuild:host` hooks.
+Builds trigger an upload via the `postbuild`, `postbuild:games`, and `postbuild:host` hooks.
+
+The upload always uses **FTPS** (FTP over TLS), so the password and files are encrypted in transit. Plain, unencrypted FTP is not supported. Your host must offer FTPS, and its TLS certificate must be valid for `FTP_HOST`.
 
 ### Credentials
 
@@ -884,6 +904,11 @@ Create a `.env` file in the project root:
 FTP_HOST=yourdomain.com
 FTP_USER=username
 FTP_PASS=password
+# Optional: set to "implicit" if your host only offers implicit FTPS (port 990).
+# By default explicit FTPS (AUTH TLS on port 21) is used.
+# FTP_SECURE=implicit
+# Optional: override the port (defaults to 21, or 990 for implicit FTPS).
+# FTP_PORT=21
 ```
 
 The file is ignored by Git.
@@ -891,7 +916,11 @@ The file is ignored by Git.
 ### What Gets Synced
 
 - `dist/` → `/dist`
+- `assets/` (including built cartridges) → `/assets`
+- `icons/` → `/icons`
 - `*.html`, `*.css`, `manifest.json`, `sw.js` → `/`
+
+The remote `/dist`, `/assets` and `/icons` directories are deleted and re-uploaded on every sync.
 
 ### Manual Upload
 
@@ -961,7 +990,7 @@ Use `logi/logf`, `warni/warnf`, `errori/errorf` for interpolation (see Console L
 **`UncheckedArrayView<T>`** - Zero-allocation array backed by pre-allocated memory:
 
 ```ts
-import { UncheckedArrayView } from "./console";
+import { UncheckedArrayView } from "../sdk";
 
 // Calculate memory size needed
 const GRID_SIZE = 100;
@@ -991,7 +1020,7 @@ const val = grid[10];
 **`ArrayView<T, U>`** - Array with dynamic length tracking:
 
 ```ts
-import { ArrayView } from "./console";
+import { ArrayView } from "../sdk";
 
 // Calculate memory size (includes metadata)
 const CAPACITY = 50;
@@ -1027,7 +1056,7 @@ const x = items[0];
 **`Vec2i`** - 2D integer vector for coordinate pairs:
 
 ```ts
-import { Vec2i, RAM_START } from "./console";
+import { Vec2i, RAM_START } from "../sdk";
 
 // WARNING: Using 'new Vec2i()' allocates memory!
 // For zero allocation, pre-allocate in RAM and use fromAddress()
@@ -1057,7 +1086,7 @@ enemyPos.set(50, 100); // Set both coordinates at once
 The SDK provides `drawString()` and `drawNumber()` for rendering text:
 
 ```ts
-import { drawString, drawNumber } from "./console";
+import { drawString, drawNumber } from "../sdk";
 
 // Draw text (UPPERCASE ONLY)
 drawString(10, 10, "SCORE:", 0xffffffff);
