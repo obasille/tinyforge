@@ -803,9 +803,9 @@ pnpm watch:games
 
 **Build scripts:**
 
-- `pnpm build` - Build everything (host + all games), then upload
-- `pnpm build:host` - Build only the web runtime (TypeScript → JavaScript), then upload
-- `pnpm build:games` - Build all games (AssemblyScript → WASM), then upload
+- `pnpm build` - Build everything (host + all games), then upload if FTP is configured
+- `pnpm build:host` - Build only the web runtime (TypeScript → JavaScript), then upload if FTP is configured
+- `pnpm build:games` - Build all games (AssemblyScript → WASM), then upload if FTP is configured
 - `pnpm build:games <gameName>` - Build a single game by name (e.g., `pnpm build:games snake`)
 - `pnpm build:debug` - Build all games with debug symbols and source maps
 
@@ -944,7 +944,11 @@ The classic host and its deployment are unchanged by the editor.
 
 ## FTP Upload
 
-Builds trigger an upload via the `postbuild`, `postbuild:games`, and `postbuild:host` hooks.
+Builds trigger an upload via the `postbuild`, `postbuild:games`, and `postbuild:host` hooks. The upload is **optional**:
+
+- If `FTP_HOST`, `FTP_USER` or `FTP_PASS` is not set (for example, no `.env`), the build prints `FTP upload skipped` and still succeeds.
+- To skip the upload even when credentials are set, set `FTP_UPLOAD=0` in `.env` or in the shell (for example `FTP_UPLOAD=0 pnpm build`, or `set FTP_UPLOAD=0` in `cmd`).
+- `pnpm upload` run by hand always tries to upload, and fails if credentials are missing.
 
 The upload always uses **FTPS** (FTP over TLS), so the password and files are encrypted in transit. Plain, unencrypted FTP is not supported. Your host must offer FTPS, and its TLS certificate must be valid for `FTP_HOST`.
 
@@ -961,6 +965,8 @@ FTP_PASS=password
 # FTP_SECURE=implicit
 # Optional: override the port (defaults to 21, or 990 for implicit FTPS).
 # FTP_PORT=21
+# Optional: set to 0 to stop builds from uploading automatically.
+# FTP_UPLOAD=0
 ```
 
 The file is ignored by Git.

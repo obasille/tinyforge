@@ -25,9 +25,9 @@
     "watch:games": "node scripts/watch-games.js",
     "upload": "node scripts/upload.js",
     "serve": "node scripts/serve-classic.js 8080",
-    "postbuild": "pnpm run upload",
-    "postbuild:host": "pnpm run upload",
-    "postbuild:games": "pnpm run upload"
+    "postbuild": "node scripts/upload.js --if-configured",
+    "postbuild:host": "node scripts/upload.js --if-configured",
+    "postbuild:games": "node scripts/upload.js --if-configured"
   },
   "keywords": [
     "tinyforge",
