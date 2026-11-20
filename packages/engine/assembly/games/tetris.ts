@@ -33,6 +33,11 @@ const BOARD_Y: i32 = (SCREEN_HEIGHT - BOARD_HEIGHT * CELL_SIZE) / 2;
 
 const LINES_PER_LEVEL: i32 = 10;
 const MAX_LEVEL: i32 = 255; // level is stored as u8
+// Line clear: rows blink (flash on/off every CLEAR_BLINK_FRAMES) for
+// CLEAR_FRAMES before they are removed, with the game paused meanwhile.
+const CLEAR_FRAMES: u8 = 36;
+const CLEAR_BLINK_FRAMES: u8 = 6;
+const CLEAR_FLASH_COLOR: u32 = 0xffffff;
 const GRID_COLOR: u32 = 0x1c1c1c; // board background is 0x111111
 const PREVIEW_SIZE: i32 = 4;
 const PREVIEW_X: i32 = BOARD_X + BOARD_WIDTH * CELL_SIZE + 16;
@@ -43,6 +48,7 @@ enum GameState {
   START_SCREEN = 0,
   PLAYING = 1,
   GAME_OVER = 2,
+  CLEARING = 3, // full lines blink; gravity, input and spawning wait
 }
 
 // === RAM Layout ===
@@ -59,10 +65,15 @@ class Vars {
   fallDelay: u8; // 20
   level: u8; // 21
   nextType: u8; // 22
+  clearTimer: u8; // 23, frames left in the CLEARING blink
+  clearMask: u32; // 24, bit y set = row y is being cleared
 }
 
 const vars = changetype<Vars>(RAM_START);
-const BOARD_START = RAM_START + sizeof<Vars>(); // 200 bytes for board
+// Board: 200 bytes right after Vars. getU8/setU8 take offsets from
+// RAM_START, so this is an offset, not an address. offsetof<Vars>() is the
+// struct size; sizeof<Vars>() would be the size of a pointer (4).
+const BOARD_OFFSET = offsetof<Vars>();
 
 // === Tetromino Data ===
 // Each piece is a 4x4 bitmask (row-major). Index = type * 4 + rotation.
@@ -106,7 +117,7 @@ const FRAMES_PER_SECOND: i32 = 60;
 
 // === Board Helpers ===
 function boardIndex(x: i32, y: i32): usize {
-  return BOARD_START + (y * BOARD_WIDTH + x);
+  return BOARD_OFFSET + (y * BOARD_WIDTH + x);
 }
 
 function getBoardCell(x: i32, y: i32): u8 {
@@ -124,7 +135,7 @@ function shapeMask(pieceType: u8, rotation: u8): i32 {
 function clearBoard(): void {
   const total = BOARD_WIDTH * BOARD_HEIGHT;
   for (let i: i32 = 0; i < total; i++) {
-    setU8(BOARD_START + i, 0);
+    setU8(BOARD_OFFSET + i, 0);
   }
 }
 
@@ -167,11 +178,10 @@ function placeCurrentPiece(): void {
   }
 }
 
-function clearLines(): i32 {
-  let cleared: i32 = 0;
-  let y: i32 = BOARD_HEIGHT - 1;
-
-  while (y >= 0) {
+// Bitmask of the rows that are full (bit y = row y).
+function findFullRows(): u32 {
+  let mask: u32 = 0;
+  for (let y: i32 = 0; y < BOARD_HEIGHT; y++) {
     let full = true;
     for (let x: i32 = 0; x < BOARD_WIDTH; x++) {
       if (getBoardCell(x, y) == 0) {
@@ -179,23 +189,32 @@ function clearLines(): i32 {
         break;
       }
     }
+    if (full) mask |= (1 as u32) << (y as u32);
+  }
+  return mask;
+}
 
-    if (full) {
-      cleared++;
-      for (let yy: i32 = y; yy > 0; yy--) {
-        for (let x: i32 = 0; x < BOARD_WIDTH; x++) {
-          setBoardCell(x, yy, getBoardCell(x, yy - 1));
-        }
-      }
+// Remove the rows in `mask` and let everything above fall down.
+function removeRows(mask: u32): void {
+  let write: i32 = BOARD_HEIGHT - 1;
+  for (let y: i32 = BOARD_HEIGHT - 1; y >= 0; y--) {
+    if ((mask & ((1 as u32) << (y as u32))) != 0) continue;
+    if (write != y) {
       for (let x: i32 = 0; x < BOARD_WIDTH; x++) {
-        setBoardCell(x, 0, 0);
+        setBoardCell(x, write, getBoardCell(x, y));
       }
-    } else {
-      y--;
+    }
+    write--;
+  }
+  for (let y: i32 = write; y >= 0; y--) {
+    for (let x: i32 = 0; x < BOARD_WIDTH; x++) {
+      setBoardCell(x, y, 0);
     }
   }
+}
 
-  return cleared;
+function isClearingRow(y: i32): bool {
+  return (vars.clearMask & ((1 as u32) << (y as u32))) != 0;
 }
 
 function gravityForLevel(level: i32): u8 {
@@ -208,28 +227,46 @@ function updateFallDelay(): void {
 }
 
 // Lock the current piece, clear lines, update score/level, spawn the next one.
+// Lock the current piece. Full lines start the CLEARING blink; otherwise
+// the next piece spawns right away.
 function lockPiece(): void {
   placeCurrentPiece();
-  const cleared = clearLines();
-  if (cleared > 0) {
-    const previousLevel = vars.level;
-    vars.lines += cleared;
-    vars.score += cleared * 100;
-    let level = vars.lines / LINES_PER_LEVEL;
-    if (level > MAX_LEVEL) level = MAX_LEVEL;
-    vars.level = level as u8;
-    updateFallDelay();
-
-    if (cleared >= 4) {
-      playSfx("tetris_tetris", 0.8);
-    } else {
-      playSfx("tetris_line", 0.7);
-    }
-    if (vars.level != previousLevel) playSfx("tetris_levelup", 0.7);
-  } else {
+  const mask = findFullRows();
+  if (mask == 0) {
     playSfx("tetris_lock", 0.6);
+    spawnPiece();
+    return;
   }
+
+  vars.clearMask = mask;
+  vars.clearTimer = CLEAR_FRAMES;
+  vars.state = GameState.CLEARING as u8;
+  if (popcnt(mask) >= 4) {
+    playSfx("tetris_tetris", 0.8);
+  } else {
+    playSfx("tetris_line", 0.7);
+  }
+}
+
+// End of the blink: remove the lines, score them, spawn the next piece.
+function finishClear(): void {
+  const mask = vars.clearMask;
+  const cleared = popcnt(mask) as i32;
+  removeRows(mask);
+  vars.clearMask = 0;
+
+  const previousLevel = vars.level;
+  vars.lines += cleared;
+  vars.score += cleared * 100;
+  let level = vars.lines / LINES_PER_LEVEL;
+  if (level > MAX_LEVEL) level = MAX_LEVEL;
+  vars.level = level as u8;
+  updateFallDelay();
+  if (vars.level != previousLevel) playSfx("tetris_levelup", 0.7);
+
+  vars.state = GameState.PLAYING as u8;
   spawnPiece();
+  vars.fallTimer = vars.fallDelay;
 }
 
 function spawnPiece(): void {
@@ -323,6 +360,8 @@ export function init(): void {
   vars.score = 0;
   vars.lines = 0;
   vars.level = 0;
+  vars.clearTimer = 0;
+  vars.clearMask = 0;
   updateFallDelay();
   vars.fallTimer = vars.fallDelay;
   vars.state = GameState.START_SCREEN as u8;
@@ -344,6 +383,13 @@ export function update(): void {
   // Restart on START from game over
   if (state == GameState.GAME_OVER && buttonPressed(Button.START)) {
     init();
+    return;
+  }
+
+  // Line clear blink: the game waits until it's over.
+  if (state == GameState.CLEARING) {
+    vars.clearTimer--;
+    if (vars.clearTimer == 0) finishClear();
     return;
   }
 
@@ -419,12 +465,17 @@ export function draw(): void {
     fillRect(BOARD_X, BOARD_Y + y * CELL_SIZE, BOARD_WIDTH * CELL_SIZE, 1, gridColor);
   }
 
-  // Draw settled blocks
+  // Draw settled blocks. Rows being cleared alternate between a white
+  // flash and empty.
+  const clearing = vars.state == GameState.CLEARING;
+  const flashOn = ((CLEAR_FRAMES - vars.clearTimer) / CLEAR_BLINK_FRAMES) % 2 == 0;
   for (let y: i32 = 0; y < BOARD_HEIGHT; y++) {
+    const blinking = clearing && isClearingRow(y);
+    if (blinking && !flashOn) continue;
     for (let x: i32 = 0; x < BOARD_WIDTH; x++) {
       const cell = getBoardCell(x, y);
       if (cell == 0) continue;
-      const color = c(PIECE_COLORS[(cell - 1) as i32]);
+      const color = blinking ? c(CLEAR_FLASH_COLOR) : c(PIECE_COLORS[(cell - 1) as i32]);
       const sx = BOARD_X + x * CELL_SIZE;
       const sy = BOARD_Y + y * CELL_SIZE;
       fillRect(sx + 1, sy + 1, CELL_SIZE - 2, CELL_SIZE - 2, color);
