@@ -937,6 +937,8 @@ Then open the URL Vite prints (http://localhost:5173/).
 - **Panels:** Game, Run (pause, single step, restart, save/load state, seed),
   Memory (hex view of the visible range, refreshed every frame), Console.
   The layout is saved in the browser.
+- **Sound:** the speaker button and slider in the toolbar set the master volume
+  and mute for every game. The setting is saved in the browser.
 - **Dev hook:** in development, `window.__tf` exposes the editor, the project
   and session stores, and `snapshot()`, for tests and agents.
 

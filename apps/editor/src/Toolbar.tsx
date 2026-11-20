@@ -6,6 +6,8 @@ export function Toolbar({ onResetLayout }: { onResetLayout: () => void }) {
   const project = useStore(editor.project);
   const stack = useStore(editor.commands);
   const session = useStore(editor.host.session);
+  const sound = useStore(editor.audioSettings);
+  const silent = sound.muted || sound.volume === 0;
 
   return (
     <header className="tf-toolbar">
@@ -36,6 +38,33 @@ export function Toolbar({ onResetLayout }: { onResetLayout: () => void }) {
         Redo
       </button>
       <span className="tf-spacer" />
+      <span className="tf-volume">
+        <button
+          type="button"
+          data-testid="mute"
+          aria-pressed={sound.muted}
+          title={sound.muted ? 'Unmute sound' : 'Mute sound'}
+          onClick={() => {
+            editor.toggleMute();
+            editor.viewport.focus();
+          }}
+        >
+          {silent ? '🔇' : sound.volume < 0.5 ? '🔉' : '🔊'}
+        </button>
+        <input
+          type="range"
+          data-testid="volume"
+          aria-label="Master volume"
+          title={`Master volume ${Math.round(sound.volume * 100)}%`}
+          min={0}
+          max={100}
+          step={1}
+          value={Math.round(sound.volume * 100)}
+          onChange={(e) => editor.setVolume(Number(e.target.value) / 100)}
+          // After a drag, give the keyboard back to the game.
+          onPointerUp={() => editor.viewport.focus()}
+        />
+      </span>
       <span className={`tf-status tf-status-${session.status}`} data-testid="run-status">
         {session.status}
       </span>

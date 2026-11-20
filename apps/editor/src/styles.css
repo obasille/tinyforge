@@ -62,6 +62,20 @@ button:disabled {
   flex: 1;
 }
 
+.tf-volume {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tf-volume input[type="range"] {
+  width: 90px;
+}
+
+.tf-volume button {
+  min-width: 2.2em;
+}
+
 .tf-status {
   font-family: var(--tf-mono);
   padding: 1px 6px;

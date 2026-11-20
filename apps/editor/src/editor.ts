@@ -32,6 +32,27 @@ function loadProject(games: string[]): ProjectState {
   return emptyProject();
 }
 
+const AUDIO_KEY = 'tinyforge.editor.audio';
+
+/** Master sound settings. A preference of this browser, not part of the project. */
+export interface AudioSettings {
+  volume: number;
+  muted: boolean;
+}
+
+function loadAudioSettings(): AudioSettings {
+  try {
+    const saved = JSON.parse(localStorage.getItem(AUDIO_KEY) ?? 'null') as Partial<AudioSettings> | null;
+    const volume = Number(saved?.volume);
+    return {
+      volume: saved && Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : 1,
+      muted: saved?.muted === true,
+    };
+  } catch {
+    return { volume: 1, muted: false };
+  }
+}
+
 const absolute = (url: string) => new URL(url, document.baseURI).href;
 
 export class Editor {
@@ -47,11 +68,25 @@ export class Editor {
   /** Color of the game pixel under the mouse, or null when not over the game. */
   readonly pixel = createStore<PixelInfo | null>(null);
   readonly pixelProbe: PixelProbe;
+  readonly audioSettings = createStore<AudioSettings>(loadAudioSettings());
 
   constructor(readonly manifest: AssetManifest) {
     this.project = createStore(loadProject(manifest.games));
     this.commands = new CommandStack(this.project);
     this.audio = new AudioPlayer((m) => this.logs.add('WARN', m));
+    const applyAudio = () => {
+      const { volume, muted } = this.audioSettings.getState();
+      this.audio.setOutput(volume, muted);
+    };
+    applyAudio();
+    this.audioSettings.subscribe(() => {
+      applyAudio();
+      try {
+        localStorage.setItem(AUDIO_KEY, JSON.stringify(this.audioSettings.getState()));
+      } catch {
+        // Storage may be unavailable; the setting still applies for this session.
+      }
+    });
     this.pixelProbe = new PixelProbe(
       (offset, length, listener) => this.host.watch(offset, length, listener),
       (pixel) => this.pixel.setState(pixel),
@@ -81,6 +116,14 @@ export class Editor {
       if (next.game !== current.game) this.loadGame();
       current = next;
     });
+  }
+
+  setVolume(volume: number): void {
+    this.audioSettings.setState((s) => ({ ...s, volume: Math.max(0, Math.min(1, volume)), muted: false }));
+  }
+
+  toggleMute(): void {
+    this.audioSettings.setState((s) => ({ ...s, muted: !s.muted }));
   }
 
   async start(): Promise<void> {
