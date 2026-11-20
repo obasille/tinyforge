@@ -656,8 +656,10 @@ screenshotBtn?.addEventListener('click', takeScreenshot);
 
 // Keyboard shortcuts: R to restart, P to pause, F for fullscreen, G for a
 // screenshot, C to copy color. W/A/S/D are game buttons, so none of these
-// may use them.
+// may use them. They skip Ctrl/Cmd combos (Ctrl is a game trigger), so
+// browser shortcuts such as Ctrl+R and Ctrl+C keep working.
 window.addEventListener('keydown', (e: KeyboardEvent) => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
   if ((e.key === 'r' || e.key === 'R') && !e.repeat) {
     restartGame();
     e.preventDefault();
@@ -698,6 +700,8 @@ const keyMap = {
   start: 1 << 6,
   x: 1 << 7,
   y: 1 << 8,
+  lt: 1 << 9,
+  rt: 1 << 10,
 } as const;
 
 // The action buttons form a diamond on WASD (Y top, X left, A bottom,
@@ -716,6 +720,10 @@ const keyCodeMap: Record<string, number> = {
   KeyX: keyMap.b,
   Enter: keyMap.start,
   Space: keyMap.start,
+  // Triggers: Left Ctrl is player 2's fire key (next to WASD), Right Ctrl
+  // player 1's (next to the arrows).
+  ControlLeft: keyMap.lt,
+  ControlRight: keyMap.rt,
 };
 
 // Keyboard buttons and on-screen buttons are tracked apart and OR'd together,
@@ -725,6 +733,22 @@ let keyMask = 0;
 let touchMask = 0;
 let inputMask = 0;
 let prevInputMask = 0;
+
+// A key released while the page is in the background never sends keyup
+// (Ctrl+Tab is the usual one), so drop everything when the window blurs.
+window.addEventListener('blur', () => {
+  heldKeys.clear();
+  touchMask = 0;
+  updateInputMask();
+});
+
+// Holding a trigger (Ctrl) while pressing W is Ctrl+W, which closes the tab
+// and cannot be cancelled. While a trigger is held, ask before unloading.
+window.addEventListener('beforeunload', (e: BeforeUnloadEvent) => {
+  if ((inputMask & (keyMap.lt | keyMap.rt)) === 0) return;
+  e.preventDefault();
+  e.returnValue = '';
+});
 
 function updateInputMask(): void {
   keyMask = 0;

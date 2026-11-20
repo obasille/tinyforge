@@ -35,10 +35,16 @@ import {
  *   X                   A
  *   Y                   W
  *   START               Enter or Space
+ *   LT                  Left Ctrl
+ *   RT                  Right Ctrl
  *
  * The four action buttons sit in a diamond on W/A/S/D (Y top, X left,
  * A bottom, B right), so they also work as a second D-pad for player 2.
  * Use the P2_* aliases (or the p2* helpers) to read them that way.
+ *
+ * The triggers sit next to each player's hand in a two-player game: LT
+ * (Left Ctrl) for the WASD player, RT (Right Ctrl) for the arrows player.
+ * P1_FIRE and P2_FIRE name them that way.
  */
 export enum Button {
   UP = 1 << 0,
@@ -50,12 +56,18 @@ export enum Button {
   START = 1 << 6, // Enter or Space
   X = 1 << 7, // A key
   Y = 1 << 8, // W key
+  LT = 1 << 9, // Left Ctrl
+  RT = 1 << 10, // Right Ctrl
 
   // Second D-pad (player 2): the action buttons read by direction.
   P2_UP = 1 << 8, // = Y (W key)
   P2_DOWN = 1 << 4, // = A (S key)
   P2_LEFT = 1 << 7, // = X (A key)
   P2_RIGHT = 1 << 5, // = B (D key)
+
+  // Per-player fire keys in a two-player game.
+  P1_FIRE = 1 << 10, // = RT (Right Ctrl, next to the arrows)
+  P2_FIRE = 1 << 9, // = LT (Left Ctrl, next to WASD)
 }
 
 /**

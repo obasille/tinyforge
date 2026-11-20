@@ -3,6 +3,7 @@
 // Plain DOM code; the React panel only hands it a container.
 
 import { SCREEN_HEIGHT, SCREEN_WIDTH } from '@tinyforge/engine/memory-map';
+import { TRIGGERS } from '@tinyforge/runtime';
 import { type InputTracker, toGamePixel } from './input.ts';
 
 export class Viewport {
@@ -53,6 +54,19 @@ export class Viewport {
       if (this.input.key(e.code, false)) e.preventDefault();
     });
     on('blur', () => this.input.clear());
+
+    // The triggers are the Ctrl keys, and a player who holds one while
+    // pressing W would hit Ctrl+W, which closes the tab and cannot be
+    // cancelled by preventDefault. While a trigger is held, ask before the
+    // page unloads instead. Ctrl+key presses that are not game keys still
+    // reach the browser and the editor.
+    const guard = (e: BeforeUnloadEvent) => {
+      if ((this.input.current.buttons & TRIGGERS) === 0) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', guard);
+    this.cleanup.push(() => window.removeEventListener('beforeunload', guard));
     on('pointermove', (e) => this.pointer(e));
     on('pointerleave', () => this.input.pointer(-1, -1));
     on('pointerdown', (e) => {

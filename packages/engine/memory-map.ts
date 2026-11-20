@@ -18,8 +18,10 @@ export const FB_SIZE = SCREEN_WIDTH * SCREEN_HEIGHT * 4; // 0x04B000
 // Keyboard state is stored at INPUT_ADDR with the following layout:
 //   +0: u16 buttons     - Current button state (bitmask, little-endian)
 //   +2: u16 prevButtons - Previous button state (for edge detection)
-// Bits: 0-3 D-pad (up, down, left, right), 4 A, 5 B, 6 START, 7 X, 8 Y.
+// Bits: 0-3 D-pad (up, down, left, right), 4 A, 5 B, 6 START, 7 X, 8 Y,
+// 9 LT (left trigger), 10 RT (right trigger).
 // A/B/X/Y form a diamond on W/A/S/D and double as a second D-pad (player 2).
+// LT is Left Ctrl (player 2's fire key), RT is Right Ctrl (player 1's).
 // Access via buttonDown(), buttonPressed() in input.ts
 
 /** Keyboard input base address */

@@ -33,6 +33,16 @@ describe('InputTracker', () => {
     expect(tracker.current.buttons).toBe(Button.y | Button.x | Button.a | Button.b);
   });
 
+  it('maps Left and Right Ctrl to the LT and RT triggers', () => {
+    const tracker = new InputTracker(() => {});
+    expect(tracker.key('ControlLeft', true)).toBe(true);
+    expect(tracker.current.buttons).toBe(Button.lt);
+    tracker.key('ControlRight', true);
+    expect(tracker.current.buttons).toBe(Button.lt | Button.rt);
+    tracker.key('ControlLeft', false);
+    expect(tracker.current.buttons).toBe(Button.rt);
+  });
+
   it('keeps a button held while another key for it is still down', () => {
     const tracker = new InputTracker(() => {});
     tracker.key('KeyS', true);

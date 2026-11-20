@@ -1,6 +1,7 @@
 // Editor keyboard shortcuts. They use function keys so they never collide
 // with game keys (arrows, WASD, Z/X, Enter/Space) or the C color copy, and
-// they work whether the game view or the editor has focus.
+// they work whether the game view or the editor has focus. A bare Ctrl press
+// is a game trigger (LT/RT); only Ctrl+key combinations are shortcuts.
 
 export type ShortcutAction = 'reload' | 'restart' | 'pauseResume' | 'step' | 'undo' | 'redo';
 

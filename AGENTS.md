@@ -211,7 +211,7 @@ if (buttonDown(Button.LEFT)) {
 }
 ```
 
-**Buttons and keys:** D-pad `UP`/`DOWN`/`LEFT`/`RIGHT` (arrow keys), four action buttons in a diamond on WASD: `Y` (W), `X` (A), `A` (S, also Z), `B` (D, also X), and `START` (Enter/Space).
+**Buttons and keys:** D-pad `UP`/`DOWN`/`LEFT`/`RIGHT` (arrow keys), four action buttons in a diamond on WASD: `Y` (W), `X` (A), `A` (S, also Z), `B` (D, also X), `START` (Enter/Space), and two triggers: `LT` (Left Ctrl) and `RT` (Right Ctrl).
 
 **Two-player games:** the action buttons double as player 2's D-pad. Use `Button.P2_UP` (= Y), `P2_DOWN` (= A), `P2_LEFT` (= X), `P2_RIGHT` (= B), or the axis helpers:
 
@@ -221,7 +221,7 @@ vars.p1X += (p1AxisX() as f32) * SPEED;
 vars.p2X += (p2AxisX() as f32) * SPEED;
 ```
 
-In that setup player 2 has no spare action buttons (WASD is their D-pad), and START is shared by both players.
+In that setup each player's fire key is a trigger: `Button.P2_FIRE` (= LT, Left Ctrl) for the WASD player and `Button.P1_FIRE` (= RT, Right Ctrl) for the arrows player. START is shared. Many laptops (most Macs) have no Right Ctrl, so don't make RT the only fire key in a single-player game.
 
 **Mouse:** `mouseX()`, `mouseY()` (-1 when outside the canvas), `mouseDown(MouseButton.LEFT)`, `mousePressed(MouseButton.LEFT)`.
 
