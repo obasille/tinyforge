@@ -73,8 +73,12 @@ describe('GameMachine with real cartridges', () => {
 
   describe('tetris', () => {
     // Offsets into tetris's Vars struct at RAM_START.
+    const LINES = 4;
     const CURRENT_Y = 12;
+    const STATE = 16;
     const FALL_DELAY = 20;
+    const BOARD = 28; // sizeof<Vars>; 10x20 cells, one byte each
+    const CLEARING = 3;
     const START: InputState = { ...NO_INPUT, buttons: Button.start };
     const UP: InputState = { ...NO_INPUT, buttons: Button.up };
 
@@ -88,6 +92,24 @@ describe('GameMachine with real cartridges', () => {
       expect(y()).toBe(start);
       machine.tick(NO_INPUT);
       expect(y()).toBe(start + 1);
+    });
+
+    it('blinks a full line for 36 frames, paused, then removes it', async () => {
+      const machine = await boot('tetris');
+      machine.tick(START);
+      // Fill the bottom row, then hard drop: locking finds the full row.
+      const mem = machine.snapshot();
+      mem.fill(1, RAM_START + BOARD + 19 * 10, RAM_START + BOARD + 20 * 10);
+      machine.restore(mem);
+      machine.tick(UP);
+      const byte = (offset: number) => machine.read(RAM_START + offset, 1)[0];
+      expect(byte(STATE)).toBe(CLEARING);
+      for (let i = 0; i < 35; i++) machine.tick(i % 2 === 0 ? UP : NO_INPUT);
+      expect(byte(STATE)).toBe(CLEARING);
+      expect(byte(LINES)).toBe(0);
+      machine.tick(NO_INPUT);
+      expect(byte(LINES)).toBe(1);
+      expect(byte(STATE)).not.toBe(CLEARING);
     });
 
     it('plays music, lock and game over sounds', async () => {
