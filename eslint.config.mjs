@@ -21,7 +21,7 @@ export default defineConfig([
     files: ["apps/classic/src/**/*.ts"],
   })),
   {
-    files: ["scripts/*.js"],
+    files: ["scripts/**/*.js"],
     languageOptions: {
       globals: {
         process: true,
