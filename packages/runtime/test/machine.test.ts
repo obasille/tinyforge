@@ -90,7 +90,7 @@ describe('GameMachine with real cartridges', () => {
       expect(y()).toBe(start + 1);
     });
 
-    it('plays lock and game over sounds', async () => {
+    it('plays music, lock and game over sounds', async () => {
       const rec = recordingHost();
       const machine = await boot('tetris', rec.host);
       machine.tick(START);
@@ -99,6 +99,8 @@ describe('GameMachine with real cartridges', () => {
       const ids = rec.audio.flatMap((c) => (c.type === 'sfx' ? [c.id] : []));
       expect(ids).toContain('tetris_lock');
       expect(ids).toContain('tetris_gameover');
+      expect(rec.audio[0]).toMatchObject({ type: 'music', id: 'tetris_theme' });
+      expect(rec.audio.some((c) => c.type === 'stopMusic')).toBe(true);
     });
   });
 });
