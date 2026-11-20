@@ -867,7 +867,8 @@ pnpm check:alloc <gameName>
 
 **Prerequisites:**
 
-- Requires `wasm-objdump` to be installed and in your PATH
+- On Windows, the script uses the bundled `tools/wasm-objdump.exe` (see `tools/README.md`)
+- On macOS/Linux, `wasm-objdump` must be installed and in your PATH
 - Part of the WebAssembly Binary Toolkit (WABT): https://github.com/WebAssembly/wabt
 
 **Example usage:**
