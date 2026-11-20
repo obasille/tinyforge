@@ -3,7 +3,7 @@
 
 import { execSync } from 'child_process';
 import path from 'path';
-import { mkdirSync } from 'fs';
+import { existsSync, mkdirSync } from 'fs';
 
 const GAME = process.argv[2];
 if (!GAME) {
@@ -37,8 +37,14 @@ const symbols = [
 ];
 
 try {
+  // On Windows, prefer the copy bundled in tools/; otherwise use PATH.
+  const bundled = path.join('tools', 'wasm-objdump.exe');
   const objdump =
-    process.platform === 'win32' ? 'wasm-objdump.exe' : 'wasm-objdump';
+    process.platform === 'win32'
+      ? existsSync(bundled)
+        ? bundled
+        : 'wasm-objdump.exe'
+      : 'wasm-objdump';
   const output = execSync(`${objdump} -x ${wasmPath}`, { encoding: 'utf8' });
   let found = false;
   for (const sym of symbols) {
