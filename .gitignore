@@ -2,6 +2,8 @@
 node_modules/
 *.wasm
 *.wasm.map
-/dist/
+dist/
 /assets/cartridges/
 /tmp/
+test-results/
+playwright-report/

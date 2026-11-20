@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>TinyForge</title>
+
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0f172a" />
+
+    <!-- Manifest for PWA-->
+    <link rel="manifest" href="manifest.json" />
+
+    <!-- Favicon for the browser tab -->
+    <link rel="icon" href="icons/favicon.svg" />
+
+    <!-- Apple touch icon for the home screen -->
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+
+    <!-- Apple mobile web app capabilities -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="TinyForge" />
+
+    <!-- Main styles -->
+    <link rel="stylesheet" href="styles.css" />
+    <!-- Virtual Console styles -->
+    <link rel="stylesheet" href="stylesVC.css" />
+
+    <style>
+      /* desktop */
+      @media (pointer: fine) and (min-width: 901px) {
+        .dpad,
+        .buttons-wrap {
+          display: none !important;
+        }
+      }
+      /* mobile */
+      @media (pointer: coarse), (max-width: 900px) {
+        body {
+            overflow: hidden;
+            overscroll-behavior: none;
+            touch-action: none;
+        }
+        /* block scroll on mobile */
+        #main-column {
+          /* height: 100dvh; */
+          overflow: hidden;
+          width: 100%;
+          height: 100%;
+        }
+        /* Hide console and devtools on mobile */
+        #console,
+        #devtools {
+          display: none !important;
+        }
+      }
+      /* Remove top padding on iOS PWA */
+      @media (display-mode: standalone) and (pointer: coarse) and (orientation: portrait) {
+        body {
+          padding-top: 0;
+          height: 100dvh;
+        }
+      }
+      /* Fullscreen canvas */
+      canvas:fullscreen {
+        width: 100vw;
+        height: 100vh;
+        display: block;
+        background: #000;
+      }
+      canvas:-webkit-full-screen {
+        width: 100vw;
+        height: 100vh;
+        display: block;
+        background: #000;
+      }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "@assemblyscript/loader": "https://unpkg.com/@assemblyscript/loader/index.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <main>
+      <div id="main-column">
+        <section class="virtual-console">
+          <div class="dpad">
+            <button class="btn" data-input="up" aria-label="Up">▲</button>
+            <div class="dpad-row">
+              <button class="btn" data-input="left" aria-label="Left">◀</button>
+              <button class="btn" data-input="right" aria-label="Right">▶</button>
+            </div>
+            <button class="btn" data-input="down" aria-label="Down">▼</button>
+          </div>
+          <div class="screen">
+            <canvas id="screen" width="320" height="240"></canvas>
+          </div>
+          <div class="buttons-wrap">
+            <button class="btn btn-text" data-action="next" aria-label="Next">
+              Next
+            </button>
+            <button class="btn btn-text" data-input="start" aria-label="Start">
+              Start
+            </button>
+            <div class="buttons-main">
+              <button class="btn btn-large" data-input="a" aria-label="Button A">
+                A
+              </button>
+              <button
+                class="btn btn-large btn-secondary"
+                data-input="b"
+                aria-label="Button B"
+              >
+                B
+              </button>
+            </div>
+          </div>
+        </section>
+                
+        <div id="console">
+          <div class="console-header">
+            <span class="console-title">Console</span>
+            <button id="clear-console" class="console-btn">Clear</button>
+          </div>
+          <div id="console-entries" class="console-entries"></div>
+        </div>
+      </div>
+      
+      <div id="devtools">
+        <div class="panel">
+          <h3>Game Select</h3>
+          <select id="game-select" class="game-selector"></select>
+          <button id="restart-game" class="console-btn" style="margin-top: 8px; width: 100%;">Restart (R)</button>
+          <button id="pause-game" class="console-btn" style="margin-top: 8px; width: 100%;">Pause (P)</button>
+          <button id="fullscreen-btn" class="console-btn" style="margin-top: 8px; width: 100%;">Fullscreen (F)</button>
+          <button id="screenshot-btn" class="console-btn" style="margin-top: 8px; width: 100%;">Screenshot (S)</button>
+        </div>
+        
+        <div class="panel" id="debug">
+          <h3>Debug Info</h3>
+          <div class="metric">
+            <span class="metric-label">FPS:</span>
+            <span class="metric-value" id="fps">60</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Update Time:</span>
+            <span class="metric-value"><span id="update-time">0.00</span> ms</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Draw Time:</span>
+            <span class="metric-value"><span id="draw-time">0.00</span> ms</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Updates/Frame:</span>
+            <span class="metric-value" id="updates">1</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Accumulator:</span>
+            <span class="metric-value"><span id="acc">0</span> ms</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Input Mask:</span>
+            <span class="metric-value" id="input">0x00</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Mouse:</span>
+            <span class="metric-value" id="mouse">-1, -1</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Mouse Buttons:</span>
+            <span class="metric-value" id="mouse-buttons">0x00</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">RNG Seed:</span>
+            <span class="metric-value">
+              <input id="rng-seed-input" class="metric-input" type="text" value="0x00000000">
+              <button id="rng-seed-apply" class="console-btn metric-btn">Set</button>
+              <button id="rng-seed-random" class="console-btn metric-btn">Gen</button>
+            </span>
+          </div>
+        </div>
+
+        <div class="panel" id="color-peek">
+          <h3>Color Peek (C)</h3>
+          <div class="metric">
+            <span class="metric-label">0xAABBGGRR:</span>
+            <span class="metric-value" id="color-argb">0x00000000</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">RGB:</span>
+            <span class="metric-value" id="color-rgb">#000000</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Preview:</span>
+            <span class="metric-value">
+              <span id="color-swatch" class="color-swatch" aria-hidden="true"></span>
+            </span>
+          </div>
+        </div>
+        
+        <div class="panel">
+          <h3>Controls</h3>
+          <div class="help">
+            <strong>Arrow Keys:</strong> D-Pad<br>
+            <strong>Z:</strong> A Button<br>
+            <strong>X:</strong> B Button<br>
+            <strong>Enter / Space:</strong> Start<br>
+            <strong>C:</strong> Copy Color (RGB)
+          </div>
+        </div>
+        
+        <div class="panel">
+          <h3>System</h3>
+          <div class="metric">
+            <span class="metric-label">Resolution:</span>
+            <span class="metric-value">320×240</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Tick Rate:</span>
+            <span class="metric-value">60 Hz</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Memory:</span>
+            <span class="metric-value">1 MB</span>
+          </div>
+          <button id="open-memory-viewer" class="console-btn" style="margin-top: 8px; width: 100%;">Open Memory Viewer</button>
+        </div>
+      </div>
+    </main>
+    
+    <script type="module" src="dist/apps/classic/src/main.js"></script>
+  </body>
+</html>

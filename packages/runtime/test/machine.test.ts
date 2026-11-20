@@ -1,0 +1,72 @@
+import { listGames } from '@tinyforge/engine/tooling/compile-game';
+import { describe, expect, it } from 'vitest';
+import { Button, type InputState, NO_INPUT } from '../src/input.ts';
+import { GameMachine } from '../src/machine.ts';
+import { boot, cartridge, FIXED_SEED, hash, recordingHost } from './helpers.ts';
+
+const HOLD_RIGHT: InputState = { ...NO_INPUT, buttons: Button.right | Button.start };
+
+function run(machine: GameMachine, ticks: number, input: InputState = HOLD_RIGHT): string {
+  for (let i = 0; i < ticks; i++) machine.tick(input);
+  machine.draw();
+  return hash(machine.framebuffer());
+}
+
+describe('GameMachine with real cartridges', () => {
+  it('produces the same frame for the same seed and input', async () => {
+    const a = run(await boot('pong'), 120);
+    const b = run(await boot('pong'), 120);
+    expect(a).toBe(b);
+  });
+
+  it('draws something other than a blank screen', async () => {
+    const machine = await boot('pong');
+    machine.draw();
+    const pixels = new Uint32Array(machine.framebuffer().buffer, 0, 320 * 240);
+    expect(new Set(pixels).size).toBeGreaterThan(1);
+  });
+
+  it('restores a snapshot exactly', async () => {
+    const machine = await boot('pong');
+    run(machine, 30);
+    const snap = machine.snapshot();
+    const first = run(machine, 60);
+    machine.restore(snap);
+    expect(run(machine, 60)).toBe(first);
+  });
+
+  it('keeps game state across a hot reload', async () => {
+    const straight = await boot('pong');
+    const expected = run(straight, 90);
+
+    const reloaded = await boot('pong');
+    run(reloaded, 45);
+    await reloaded.load(await cartridge('pong'), { keepState: true });
+    for (let i = 0; i < 45; i++) reloaded.tick(HOLD_RIGHT);
+    reloaded.draw();
+    expect(hash(reloaded.framebuffer())).toBe(expected);
+  });
+
+  it('rejects a module without the lifecycle exports', async () => {
+    // (module (import "env" "memory" (memory 16 16)))
+    const empty = new Uint8Array([
+      0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x02, 0x10, 0x01, 0x03, 0x65, 0x6e, 0x76, 0x06, 0x6d, 0x65, 0x6d,
+      0x6f, 0x72, 0x79, 0x02, 0x01, 0x10, 0x10,
+    ]);
+    const machine = new GameMachine(recordingHost().host);
+    await expect(machine.load(empty)).rejects.toThrow(/missing required exports: init, update, draw/);
+  });
+
+  describe.each(listGames())('%s', (name) => {
+    it('boots and runs 120 ticks without aborting', async () => {
+      const rec = recordingHost();
+      const machine = new GameMachine(rec.host);
+      machine.seed = FIXED_SEED;
+      await machine.load(await cartridge(name));
+      run(machine, 120);
+      const errors = rec.logs.filter((l) => l.level === 'ABORT' || l.level === 'ERROR');
+      expect(errors).toEqual([]);
+      expect(machine.aborted).toBe(false);
+    });
+  });
+});

@@ -27,7 +27,7 @@ try {
 // Compile test file
 try {
   execSync(
-    `npx asc src/assembly/sdk/utility.spec.ts ` +
+    `npx asc packages/engine/assembly/sdk/utility.spec.ts ` +
       `--runtime stub ` +
       `--importMemory ` +
       `--memoryBase 524288 ` +
