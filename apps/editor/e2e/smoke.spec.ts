@@ -117,3 +117,42 @@ test('a game stuck in an infinite loop can be stopped without freezing the edito
   await expect.poll(async () => (await session(page))?.game).toBe('pong');
   expect((await session(page))?.generation).toBe(2);
 });
+
+test('hovering the game shows the color of the pixel under the mouse', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('run-status')).toHaveText('running');
+  const canvas = page.getByTestId('game-canvas');
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error('no canvas');
+  // Pixel (0, 0) of pong is the black background; compare with what the worker reports.
+  await page.mouse.move(box.x + 1, box.y + 1);
+  const readout = page.getByTestId('pixel-color');
+  await expect(readout).toContainText(/^0, 0 {3}#[0-9A-F]{6} {3}0x[0-9A-F]{8}/);
+  const fromMemory = await page.evaluate(async () => {
+    const snap = await window.__tf?.snapshot();
+    return snap
+      ? `#${[snap[0], snap[1], snap[2]].map((c) => c.toString(16).padStart(2, '0')).join('')}`.toUpperCase()
+      : '';
+  });
+  await expect(readout).toContainText(fromMemory);
+  await page.mouse.move(box.x - 20, box.y - 20);
+  await expect(readout).toContainText('Hover the game');
+});
+
+test('seed fields are plain text, not color pickers', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('run-status')).toHaveText('running');
+  const run = page.getByTestId('run-panel');
+  await expect(run.locator('.tp-colv, .tp-colswv')).toHaveCount(0);
+  const values = await run
+    .locator('input, textarea')
+    .evaluateAll((els) => els.map((e) => (e as HTMLInputElement).value));
+  expect(values.some((v) => /^0x[0-9A-F]{8}$/.test(v))).toBe(true);
+});
+
+test('choosing a game gives the keyboard back to the game view', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('run-status')).toHaveText('running');
+  await page.getByTestId('game-select').selectOption('snake');
+  await expect(page.getByTestId('viewport')).toBeFocused();
+});

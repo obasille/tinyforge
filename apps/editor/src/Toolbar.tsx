@@ -15,7 +15,11 @@ export function Toolbar({ onResetLayout }: { onResetLayout: () => void }) {
         <select
           data-testid="game-select"
           value={project.game ?? ''}
-          onChange={(e) => editor.selectGame(e.target.value)}
+          onChange={(e) => {
+            editor.selectGame(e.target.value);
+            // Hand the keyboard back to the game so it can be played right away.
+            editor.viewport.focus();
+          }}
         >
           {project.game === null && <option value="">Choose…</option>}
           {editor.manifest.games.map((g) => (
