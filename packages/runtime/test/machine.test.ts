@@ -103,4 +103,25 @@ describe('GameMachine with real cartridges', () => {
       expect(rec.audio.some((c) => c.type === 'stopMusic')).toBe(true);
     });
   });
+
+  describe('pong audio', () => {
+    const START: InputState = { ...NO_INPUT, buttons: Button.start };
+
+    it('plays music, countdown, hit, score and win sounds', async () => {
+      const rec = recordingHost();
+      const machine = await boot('pong', rec.host);
+      machine.tick(START);
+      // Paddles stay centered for the first serve, so the ball rallies.
+      for (let i = 0; i < 600; i++) machine.tick(NO_INPUT);
+      // Then the bottom paddle moves out of the way until player 1 wins.
+      for (let i = 0; i < 3000; i++) machine.tick(HOLD_RIGHT);
+      const ids = rec.audio.flatMap((c) => (c.type === 'sfx' ? [c.id] : []));
+      expect(rec.audio[0]).toMatchObject({ type: 'music', id: 'pong_theme' });
+      expect(ids.slice(0, 4)).toEqual(['pong_tick', 'pong_tick', 'pong_tick', 'pong_go']);
+      for (const id of ['pong_serve', 'pong_hit_p1', 'pong_hit_p2', 'pong_score', 'pong_win']) {
+        expect(ids).toContain(id);
+      }
+      expect(rec.audio.some((c) => c.type === 'stopMusic')).toBe(true);
+    });
+  });
 });

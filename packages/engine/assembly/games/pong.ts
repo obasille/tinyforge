@@ -13,9 +13,11 @@ import {
   fillRect,
   SCREEN_HEIGHT,
   log,
+  playMusic,
   playSfx,
   RAM_START,
   SCREEN_WIDTH,
+  stopMusic,
 } from "../sdk";
 
 // === Constants ===
@@ -84,12 +86,12 @@ function checkCollision(): void {
     vars.ballX = 0.0;
     ballVX = -ballVX;
     vars.ballVX = ballVX;
-    playSfx("tap", 0.3);
+    playSfx("pong_wall", 0.5);
   } else if (ballX >= ((SCREEN_WIDTH - BALL_SIZE) as f32)) {
     vars.ballX = (SCREEN_WIDTH - BALL_SIZE) as f32;
     ballVX = -ballVX;
     vars.ballVX = ballVX;
-    playSfx("tap", 0.2);
+    playSfx("pong_wall", 0.5);
   }
 
   // Top paddle collision (player 1)
@@ -114,7 +116,7 @@ function checkCollision(): void {
 
     vars.ballVX = ballVX;
     vars.ballVY = ballVY;
-    playSfx("tap", 0.4);
+    playSfx("pong_hit_p1", 0.6);
   }
 
   // Bottom paddle collision (player 2)
@@ -140,20 +142,22 @@ function checkCollision(): void {
 
     vars.ballVX = ballVX;
     vars.ballVY = ballVY;
-    playSfx("tap", 0.4);
+    playSfx("pong_hit_p2", 0.6);
   }
 
   // Top edge (player 2 scores)
   if (ballY < 0.0) {
     vars.p2Score++;
     log("Player 2 scores!");
-    playSfx("explosion", 0.5);
 
     if (vars.p2Score >= MAX_SCORE) {
       vars.state = GameState.GAME_OVER as u8;
       vars.winner = 2;
       log("Player 2 wins!");
+      stopMusic();
+      playSfx("pong_win", 0.8);
     } else {
+      playSfx("pong_score", 0.6);
       resetBall(2);
     }
   }
@@ -162,13 +166,15 @@ function checkCollision(): void {
   if (ballY > (SCREEN_HEIGHT as f32)) {
     vars.p1Score++;
     log("Player 1 scores!");
-    playSfx("explosion", 0.5);
 
     if (vars.p1Score >= MAX_SCORE) {
       vars.state = GameState.GAME_OVER as u8;
       vars.winner = 1;
       log("Player 1 wins!");
+      stopMusic();
+      playSfx("pong_win", 0.8);
     } else {
+      playSfx("pong_score", 0.6);
       resetBall(1);
     }
   }
@@ -198,6 +204,8 @@ export function update(): void {
   // Start game from start screen
   if (state == GameState.START_SCREEN && buttonPressed(Button.START)) {
     vars.state = GameState.PLAYING as u8;
+    // Audio only starts after a user gesture, so start music on START.
+    playMusic("pong_theme", 0.4);
     return;
   }
 
@@ -212,6 +220,16 @@ export function update(): void {
   // Handle countdown
   if (vars.countdown > 0) {
     vars.countdown--;
+    const countdown = vars.countdown;
+
+    // Beep on each "3", "2", "1", then a higher tone on "GO!"
+    if (countdown % 60 == 59) {
+      if (countdown >= 60) {
+        playSfx("pong_tick", 0.5);
+      } else {
+        playSfx("pong_go", 0.5);
+      }
+    }
 
     // Launch ball when countdown reaches 0
     if (vars.countdown == 0) {
@@ -221,6 +239,7 @@ export function update(): void {
       } else {
         vars.ballVY = -BALL_SPEED_INITIAL; // Serve up toward player 1
       }
+      playSfx("pong_serve", 0.5);
     }
   }
 
