@@ -9,6 +9,8 @@ import {
   emptyProject,
   GameHost,
   InputTracker,
+  type PixelInfo,
+  PixelProbe,
   type ProjectState,
   projectCommands,
   type Store,
@@ -42,12 +44,22 @@ export class Editor {
   readonly audio: AudioPlayer;
   private savedState: Uint8Array | null = null;
   readonly hasSavedState = createStore(false);
+  /** Color of the game pixel under the mouse, or null when not over the game. */
+  readonly pixel = createStore<PixelInfo | null>(null);
+  readonly pixelProbe: PixelProbe;
 
   constructor(readonly manifest: AssetManifest) {
     this.project = createStore(loadProject(manifest.games));
     this.commands = new CommandStack(this.project);
     this.audio = new AudioPlayer((m) => this.logs.add('WARN', m));
-    this.input = new InputTracker((state) => this.host.setInput(state));
+    this.pixelProbe = new PixelProbe(
+      (offset, length, listener) => this.host.watch(offset, length, listener),
+      (pixel) => this.pixel.setState(pixel),
+    );
+    this.input = new InputTracker((state) => {
+      this.host.setInput(state);
+      this.pixelProbe.setPosition(state.mouseX, state.mouseY);
+    });
     this.viewport = new Viewport(this.input, () => this.audio.unlock());
     this.host = new GameHost({
       createWorker: () => new GameWorker({ name: 'tinyforge-game' }),

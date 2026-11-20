@@ -28,7 +28,8 @@ export function RunPanel() {
     live.addBinding(stats, 'draw', { label: 'draw ms', readonly: true, format: (v: number) => v.toFixed(2) });
     live.addBinding(stats, 'update', { label: 'update graph', readonly: true, view: 'graph', min: 0, max: 16.7 });
     live.addBinding(stats, 'ticks', { readonly: true, format: (v: number) => v.toFixed(0) });
-    live.addBinding(stats, 'seed', { label: 'RNG seed', readonly: true });
+    // view: 'text' stops Tweakpane from reading a '0x…' string as a color.
+    live.addBinding(stats, 'seed', { label: 'RNG seed', readonly: true, view: 'text' });
 
     const run = pane.addFolder({ title: 'Run' });
     const pauseBtn = run.addButton({ title: 'Pause' });
@@ -50,7 +51,7 @@ export function RunPanel() {
     seedFolder.addBinding(settings, 'fixedSeed', { label: 'fixed seed' }).on('change', (ev) => {
       editor.setSeed(ev.value ? Number.parseInt(settings.seed, 16) || 1 : null);
     });
-    seedFolder.addBinding(settings, 'seed', { label: 'value (hex)' }).on('change', (ev) => {
+    seedFolder.addBinding(settings, 'seed', { label: 'value (hex)', view: 'text' }).on('change', (ev) => {
       if (!settings.fixedSeed) return;
       const n = Number.parseInt(String(ev.value).replace(/^0x/i, ''), 16);
       if (Number.isFinite(n) && n !== editor.project.getState().seed) editor.setSeed(n);
