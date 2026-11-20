@@ -13,6 +13,7 @@ import {
   PixelProbe,
   type ProjectState,
   projectCommands,
+  type ShortcutAction,
   type Store,
   Viewport,
 } from '@tinyforge/editor-core';
@@ -199,6 +200,35 @@ export class Editor {
     if (!this.savedState) return;
     await this.host.restore(this.savedState);
     this.logs.add('HOST', 'State restored');
+  }
+
+  /** Run what a keyboard shortcut stands for. */
+  runShortcut(action: ShortcutAction): void {
+    switch (action) {
+      case 'reload':
+        this.loadGame();
+        break;
+      case 'restart':
+        this.restart();
+        break;
+      case 'pauseResume':
+        this.togglePause();
+        break;
+      case 'step':
+        this.host.step(1);
+        break;
+      case 'undo':
+        this.commands.undo();
+        break;
+      case 'redo':
+        this.commands.redo();
+        break;
+    }
+  }
+
+  togglePause(): void {
+    if (this.host.session.getState().status === 'paused') this.host.resume();
+    else this.host.pause();
   }
 
   /** Replace a hung game Worker and load the project's game from scratch. */

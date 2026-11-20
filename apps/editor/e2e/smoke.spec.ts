@@ -57,7 +57,7 @@ test('memory viewer updates every frame from the worker', async ({ page }) => {
 test('pause, step and resume through the run panel', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByTestId('run-status')).toHaveText('running');
-  await page.getByRole('button', { name: 'Pause' }).click();
+  await page.getByRole('button', { name: /^Pause/ }).click();
   await expect(page.getByTestId('run-status')).toHaveText('paused');
   const before = await page.evaluate(async () => {
     const tf = window.__tf;
@@ -68,7 +68,7 @@ test('pause, step and resume through the run panel', async ({ page }) => {
       });
     });
   });
-  await page.getByRole('button', { name: 'Step 1 tick' }).click();
+  await page.getByRole('button', { name: /^Step 1 tick/ }).click();
   const after = await page.evaluate(async () => {
     const tf = window.__tf;
     return new Promise<number>((resolve) => {
@@ -79,7 +79,7 @@ test('pause, step and resume through the run panel', async ({ page }) => {
     });
   });
   expect(after).toBe(before + 1);
-  await page.getByRole('button', { name: 'Resume' }).click();
+  await page.getByRole('button', { name: /^Resume/ }).click();
   await expect(page.getByTestId('run-status')).toHaveText('running');
 });
 
@@ -189,5 +189,44 @@ test('master volume and mute apply to the audio and survive a reload', async ({ 
 
   await page.getByTestId('mute').click();
   await expect.poll(gain).toBeCloseTo(0.3);
+  expect(errors).toEqual([]);
+});
+
+test('F-key shortcuts pause, step, resume, restart and reload', async ({ page }) => {
+  const errors = trackErrors(page);
+  await page.goto('/');
+  await expect(page.getByTestId('run-status')).toHaveText('running');
+  await expect(page.getByTestId('viewport')).toBeFocused();
+  const ticks = () =>
+    page.evaluate(
+      () =>
+        new Promise<number>((resolve) => {
+          const stop = window.__tf?.editor.host.watch(0, 4, (_b, _o, t) => {
+            stop?.();
+            resolve(t);
+          });
+        }),
+    );
+
+  await page.keyboard.press('F8');
+  await expect(page.getByTestId('run-status')).toHaveText('paused');
+  await expect(page.getByRole('button', { name: 'Resume (F8)' })).toBeVisible();
+  const before = await ticks();
+  await page.keyboard.press('F10');
+  await expect.poll(ticks).toBe(before + 1);
+  await page.keyboard.press('F8');
+  await expect(page.getByTestId('run-status')).toHaveText('running');
+
+  // F5 must reload the cartridge, not the browser page.
+  await page.evaluate(() => {
+    (window as unknown as { marker: number }).marker = 1;
+  });
+  await expect.poll(ticks).toBeGreaterThan(60);
+  await page.keyboard.press('Shift+F5');
+  await expect.poll(ticks).toBeLessThan(60);
+  await expect.poll(ticks).toBeGreaterThan(60);
+  await page.keyboard.press('F5');
+  await expect.poll(ticks).toBeLessThan(60);
+  expect(await page.evaluate(() => (window as unknown as { marker?: number }).marker)).toBe(1);
   expect(errors).toEqual([]);
 });

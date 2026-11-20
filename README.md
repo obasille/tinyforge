@@ -939,6 +939,18 @@ Then open the URL Vite prints (http://localhost:5173/).
   The layout is saved in the browser.
 - **Sound:** the speaker button and slider in the toolbar set the master volume
   and mute for every game. The setting is saved in the browser.
+- **Shortcuts:** they work anywhere in the editor and stay clear of game keys
+  (arrows, WASD, Z/X, Enter, Space, C). Button tooltips show them too.
+
+  | Key            | Action                          |
+  | -------------- | ------------------------------- |
+  | F5             | Reload cartridge                |
+  | Shift+F5       | Restart (run `init` again)      |
+  | F8             | Pause / resume                  |
+  | F10            | Step 1 tick (pauses first)      |
+  | Ctrl+Z         | Undo (Cmd+Z on macOS)           |
+  | Ctrl+Shift+Z   | Redo (Cmd+Shift+Z on macOS)     |
+
 - **Dev hook:** in development, `window.__tf` exposes the editor, the project
   and session stores, and `snapshot()`, for tests and agents.
 

@@ -7,6 +7,7 @@ export * from './memory-view.ts';
 export * from './pixel-probe.ts';
 export * from './project.ts';
 export * from './protocol.ts';
+export * from './shortcuts.ts';
 export * from './store.ts';
 export * from './viewport.ts';
 export { formatSeed } from './worker-core.ts';
