@@ -15,6 +15,7 @@ import {
   getU8,
   SCREEN_HEIGHT,
   log,
+  playSfx,
   RAM_START,
   randomRange,
   setU8,
@@ -28,8 +29,8 @@ const CELL_SIZE: i32 = 12;
 const BOARD_X: i32 = (SCREEN_WIDTH - BOARD_WIDTH * CELL_SIZE) / 2;
 const BOARD_Y: i32 = (SCREEN_HEIGHT - BOARD_HEIGHT * CELL_SIZE) / 2;
 
-const INITIAL_FALL_DELAY: u8 = 60;
-const MIN_FALL_DELAY: u8 = 2;
+const LINES_PER_LEVEL: i32 = 10;
+const MAX_LEVEL: i32 = 255; // level is stored as u8
 const PREVIEW_SIZE: i32 = 4;
 const PREVIEW_X: i32 = BOARD_X + BOARD_WIDTH * CELL_SIZE + 16;
 const PREVIEW_Y: i32 = BOARD_Y + 15;
@@ -88,6 +89,16 @@ const PIECE_COLORS: u32[] = [
   0x0066ff, // J
   0xffaa00, // L
 ];
+
+// Gravity: frames per row at 60 Hz, indexed by level. NES-style curve:
+// 48 frames at level 0, -5 per level up to level 8, then 6 at level 9,
+// 5 for levels 10-12, 4 for 13-15, 3 for 16-18, 2 for 19-28, 1 from level 29.
+const GRAVITY_FRAMES: u8[] = [
+  48, 43, 38, 33, 28, 23, 18, 13, 8, 6, // 0-9
+  5, 5, 5, 4, 4, 4, 3, 3, 3, // 10-18
+  2, 2, 2, 2, 2, 2, 2, 2, 2, 2, // 19-28
+];
+const MAX_SPEED_FRAMES: u8 = 1; // level 29 and up
 
 // === Board Helpers ===
 function boardIndex(x: i32, y: i32): usize {
@@ -183,11 +194,38 @@ function clearLines(): i32 {
   return cleared;
 }
 
+function gravityForLevel(level: i32): u8 {
+  if (level < GRAVITY_FRAMES.length) return GRAVITY_FRAMES[level];
+  return MAX_SPEED_FRAMES;
+}
+
 function updateFallDelay(): void {
-  const level = vars.level as i32;
-  let delay = INITIAL_FALL_DELAY - level;
-  if (delay < (MIN_FALL_DELAY as i32)) delay = MIN_FALL_DELAY as i32;
-  vars.fallDelay = delay as u8;
+  vars.fallDelay = gravityForLevel(vars.level as i32);
+}
+
+// Lock the current piece, clear lines, update score/level, spawn the next one.
+function lockPiece(): void {
+  placeCurrentPiece();
+  const cleared = clearLines();
+  if (cleared > 0) {
+    const previousLevel = vars.level;
+    vars.lines += cleared;
+    vars.score += cleared * 100;
+    let level = vars.lines / LINES_PER_LEVEL;
+    if (level > MAX_LEVEL) level = MAX_LEVEL;
+    vars.level = level as u8;
+    updateFallDelay();
+
+    if (cleared >= 4) {
+      playSfx("tetris_tetris", 0.8);
+    } else {
+      playSfx("tetris_line", 0.7);
+    }
+    if (vars.level != previousLevel) playSfx("tetris_levelup", 0.7);
+  } else {
+    playSfx("tetris_lock", 0.6);
+  }
+  spawnPiece();
 }
 
 function spawnPiece(): void {
@@ -198,6 +236,7 @@ function spawnPiece(): void {
 
   if (!canPlace(nextType, nextX, nextY, nextRotation)) {
     vars.state = GameState.GAME_OVER as u8;
+    playSfx("tetris_gameover", 0.8);
     log("Game Over!");
     return;
   }
@@ -220,55 +259,40 @@ function tryMove(dx: i32, dy: i32): bool {
   return false;
 }
 
-function tryRotate(clockwise: bool): void {
+function tryRotate(clockwise: bool): bool {
   const rot = vars.currentRotation;
   const nextRot = clockwise ? (((rot + 1) & 3) as u8) : (((rot + 3) & 3) as u8);
 
   if (canPlace(vars.currentType, vars.currentX, vars.currentY, nextRot)) {
     vars.currentRotation = nextRot;
-    return;
+    return true;
   }
 
   // Simple wall kicks
   if (canPlace(vars.currentType, vars.currentX - 1, vars.currentY, nextRot)) {
     vars.currentX -= 1;
     vars.currentRotation = nextRot;
-    return;
+    return true;
   }
   if (canPlace(vars.currentType, vars.currentX + 1, vars.currentY, nextRot)) {
     vars.currentX += 1;
     vars.currentRotation = nextRot;
-    return;
+    return true;
   }
+  return false;
 }
 
 function stepDown(): void {
   if (tryMove(0, 1)) return;
 
-  placeCurrentPiece();
-  const cleared = clearLines();
-  if (cleared > 0) {
-    vars.lines += cleared;
-    vars.score += cleared * 100;
-    vars.level = (vars.lines / 10) as u8;
-    updateFallDelay();
-  }
-  spawnPiece();
+  lockPiece();
 }
 
 function hardDrop(): void {
   while (tryMove(0, 1)) {
     // Move down until blocked.
   }
-  placeCurrentPiece();
-  const cleared = clearLines();
-  if (cleared > 0) {
-    vars.lines += cleared;
-    vars.score += cleared * 100;
-    vars.level = (vars.lines / 10) as u8;
-    updateFallDelay();
-  }
-  spawnPiece();
+  lockPiece();
 }
 
 // === Lifecycle ===
@@ -277,7 +301,7 @@ export function init(): void {
   vars.score = 0;
   vars.lines = 0;
   vars.level = 0;
-  vars.fallDelay = INITIAL_FALL_DELAY;
+  updateFallDelay();
   vars.fallTimer = vars.fallDelay;
   vars.state = GameState.START_SCREEN as u8;
   vars.nextType = randomPiece();
@@ -303,16 +327,16 @@ export function update(): void {
 
   // Horizontal movement
   if (buttonPressed(Button.LEFT)) {
-    tryMove(-1, 0);
+    if (tryMove(-1, 0)) playSfx("tetris_move", 0.4);
   } else if (buttonPressed(Button.RIGHT)) {
-    tryMove(1, 0);
+    if (tryMove(1, 0)) playSfx("tetris_move", 0.4);
   }
 
   // Rotation
   if (buttonPressed(Button.A)) {
-    tryRotate(true);
+    if (tryRotate(true)) playSfx("tetris_rotate", 0.4);
   } else if (buttonPressed(Button.B)) {
-    tryRotate(false);
+    if (tryRotate(false)) playSfx("tetris_rotate", 0.4);
   }
 
   // Hard drop

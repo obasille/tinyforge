@@ -1,3 +1,4 @@
+import { RAM_START } from '@tinyforge/engine/memory-map';
 import { listGames } from '@tinyforge/engine/tooling/compile-game';
 import { describe, expect, it } from 'vitest';
 import { Button, type InputState, NO_INPUT } from '../src/input.ts';
@@ -67,6 +68,37 @@ describe('GameMachine with real cartridges', () => {
       const errors = rec.logs.filter((l) => l.level === 'ABORT' || l.level === 'ERROR');
       expect(errors).toEqual([]);
       expect(machine.aborted).toBe(false);
+    });
+  });
+
+  describe('tetris', () => {
+    // Offsets into tetris's Vars struct at RAM_START.
+    const CURRENT_Y = 12;
+    const FALL_DELAY = 20;
+    const START: InputState = { ...NO_INPUT, buttons: Button.start };
+    const UP: InputState = { ...NO_INPUT, buttons: Button.up };
+
+    it('falls one row every 48 frames at level 0', async () => {
+      const machine = await boot('tetris');
+      machine.tick(START);
+      expect(machine.read(RAM_START + FALL_DELAY, 1)[0]).toBe(48);
+      const y = () => new DataView(machine.read(RAM_START + CURRENT_Y, 4).buffer).getInt32(0, true);
+      const start = y();
+      for (let i = 0; i < 47; i++) machine.tick(NO_INPUT);
+      expect(y()).toBe(start);
+      machine.tick(NO_INPUT);
+      expect(y()).toBe(start + 1);
+    });
+
+    it('plays lock and game over sounds', async () => {
+      const rec = recordingHost();
+      const machine = await boot('tetris', rec.host);
+      machine.tick(START);
+      // Hard drop every other frame until the stack tops out.
+      for (let i = 0; i < 200; i++) machine.tick(i % 2 === 0 ? UP : NO_INPUT);
+      const ids = rec.audio.flatMap((c) => (c.type === 'sfx' ? [c.id] : []));
+      expect(ids).toContain('tetris_lock');
+      expect(ids).toContain('tetris_gameover');
     });
   });
 });
