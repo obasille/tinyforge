@@ -904,6 +904,7 @@ const items = ArrayView.fromAddress<u16>(RAM_START + Var.ITEMS_START);
 
    `gameName` must be the exact `.ts` filename without the extension.
    Run builds from the command line so the `postbuild` step runs and auto-uploads.
+   The upload is skipped (and the build still succeeds) when FTP credentials are not set or `FTP_UPLOAD=0`.
    **Always build after creating a game or making any game changes.**
    The game will be compiled to `assets/cartridges/gameName.wasm` and can be selected from the dropdown.
 

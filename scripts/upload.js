@@ -6,9 +6,24 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const { FTP_HOST, FTP_USER, FTP_PASS, FTP_SECURE, FTP_PORT } = process.env;
+const { FTP_HOST, FTP_USER, FTP_PASS, FTP_SECURE, FTP_PORT, FTP_UPLOAD } =
+  process.env;
+
+// --if-configured is passed by the postbuild hooks: the upload is optional
+// there, so a build succeeds without FTP settings. A manual `pnpm upload`
+// (no flag) still fails when the settings are missing.
+const optional = process.argv.includes('--if-configured');
+
+if (optional && /^(0|false|no|off)$/i.test(FTP_UPLOAD ?? '')) {
+  console.log('FTP upload skipped (FTP_UPLOAD is off).');
+  process.exit(0);
+}
 
 if (!FTP_HOST || !FTP_USER || !FTP_PASS) {
+  if (optional) {
+    console.log('FTP upload skipped (FTP_HOST, FTP_USER or FTP_PASS not set).');
+    process.exit(0);
+  }
   console.error('Missing FTP_HOST, FTP_USER, or FTP_PASS in .env');
   process.exit(1);
 }
