@@ -6,7 +6,7 @@
  */
 
 // import * as loader from '@assemblyscript/loader';
-import { execSync } from 'child_process';
+import { runAsc } from './lib/asc.js';
 import { readFileSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -26,20 +26,24 @@ try {
 
 // Compile test file
 try {
-  execSync(
-    `npx asc packages/engine/assembly/sdk/utility.spec.ts ` +
-      `--runtime stub ` +
-      `--importMemory ` +
-      `--memoryBase 524288 ` +
-      `--exportRuntime ` +
-      `--use abort= ` +
-      `--disable bulk-memory ` +
-      `-o tmp/utility.test.wasm ` +
-      `--sourceMap`,
-    {
-      cwd: rootDir,
-      stdio: 'inherit',
-    },
+  runAsc(
+    [
+      'packages/engine/assembly/sdk/utility.spec.ts',
+      '--runtime',
+      'stub',
+      '--importMemory',
+      '--memoryBase',
+      '524288',
+      '--exportRuntime',
+      '--use',
+      'abort=',
+      '--disable',
+      'bulk-memory',
+      '-o',
+      'tmp/utility.test.wasm',
+      '--sourceMap',
+    ],
+    { cwd: rootDir },
   );
 } catch {
   console.error('Failed to compile tests');

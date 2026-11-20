@@ -7,9 +7,9 @@
 //   node build-game.js debug <file>       - build single game (debug)
 //   node build-game.js debug <f1> <f2>... - build multiple games (debug)
 
-import { execSync } from 'child_process';
 import { mkdirSync, readdirSync } from 'fs';
 import { basename } from 'path';
+import { runAsc } from './lib/asc.js';
 
 // Parse --outdir option
 let args = process.argv.slice(2);
@@ -24,7 +24,7 @@ const isDebug = args[0] === 'debug';
 const files = isDebug ? args.slice(1) : args;
 
 const mode = isDebug ? 'debug' : 'release';
-const target = isDebug ? '--target debug' : '';
+const target = isDebug ? 'debug' : 'release';
 
 function buildGame(fileName, showMode = false) {
   const modeLabel = showMode && isDebug ? ' (debug)' : '';
@@ -32,10 +32,15 @@ function buildGame(fileName, showMode = false) {
 
   try {
     mkdirSync(outputDir, { recursive: true });
-    execSync(
-      `npx asc packages/engine/assembly/games/${fileName}.ts -o ${outputDir}/${fileName}.wasm --config packages/engine/assembly/games/asconfig.json ${target}`,
-      { stdio: 'inherit' },
-    );
+    runAsc([
+      `packages/engine/assembly/games/${fileName}.ts`,
+      '-o',
+      `${outputDir}/${fileName}.wasm`,
+      '--config',
+      'packages/engine/assembly/games/asconfig.json',
+      '--target',
+      target,
+    ]);
     console.log(`✓ ${fileName}`);
     return true;
   } catch {
