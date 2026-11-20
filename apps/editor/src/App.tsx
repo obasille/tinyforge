@@ -1,3 +1,4 @@
+import { matchShortcut } from '@tinyforge/editor-core';
 import {
   type DockviewApi,
   DockviewReact,
@@ -80,18 +81,22 @@ export function App({ editor }: { editor: Editor }) {
     defaultLayout(api);
   }, []);
 
-  // Undo/redo shortcuts (not while typing in an input).
+  // Editor shortcuts (see SHORTCUTS). Capture phase, so they work while the
+  // game view has focus; undo/redo stay out of text fields.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const shortcut = matchShortcut(e);
+      if (!shortcut) return;
       const target = e.target as HTMLElement | null;
-      if (target?.closest('input, textarea, [contenteditable]')) return;
-      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z') return;
+      const typing = target?.closest('input, textarea, select, [contenteditable]');
+      if (typing && (shortcut.action === 'undo' || shortcut.action === 'redo')) return;
       e.preventDefault();
-      if (e.shiftKey) editor.commands.redo();
-      else editor.commands.undo();
+      e.stopPropagation();
+      if (e.repeat && shortcut.action !== 'step') return;
+      editor.runShortcut(shortcut.action);
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, { capture: true });
+    return () => window.removeEventListener('keydown', onKey, { capture: true });
   }, [editor]);
 
   return (

@@ -1,4 +1,4 @@
-import { formatSeed } from '@tinyforge/editor-core';
+import { formatSeed, withShortcut } from '@tinyforge/editor-core';
 import { useEffect, useRef } from 'react';
 import { Pane } from 'tweakpane';
 import { useEditor } from '../EditorContext.ts';
@@ -32,15 +32,11 @@ export function RunPanel() {
     live.addBinding(stats, 'seed', { label: 'RNG seed', readonly: true, view: 'text' });
 
     const run = pane.addFolder({ title: 'Run' });
-    const pauseBtn = run.addButton({ title: 'Pause' });
-    pauseBtn.on('click', () => {
-      const status = editor.host.session.getState().status;
-      if (status === 'paused') editor.host.resume();
-      else editor.host.pause();
-    });
-    run.addButton({ title: 'Step 1 tick' }).on('click', () => editor.host.step(1));
-    run.addButton({ title: 'Restart (init)' }).on('click', () => editor.restart());
-    run.addButton({ title: 'Reload cartridge' }).on('click', () => editor.loadGame());
+    const pauseBtn = run.addButton({ title: withShortcut('Pause', 'pauseResume') });
+    pauseBtn.on('click', () => editor.togglePause());
+    run.addButton({ title: withShortcut('Step 1 tick', 'step') }).on('click', () => editor.host.step(1));
+    run.addButton({ title: withShortcut('Restart (init)', 'restart') }).on('click', () => editor.restart());
+    run.addButton({ title: withShortcut('Reload cartridge', 'reload') }).on('click', () => editor.loadGame());
 
     const state = pane.addFolder({ title: 'State' });
     state.addButton({ title: 'Save state' }).on('click', () => void editor.saveState());
@@ -71,7 +67,7 @@ export function RunPanel() {
         stats.ticks = s.stats.ticks;
         stats.seed = formatSeed(s.stats.seed);
       }
-      pauseBtn.title = s.status === 'paused' ? 'Resume' : 'Pause';
+      pauseBtn.title = withShortcut(s.status === 'paused' ? 'Resume' : 'Pause', 'pauseResume');
     };
     const syncProject = () => {
       const seed = editor.project.getState().seed;
