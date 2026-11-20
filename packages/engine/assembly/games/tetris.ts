@@ -33,6 +33,7 @@ const BOARD_Y: i32 = (SCREEN_HEIGHT - BOARD_HEIGHT * CELL_SIZE) / 2;
 
 const LINES_PER_LEVEL: i32 = 10;
 const MAX_LEVEL: i32 = 255; // level is stored as u8
+const GRID_COLOR: u32 = 0x1c1c1c; // board background is 0x111111
 const PREVIEW_SIZE: i32 = 4;
 const PREVIEW_X: i32 = BOARD_X + BOARD_WIDTH * CELL_SIZE + 16;
 const PREVIEW_Y: i32 = BOARD_Y + 15;
@@ -407,6 +408,16 @@ export function draw(): void {
     BOARD_HEIGHT * CELL_SIZE + 4,
     c(0x333333),
   );
+
+  // Grid lines: 1px, just above the background, on the inner cell borders
+  // (blocks leave a 1px gap at their edges, so the lines show between them).
+  const gridColor = c(GRID_COLOR);
+  for (let x: i32 = 1; x < BOARD_WIDTH; x++) {
+    fillRect(BOARD_X + x * CELL_SIZE, BOARD_Y, 1, BOARD_HEIGHT * CELL_SIZE, gridColor);
+  }
+  for (let y: i32 = 1; y < BOARD_HEIGHT; y++) {
+    fillRect(BOARD_X, BOARD_Y + y * CELL_SIZE, BOARD_WIDTH * CELL_SIZE, 1, gridColor);
+  }
 
   // Draw settled blocks
   for (let y: i32 = 0; y < BOARD_HEIGHT; y++) {
