@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { formatRows } from '../src/memory-view.ts';
 import { regionAt } from '../src/memory-regions.ts';
+import { formatRows } from '../src/memory-view.ts';
 
 describe('formatRows', () => {
   it('prints address, hex and ASCII per 16-byte row', () => {
