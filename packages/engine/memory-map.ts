@@ -16,8 +16,10 @@ export const FB_SIZE = SCREEN_WIDTH * SCREEN_HEIGHT * 4; // 0x04B000
 // === Input Memory Map ===
 
 // Keyboard state is stored at INPUT_ADDR with the following layout:
-//   +0: u8  buttons    - Current button state (bitmask)
-//   +1: u8  prevButtons - Previous button state (for edge detection)
+//   +0: u16 buttons     - Current button state (bitmask, little-endian)
+//   +2: u16 prevButtons - Previous button state (for edge detection)
+// Bits: 0-3 D-pad (up, down, left, right), 4 A, 5 B, 6 START, 7 X, 8 Y.
+// A/B/X/Y form a diamond on W/A/S/D and double as a second D-pad (player 2).
 // Access via buttonDown(), buttonPressed() in input.ts
 
 /** Keyboard input base address */
@@ -27,7 +29,7 @@ export const INPUT_ADDR = FB_START + FB_SIZE; // 0x04B000;
 export const INPUT_BUTTONS_ADDR = INPUT_ADDR + 0;
 
 /** Keyboard previous button state address */
-export const INPUT_BUTTONS_PREV_ADDR = INPUT_ADDR + 1;
+export const INPUT_BUTTONS_PREV_ADDR = INPUT_ADDR + 2;
 
 // Mouse state is stored at MOUSE_ADDR with the following layout:
 //   +0: i16 x          - Mouse X coordinate (0-319, or -1 if outside canvas)

@@ -204,7 +204,7 @@ All offsets are **absolute** and part of the hardware contract.
 Address        Size        Description
 ----------------------------------------------
 0x000000       307,200 B   Framebuffer (RGBA8888, 320×240×4)
-0x04B000       2 B         Keyboard Input (current + previous buttons)
+0x04B000       4 B         Keyboard Input (current + previous buttons, u16 each)
 0x04B008       6 B         Mouse Input (x, y, current + previous buttons)
 0x04B010       16 B        Sprite Table Header
 0x04B020       N entries   Sprite Name Lookup (N × 32 bytes, room for 256)
@@ -225,8 +225,8 @@ Address        Size        Description
 
 **Keyboard Input (0x04B000 - 0x04B007):**
 
-- `+0`: u8 current button state (bitmask)
-- `+1`: u8 previous button state (for edge detection)
+- `+0`: u16 current button state (bitmask, little-endian)
+- `+2`: u16 previous button state (for edge detection)
 
 **Mouse Input (0x04B008 - 0x04B00F):**
 
@@ -299,8 +299,26 @@ import { Button, buttonDown, buttonPressed } from "../sdk";
 
 // Button values:
 // UP = 1 << 0, DOWN = 1 << 1, LEFT = 1 << 2, RIGHT = 1 << 3
-// A = 1 << 4, B = 1 << 5, START = 1 << 6
+// A = 1 << 4, B = 1 << 5, START = 1 << 6, X = 1 << 7, Y = 1 << 8
+// P2_UP = Y, P2_DOWN = A, P2_LEFT = X, P2_RIGHT = B
 ```
+
+Default keys (both hosts):
+
+| Button | Key | As player 2's D-pad |
+| --- | --- | --- |
+| UP / DOWN / LEFT / RIGHT | Arrow keys | |
+| Y | W | `P2_UP` |
+| X | A | `P2_LEFT` |
+| A | S (also Z) | `P2_DOWN` |
+| B | D (also X) | `P2_RIGHT` |
+| START | Enter or Space | |
+
+The four action buttons sit in a diamond on WASD, so a two-player game can
+give player 1 the arrow keys and player 2 the WASD keys. Read player 2 with
+`buttonDown(Button.P2_LEFT)` and friends, or with the axis helpers
+`p2AxisX()` / `p2AxisY()` (-1, 0 or 1; `p1AxisX()` / `p1AxisY()` do the same
+for the arrows). A single-player game can use all four as action buttons.
 
 Detecting button press (not hold):
 
@@ -658,7 +676,7 @@ The SDK provides:
 
 - Memory declarations and memory map constants
 - Display constants (`SCREEN_WIDTH`, `SCREEN_HEIGHT`)
-- Input constants and helpers (`Button`, `buttonDown`, `buttonPressed`)
+- Input constants and helpers (`Button`, `buttonDown`, `buttonPressed`, `p1AxisX`/`p1AxisY`, `p2AxisX`/`p2AxisY`)
 - Console logging functions (log, warn, error)
 
 ### Minimal cartridge

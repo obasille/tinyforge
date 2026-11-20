@@ -243,13 +243,13 @@ export function update(): void {
     }
   }
 
-  // Player 1 (top paddle) - A & B buttons
+  // Player 1 (top paddle) - second D-pad: A & D keys (X & B buttons)
   let p1X = vars.p1X;
-  if (buttonDown(Button.A)) {
+  if (buttonDown(Button.P2_LEFT)) {
     p1X -= PADDLE_SPEED;
     if (p1X < 0.0) p1X = 0.0;
   }
-  if (buttonDown(Button.B)) {
+  if (buttonDown(Button.P2_RIGHT)) {
     p1X += PADDLE_SPEED;
     if (p1X > ((SCREEN_WIDTH - PADDLE_WIDTH) as f32))
       p1X = (SCREEN_WIDTH - PADDLE_WIDTH) as f32;

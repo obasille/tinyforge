@@ -27,6 +27,22 @@ describe('InputTracker', () => {
     expect(seen).toEqual([Button.left, Button.left | Button.a, Button.a]);
   });
 
+  it('maps WASD to the four action buttons', () => {
+    const tracker = new InputTracker(() => {});
+    for (const code of ['KeyW', 'KeyA', 'KeyS', 'KeyD']) tracker.key(code, true);
+    expect(tracker.current.buttons).toBe(Button.y | Button.x | Button.a | Button.b);
+  });
+
+  it('keeps a button held while another key for it is still down', () => {
+    const tracker = new InputTracker(() => {});
+    tracker.key('KeyS', true);
+    tracker.key('KeyZ', true);
+    tracker.key('KeyZ', false);
+    expect(tracker.current.buttons).toBe(Button.a);
+    tracker.key('KeyS', false);
+    expect(tracker.current.buttons).toBe(0);
+  });
+
   it('does not report repeats', () => {
     let calls = 0;
     const tracker = new InputTracker(() => calls++);

@@ -71,6 +71,23 @@ describe('GameMachine with real cartridges', () => {
     });
   });
 
+  describe('pong', () => {
+    // Top paddle X (f32) is the first field of pong's Vars struct.
+    const P1_X = 0;
+
+    it('moves the top paddle with the second D-pad (A and D keys)', async () => {
+      const machine = await boot('pong');
+      machine.tick({ ...NO_INPUT, buttons: Button.start });
+      const x = () => new DataView(machine.read(RAM_START + P1_X, 4).buffer).getFloat32(0, true);
+      const start = x();
+      for (let i = 0; i < 10; i++) machine.tick({ ...NO_INPUT, buttons: Button.b }); // D: P2_RIGHT
+      expect(x()).toBeGreaterThan(start);
+      const right = x();
+      for (let i = 0; i < 10; i++) machine.tick({ ...NO_INPUT, buttons: Button.x }); // A: P2_LEFT
+      expect(x()).toBeLessThan(right);
+    });
+  });
+
   describe('tetris', () => {
     // Offsets into tetris's Vars struct at RAM_START.
     const LINES = 4;
