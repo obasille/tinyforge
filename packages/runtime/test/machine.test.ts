@@ -96,6 +96,7 @@ describe('GameMachine with real cartridges', () => {
     const PLAYER = (i: number) => 64 + i * 48;
     const X = 0;
     const VX = 8;
+    const VY = 12;
     const SCORE = 16;
     const FALLING = 36;
     const PLAYING = 2;
@@ -163,6 +164,17 @@ describe('GameMachine with real cartridges', () => {
       m.tick(down); // second tap: player 2 (arrows) dashes right
       expect(before).toBeLessThan(1);
       expect(f32(m, PLAYER(1) + VX)).toBeGreaterThan(4);
+    });
+
+    it('dashes on the Ctrl triggers', async () => {
+      const m = await boot('sumoPush');
+      startPlaying(m);
+      // Right Ctrl with nothing held: the arrows player dashes at the other disc (left).
+      m.tick({ ...NO_INPUT, buttons: Button.rt });
+      expect(f32(m, PLAYER(1) + VX)).toBeLessThan(-4);
+      // Left Ctrl while holding W: the WASD player dashes up.
+      m.tick({ ...NO_INPUT, buttons: Button.lt | Button.y });
+      expect(f32(m, PLAYER(0) + VY)).toBeLessThan(-4);
     });
 
     it('shrinks the ring after 5 seconds of play', async () => {

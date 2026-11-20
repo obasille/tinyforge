@@ -5,8 +5,9 @@
 // Controls (same keyboard, side by side):
 //   Player 1 (red, left):   W A S D   (second D-pad: Button.P2_*)
 //   Player 2 (blue, right): arrow keys
-//   Dash: double-tap a direction. Both D-pads use every button they have,
-//   so a double tap is the dash instead of a separate button.
+//   Dash: Left Ctrl (WASD player) / Right Ctrl (arrows player), in the held
+//   direction. Double-tapping a direction also dashes, for keyboards with no
+//   Right Ctrl.
 //   START: begin / next match.
 
 import {
@@ -33,6 +34,7 @@ import {
   SCREEN_HEIGHT,
   SCREEN_WIDTH,
   stopMusic,
+  warn,
   warni,
   withAlpha,
 } from "../sdk";
@@ -193,24 +195,47 @@ function tappedDir(index: i32): i32 {
   return Dir.NONE;
 }
 
-function tryDash(index: i32, p: Player): void {
+function dash(p: Player, dx: f32, dy: f32): void {
+  const len: f32 = Mathf.sqrt(dx * dx + dy * dy);
+  if (len < 0.0001) {
+    warn("Dash without a direction");
+    return;
+  }
+  p.vx = (dx / len) * DASH_SPEED;
+  p.vy = (dy / len) * DASH_SPEED;
+  p.dashCooldown = DASH_COOLDOWN;
+  p.dashFx = DASH_FX_FRAMES;
+  p.lastTapDir = Dir.NONE;
+  playSfx("sumo_dash", 0.5);
+}
+
+// Fire key: dash the way the stick points, else the way the disc is
+// sliding, else straight at the other disc.
+function fireDash(index: i32, p: Player, ax: i32, ay: i32): void {
+  if (ax != 0 || ay != 0) {
+    dash(p, <f32>ax, <f32>ay);
+  } else if (p.vx * p.vx + p.vy * p.vy > 0.04) {
+    dash(p, p.vx, p.vy);
+  } else {
+    const other = player(1 - index);
+    const dx: f32 = other.x - p.x;
+    const dy: f32 = other.y - p.y;
+    if (dx * dx + dy * dy > 0.0001) dash(p, dx, dy);
+    else dash(p, index == 0 ? 1.0 : -1.0, 0.0);
+  }
+}
+
+// Double tap: a second press of the same direction within the window.
+function tryDoubleTap(index: i32, p: Player): void {
   const dir: i32 = tappedDir(index);
   if (dir == Dir.NONE) return;
 
   const quick: bool = dir == p.lastTapDir && vars.frame - p.lastTapFrame <= DOUBLE_TAP_WINDOW;
   if (quick && p.dashCooldown == 0) {
-    let dx: f32 = 0.0;
-    let dy: f32 = 0.0;
-    if (dir == Dir.UP) dy = -1.0;
-    else if (dir == Dir.DOWN) dy = 1.0;
-    else if (dir == Dir.LEFT) dx = -1.0;
-    else dx = 1.0;
-    p.vx = dx * DASH_SPEED;
-    p.vy = dy * DASH_SPEED;
-    p.dashCooldown = DASH_COOLDOWN;
-    p.dashFx = DASH_FX_FRAMES;
-    p.lastTapDir = Dir.NONE;
-    playSfx("sumo_dash", 0.5);
+    if (dir == Dir.UP) dash(p, 0.0, -1.0);
+    else if (dir == Dir.DOWN) dash(p, 0.0, 1.0);
+    else if (dir == Dir.LEFT) dash(p, -1.0, 0.0);
+    else dash(p, 1.0, 0.0);
     return;
   }
   p.lastTapDir = dir;
@@ -228,7 +253,10 @@ function movePlayer(index: i32, p: Player): void {
     if (ax != 0 && ay != 0) accel *= DIAGONAL;
     p.vx += <f32>ax * accel;
     p.vy += <f32>ay * accel;
-    tryDash(index, p);
+    // Fire key: Left Ctrl for the WASD player, Right Ctrl for the arrows player.
+    const fire: Button = index == 0 ? Button.P2_FIRE : Button.P1_FIRE;
+    if (buttonPressed(fire) && p.dashCooldown == 0) fireDash(index, p, ax, ay);
+    else tryDoubleTap(index, p);
   }
 
   p.vx *= FRICTION;
@@ -499,7 +527,7 @@ export function draw(): void {
     const help = c(0xd8d0e8);
     fillRect(40, 176, 240, 46, withAlpha(c(0x0e0b16), 0xd0));
     printCentered(181, "P1: W A S D      P2: ARROWS", help);
-    printCentered(193, "DOUBLE-TAP A DIRECTION TO DASH", help);
+    printCentered(193, "DASH: CTRL OR DOUBLE-TAP", help);
     printCentered(205, "PUSH THE OTHER OFF. FIRST TO 3!", help);
   } else if (state == GameState.COUNTDOWN) {
     const secs: i32 = (vars.timer + 59) / 60;
