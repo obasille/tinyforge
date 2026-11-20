@@ -9,12 +9,29 @@ export class AudioPlayer {
   private readonly sfx = new Map<string, AudioBuffer>();
   private readonly music = new Map<string, AudioBuffer>();
   private current: AudioBufferSourceNode | null = null;
+  /** Every sound goes through this node: the editor's master volume. */
+  private readonly master: GainNode;
+  private volume = 1;
+  private muted = false;
 
   constructor(
     private readonly warn: (message: string) => void,
     ctx?: AudioContext,
   ) {
     this.ctx = ctx ?? new AudioContext();
+    this.master = this.ctx.createGain();
+    this.master.connect(this.ctx.destination);
+  }
+
+  /** Master volume (0..1) and mute. Applies to sounds already playing too. */
+  setOutput(volume: number, muted: boolean): void {
+    this.volume = Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : 1;
+    this.muted = muted;
+    this.master.gain.value = this.outputGain;
+  }
+
+  get outputGain(): number {
+    return this.muted ? 0 : this.volume;
   }
 
   /** Load (or reload) the given sounds; anything not listed is dropped. */
@@ -82,7 +99,7 @@ export class AudioPlayer {
     source.buffer = buffer;
     source.loop = loop;
     gain.gain.value = Math.max(0, Math.min(1, volume));
-    source.connect(gain).connect(this.ctx.destination);
+    source.connect(gain).connect(this.master);
     source.start(0);
     return source;
   }

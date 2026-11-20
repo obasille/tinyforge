@@ -167,6 +167,31 @@ test('the game view has keyboard focus when the editor starts', async ({ page })
   await page.keyboard.up('Enter');
 });
 
+test('master volume and mute apply to the audio and survive a reload', async ({ page }) => {
+  const errors = trackErrors(page);
+  await page.goto('/');
+  await expect(page.getByTestId('run-status')).toHaveText('running');
+  const gain = () => page.evaluate(() => window.__tf?.editor.audio.outputGain);
+  expect(await gain()).toBe(1);
+
+  await page.getByTestId('volume').fill('30');
+  await expect.poll(gain).toBeCloseTo(0.3);
+  await page.getByTestId('mute').click();
+  await expect(page.getByTestId('mute')).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(gain).toBe(0);
+  await expect(page.getByTestId('viewport')).toBeFocused();
+
+  await page.reload();
+  await expect(page.getByTestId('run-status')).toHaveText('running');
+  await expect(page.getByTestId('volume')).toHaveValue('30');
+  await expect(page.getByTestId('mute')).toHaveAttribute('aria-pressed', 'true');
+  expect(await gain()).toBe(0);
+
+  await page.getByTestId('mute').click();
+  await expect.poll(gain).toBeCloseTo(0.3);
+  expect(errors).toEqual([]);
+});
+
 test('F-key shortcuts pause, step, resume, restart and reload', async ({ page }) => {
   const errors = trackErrors(page);
   await page.goto('/');
