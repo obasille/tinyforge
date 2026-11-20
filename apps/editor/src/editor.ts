@@ -72,12 +72,7 @@ export class Editor {
   }
 
   async start(): Promise<void> {
-    await this.audio.load(
-      this.manifest.sfx.map((s) => ({ ...s, url: absolute(s.url) })),
-      this.manifest.music.map((s) => ({ ...s, url: absolute(s.url) })),
-    );
-    const { sfx, music } = this.audio.counts;
-    this.logs.add('HOST', `Audio loaded: ${sfx} SFX, ${music} music tracks`);
+    await this.loadAudio(this.manifest);
     if (!this.project.getState().game && this.manifest.games.length > 0) {
       // First run: pick a game without recording an undo step.
       this.project.setState((p) => ({
@@ -87,6 +82,24 @@ export class Editor {
     } else {
       this.loadGame();
     }
+  }
+
+  private async loadAudio(manifest: AssetManifest, version = ''): Promise<void> {
+    const ref = (s: AssetManifest['sfx'][number]) => ({ ...s, url: absolute(s.url) + version });
+    await this.audio.load(manifest.sfx.map(ref), manifest.music.map(ref));
+    const { sfx, music } = this.audio.counts;
+    this.logs.add('HOST', `Audio loaded: ${sfx} SFX, ${music} music tracks`);
+  }
+
+  /** Reload sounds after files in assets/sfx or assets/music changed (dev server). */
+  async reloadAudio(): Promise<void> {
+    const res = await fetch(absolute('__tf/manifest.json'), { cache: 'no-store' });
+    if (!res.ok) {
+      this.logs.add('WARN', `Could not reload audio: manifest HTTP ${res.status}`);
+      return;
+    }
+    // Cache-bust so changed files are fetched again under the same URL.
+    await this.loadAudio((await res.json()) as AssetManifest, `?v=${Date.now()}`);
   }
 
   cartridgeUrl(game: string): string {
