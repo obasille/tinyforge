@@ -29,10 +29,15 @@ export function Toolbar({ onResetLayout }: { onResetLayout: () => void }) {
           ))}
         </select>
       </label>
-      <button type="button" disabled={!stack.canUndo} onClick={() => editor.commands.undo()} title="Ctrl+Z">
+      <button type="button" disabled={!stack.canUndo} onClick={() => editor.commands.undo()} title="Undo (Ctrl+Z)">
         Undo{stack.undoLabel ? ` ${stack.undoLabel}` : ''}
       </button>
-      <button type="button" disabled={!stack.canRedo} onClick={() => editor.commands.redo()} title="Ctrl+Shift+Z">
+      <button
+        type="button"
+        disabled={!stack.canRedo}
+        onClick={() => editor.commands.redo()}
+        title="Redo (Ctrl+Shift+Z)"
+      >
         Redo
       </button>
       <span className="tf-spacer" />
