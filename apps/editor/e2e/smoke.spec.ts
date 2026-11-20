@@ -156,3 +156,13 @@ test('choosing a game gives the keyboard back to the game view', async ({ page }
   await page.getByTestId('game-select').selectOption('snake');
   await expect(page.getByTestId('viewport')).toBeFocused();
 });
+
+test('the game view has keyboard focus when the editor starts', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('viewport')).toBeFocused();
+  // A game key reaches the game: Start leaves pong's title screen.
+  await expect(page.getByTestId('run-status')).toHaveText('running');
+  await page.keyboard.down('Enter');
+  await expect.poll(() => page.evaluate(() => window.__tf?.editor.input.current.buttons)).toBe(1 << 6);
+  await page.keyboard.up('Enter');
+});

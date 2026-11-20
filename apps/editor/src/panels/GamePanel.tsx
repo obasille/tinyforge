@@ -15,6 +15,8 @@ export function GamePanel() {
     const el = ref.current;
     if (!el) return;
     editor.viewport.attach(el);
+    // Keys go to the game from the start, without a click first.
+    editor.viewport.focus();
     return () => editor.viewport.detach();
   }, [editor]);
 
