@@ -77,10 +77,32 @@ canvas {
 }
 .buttons-main {
   display: grid;
-  grid-template-columns: 72px;
-  grid-template-rows: repeat(2, 72px);
-  gap: 16px;
+  grid-template-columns: repeat(3, 54px);
+  grid-template-rows: repeat(3, 54px);
+  grid-template-areas:
+    ". y ."
+    "x . b"
+    ". a .";
   justify-items: center;
+  align-items: center;
+}
+.buttons-main .btn-large {
+  width: 54px;
+  height: 54px;
+}
+.btn-a {
+  grid-area: a;
+}
+.btn-b {
+  grid-area: b;
+}
+.buttons-main .btn-x {
+  grid-area: x;
+  background: #3b82f6;
+}
+.buttons-main .btn-y {
+  grid-area: y;
+  background: #eab308;
 }
 .btn-text {
   width: 72px;

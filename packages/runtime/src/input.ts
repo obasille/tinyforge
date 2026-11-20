@@ -16,6 +16,8 @@ export const Button = {
   a: 1 << 4,
   b: 1 << 5,
   start: 1 << 6,
+  x: 1 << 7,
+  y: 1 << 8,
 } as const;
 
 /** Mouse button bits: 0 = left, 1 = right, 2 = middle. */
@@ -44,8 +46,8 @@ export const NO_INPUT: Readonly<InputState> = {
 /** Write the current and previous input state where the SDK reads it. */
 export function writeInput(buffer: ArrayBuffer, current: InputState, previous: InputState): void {
   const view = new DataView(buffer);
-  view.setUint8(INPUT_BUTTONS_ADDR, current.buttons & 0xff);
-  view.setUint8(INPUT_BUTTONS_PREV_ADDR, previous.buttons & 0xff);
+  view.setUint16(INPUT_BUTTONS_ADDR, current.buttons & 0xffff, true);
+  view.setUint16(INPUT_BUTTONS_PREV_ADDR, previous.buttons & 0xffff, true);
   view.setInt16(MOUSE_X_ADDR, current.mouseX, true);
   view.setInt16(MOUSE_Y_ADDR, current.mouseY, true);
   view.setUint8(MOUSE_BUTTONS_ADDR, current.mouseButtons & 0xff);

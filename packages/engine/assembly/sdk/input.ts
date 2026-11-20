@@ -2,11 +2,11 @@
 // Keyboard and mouse input via memory-mapped I/O
 //
 // Input State Memory Layout:
-//   0x0AB000: Keyboard input (2 bytes)
-//     +0: u8  buttons     - Current button state (bitmask)
-//     +1: u8  prevButtons - Previous button state (for edge detection)
+//   0x04B000: Keyboard input (4 bytes)
+//     +0: u16 buttons     - Current button state (bitmask)
+//     +2: u16 prevButtons - Previous button state (for edge detection)
 //
-//   0x0AB010: Mouse input (6 bytes)
+//   0x04B008: Mouse input (6 bytes)
 //     +0: i16 x          - Mouse X (0-319, or -1 if outside)
 //     +2: i16 y          - Mouse Y (0-239, or -1 if outside)
 //     +4: u8  buttons    - Current button state (bit 0=left, 1=right, 2=middle)
@@ -25,15 +25,37 @@ import {
   MOUSE_Y_ADDR,
 } from "./memory";
 
-/** Button bit flags for keyboard input */
+/**
+ * Button bit flags for keyboard input
+ *
+ * Default keys:
+ *   UP/DOWN/LEFT/RIGHT  Arrow keys
+ *   A                   S (also Z)
+ *   B                   D (also X)
+ *   X                   A
+ *   Y                   W
+ *   START               Enter or Space
+ *
+ * The four action buttons sit in a diamond on W/A/S/D (Y top, X left,
+ * A bottom, B right), so they also work as a second D-pad for player 2.
+ * Use the P2_* aliases (or the p2* helpers) to read them that way.
+ */
 export enum Button {
   UP = 1 << 0,
   DOWN = 1 << 1,
   LEFT = 1 << 2,
   RIGHT = 1 << 3,
-  A = 1 << 4, // Mapped to Z key
-  B = 1 << 5, // Mapped to X key
-  START = 1 << 6, // Mapped to Enter key
+  A = 1 << 4, // S key (also Z)
+  B = 1 << 5, // D key (also X)
+  START = 1 << 6, // Enter or Space
+  X = 1 << 7, // A key
+  Y = 1 << 8, // W key
+
+  // Second D-pad (player 2): the action buttons read by direction.
+  P2_UP = 1 << 8, // = Y (W key)
+  P2_DOWN = 1 << 4, // = A (S key)
+  P2_LEFT = 1 << 7, // = X (A key)
+  P2_RIGHT = 1 << 5, // = B (D key)
 }
 
 /**
@@ -69,7 +91,7 @@ export enum MouseButton {
 // @ts-expect-error AssemblyScript decorator
 @inline
 export function buttonDown(button: Button): bool {
-  return (load<u8>(INPUT_BUTTONS_ADDR) & button) != 0;
+  return (load<u16>(INPUT_BUTTONS_ADDR) & button) != 0;
 }
 
 /**
@@ -86,9 +108,53 @@ export function buttonDown(button: Button): bool {
 // @ts-expect-error AssemblyScript decorator
 @inline
 export function buttonPressed(button: Button): bool {
-  const current = load<u8>(INPUT_BUTTONS_ADDR);
-  const prev = load<u8>(INPUT_BUTTONS_PREV_ADDR);
+  const current = load<u16>(INPUT_BUTTONS_ADDR);
+  const prev = load<u16>(INPUT_BUTTONS_PREV_ADDR);
   return (current & button) != 0 && (prev & button) == 0;
+}
+
+/**
+ * Horizontal axis of player 1's D-pad (arrow keys)
+ * @returns -1 when LEFT is held, 1 when RIGHT is held, 0 for neither or both
+ */
+// @ts-expect-error AssemblyScript decorator
+@inline
+export function p1AxisX(): i32 {
+  return (buttonDown(Button.RIGHT) ? 1 : 0) - (buttonDown(Button.LEFT) ? 1 : 0);
+}
+
+/**
+ * Vertical axis of player 1's D-pad (arrow keys)
+ * @returns -1 when UP is held, 1 when DOWN is held, 0 for neither or both
+ */
+// @ts-expect-error AssemblyScript decorator
+@inline
+export function p1AxisY(): i32 {
+  return (buttonDown(Button.DOWN) ? 1 : 0) - (buttonDown(Button.UP) ? 1 : 0);
+}
+
+/**
+ * Horizontal axis of player 2's D-pad (A/D keys)
+ * @returns -1 when P2_LEFT is held, 1 when P2_RIGHT is held, 0 for neither or both
+ * @example
+ * ```typescript
+ * setI32(Var.P2_X, getI32(Var.P2_X) + p2AxisX() * SPEED);
+ * ```
+ */
+// @ts-expect-error AssemblyScript decorator
+@inline
+export function p2AxisX(): i32 {
+  return (buttonDown(Button.P2_RIGHT) ? 1 : 0) - (buttonDown(Button.P2_LEFT) ? 1 : 0);
+}
+
+/**
+ * Vertical axis of player 2's D-pad (W/S keys)
+ * @returns -1 when P2_UP is held, 1 when P2_DOWN is held, 0 for neither or both
+ */
+// @ts-expect-error AssemblyScript decorator
+@inline
+export function p2AxisY(): i32 {
+  return (buttonDown(Button.P2_DOWN) ? 1 : 0) - (buttonDown(Button.P2_UP) ? 1 : 0);
 }
 
 /**

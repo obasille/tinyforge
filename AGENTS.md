@@ -211,6 +211,18 @@ if (buttonDown(Button.LEFT)) {
 }
 ```
 
+**Buttons and keys:** D-pad `UP`/`DOWN`/`LEFT`/`RIGHT` (arrow keys), four action buttons in a diamond on WASD: `Y` (W), `X` (A), `A` (S, also Z), `B` (D, also X), and `START` (Enter/Space).
+
+**Two-player games:** the action buttons double as player 2's D-pad. Use `Button.P2_UP` (= Y), `P2_DOWN` (= A), `P2_LEFT` (= X), `P2_RIGHT` (= B), or the axis helpers:
+
+```ts
+// Player 1 on the arrows, player 2 on WASD. Each axis is -1, 0 or 1.
+vars.p1X += (p1AxisX() as f32) * SPEED;
+vars.p2X += (p2AxisX() as f32) * SPEED;
+```
+
+In that setup player 2 has no spare action buttons (WASD is their D-pad), and START is shared by both players.
+
 **Mouse:** `mouseX()`, `mouseY()` (-1 when outside the canvas), `mouseDown(MouseButton.LEFT)`, `mousePressed(MouseButton.LEFT)`.
 
 #### 6. Game State Management

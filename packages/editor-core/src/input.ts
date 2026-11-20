@@ -3,12 +3,20 @@
 import { SCREEN_HEIGHT, SCREEN_WIDTH } from '@tinyforge/engine/memory-map';
 import { Button, type InputState, NO_INPUT } from '@tinyforge/runtime';
 
-/** Same keys as the classic host. */
+/**
+ * Same keys as the classic host. The action buttons form a diamond on WASD
+ * (Y top, X left, A bottom, B right) so games can use them as player 2's
+ * D-pad. Z and X stay as aliases for A and B.
+ */
 export const DEFAULT_KEYS: Readonly<Record<string, number>> = {
   ArrowUp: Button.up,
   ArrowDown: Button.down,
   ArrowLeft: Button.left,
   ArrowRight: Button.right,
+  KeyW: Button.y,
+  KeyA: Button.x,
+  KeyS: Button.a,
+  KeyD: Button.b,
   KeyZ: Button.a,
   KeyX: Button.b,
   Enter: Button.start,
@@ -49,6 +57,7 @@ export function toGamePixel(
 /** Accumulates input and reports each change. */
 export class InputTracker {
   private state: InputState = { ...NO_INPUT };
+  private readonly held = new Set<string>();
 
   constructor(
     private readonly onChange: (state: InputState) => void,
@@ -61,9 +70,14 @@ export class InputTracker {
 
   /** Returns true when the key is a game key (the caller may preventDefault). */
   key(code: string, down: boolean): boolean {
-    const bit = this.keys[code];
-    if (bit === undefined) return false;
-    this.update({ buttons: down ? this.state.buttons | bit : this.state.buttons & ~bit });
+    if (this.keys[code] === undefined) return false;
+    if (down) this.held.add(code);
+    else this.held.delete(code);
+    // Several keys can share a button (S and Z are both A), so rebuild the
+    // mask from every held key instead of clearing the bit on release.
+    let buttons = 0;
+    for (const held of this.held) buttons |= this.keys[held] ?? 0;
+    this.update({ buttons });
     return true;
   }
 
@@ -79,6 +93,7 @@ export class InputTracker {
 
   /** Release everything (focus lost). */
   clear(): void {
+    this.held.clear();
     this.update({ buttons: 0, mouseButtons: 0, mouseX: -1, mouseY: -1 });
   }
 

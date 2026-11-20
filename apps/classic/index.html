@@ -108,16 +108,23 @@
             <button class="btn btn-text" data-input="start" aria-label="Start">
               Start
             </button>
+            <!-- Diamond on W/A/S/D: Y top, X left, B right, A bottom -->
             <div class="buttons-main">
-              <button class="btn btn-large" data-input="a" aria-label="Button A">
-                A
+              <button class="btn btn-large btn-y" data-input="y" aria-label="Button Y (W)">
+                Y
+              </button>
+              <button class="btn btn-large btn-x" data-input="x" aria-label="Button X (A)">
+                X
               </button>
               <button
-                class="btn btn-large btn-secondary"
+                class="btn btn-large btn-secondary btn-b"
                 data-input="b"
-                aria-label="Button B"
+                aria-label="Button B (D)"
               >
                 B
+              </button>
+              <button class="btn btn-large btn-a" data-input="a" aria-label="Button A (S)">
+                A
               </button>
             </div>
           </div>
@@ -139,7 +146,7 @@
           <button id="restart-game" class="console-btn" style="margin-top: 8px; width: 100%;">Restart (R)</button>
           <button id="pause-game" class="console-btn" style="margin-top: 8px; width: 100%;">Pause (P)</button>
           <button id="fullscreen-btn" class="console-btn" style="margin-top: 8px; width: 100%;">Fullscreen (F)</button>
-          <button id="screenshot-btn" class="console-btn" style="margin-top: 8px; width: 100%;">Screenshot (S)</button>
+          <button id="screenshot-btn" class="console-btn" style="margin-top: 8px; width: 100%;">Screenshot (G)</button>
         </div>
         
         <div class="panel" id="debug">
@@ -208,9 +215,13 @@
           <h3>Controls</h3>
           <div class="help">
             <strong>Arrow Keys:</strong> D-Pad<br>
-            <strong>Z:</strong> A Button<br>
-            <strong>X:</strong> B Button<br>
+            <strong>S (or Z):</strong> A Button<br>
+            <strong>D (or X):</strong> B Button<br>
+            <strong>A:</strong> X Button<br>
+            <strong>W:</strong> Y Button<br>
             <strong>Enter / Space:</strong> Start<br>
+            <em>W/A/S/D double as player 2's D-Pad</em><br>
+            <strong>R / P / F / G:</strong> Restart / Pause / Fullscreen / Screenshot<br>
             <strong>C:</strong> Copy Color (RGB)
           </div>
         </div>

@@ -1,7 +1,8 @@
 // @ts-expect-error - No type definitions available for @assemblyscript/loader
 import * as loader from '@assemblyscript/loader';
 import {
-  INPUT_ADDR,
+  INPUT_BUTTONS_ADDR,
+  INPUT_BUTTONS_PREV_ADDR,
   MOUSE_ADDR,
   SCREEN_HEIGHT,
   SCREEN_WIDTH,
@@ -324,7 +325,9 @@ async function loadGame(
     // Start game loop
     last = performance.now();
     acc = DT; // Start with one frame of accumulated time to ensure first frame runs update()
-    inputMask = 0;
+    heldKeys.clear();
+    touchMask = 0;
+    updateInputMask();
     prevInputMask = 0;
     requestAnimationFrame(frame);
   } catch (e) {
@@ -651,7 +654,9 @@ const screenshotBtn = document.getElementById(
 ) as HTMLButtonElement | null;
 screenshotBtn?.addEventListener('click', takeScreenshot);
 
-// Keyboard shortcuts: R to restart, P to pause, F for fullscreen, C to copy color
+// Keyboard shortcuts: R to restart, P to pause, F for fullscreen, G for a
+// screenshot, C to copy color. W/A/S/D are game buttons, so none of these
+// may use them.
 window.addEventListener('keydown', (e: KeyboardEvent) => {
   if ((e.key === 'r' || e.key === 'R') && !e.repeat) {
     restartGame();
@@ -662,7 +667,7 @@ window.addEventListener('keydown', (e: KeyboardEvent) => {
   } else if ((e.key === 'f' || e.key === 'F') && !e.repeat) {
     toggleFullscreen();
     e.preventDefault();
-  } else if ((e.key === 's' || e.key === 'S') && !e.repeat) {
+  } else if ((e.key === 'g' || e.key === 'G') && !e.repeat) {
     takeScreenshot();
     e.preventDefault();
   } else if ((e.key === 'c' || e.key === 'C') && !e.repeat) {
@@ -691,21 +696,41 @@ const keyMap = {
   a: 1 << 4,
   b: 1 << 5,
   start: 1 << 6,
+  x: 1 << 7,
+  y: 1 << 8,
 } as const;
 
+// The action buttons form a diamond on WASD (Y top, X left, A bottom,
+// B right) so two-player games can read them as player 2's D-pad.
+// Z and X stay as aliases for A and B.
 const keyCodeMap: Record<string, number> = {
   ArrowUp: keyMap.up,
   ArrowDown: keyMap.down,
   ArrowLeft: keyMap.left,
   ArrowRight: keyMap.right,
+  KeyW: keyMap.y,
+  KeyA: keyMap.x,
+  KeyS: keyMap.a,
+  KeyD: keyMap.b,
   KeyZ: keyMap.a,
   KeyX: keyMap.b,
   Enter: keyMap.start,
   Space: keyMap.start,
 };
 
+// Keyboard buttons and on-screen buttons are tracked apart and OR'd together,
+// so releasing one key never clears a button another key still holds.
+const heldKeys = new Set<string>();
+let keyMask = 0;
+let touchMask = 0;
 let inputMask = 0;
 let prevInputMask = 0;
+
+function updateInputMask(): void {
+  keyMask = 0;
+  for (const code of heldKeys) keyMask |= keyCodeMap[code] ?? 0;
+  inputMask = keyMask | touchMask;
+}
 let isPaused = false;
 
 const blockTouchScroll = window.matchMedia('(pointer: coarse)').matches;
@@ -725,17 +750,17 @@ let mouseButtons = 0;
 let prevMouseButtons = 0;
 
 window.addEventListener('keydown', (e: KeyboardEvent) => {
-  const mapped = keyCodeMap[e.code];
-  if (mapped !== undefined) {
-    inputMask |= mapped;
+  if (keyCodeMap[e.code] !== undefined) {
+    heldKeys.add(e.code);
+    updateInputMask();
     e.preventDefault();
   }
 });
 
 window.addEventListener('keyup', (e: KeyboardEvent) => {
-  const mapped = keyCodeMap[e.code];
-  if (mapped !== undefined) {
-    inputMask &= ~mapped;
+  if (keyCodeMap[e.code] !== undefined) {
+    heldKeys.delete(e.code);
+    updateInputMask();
     e.preventDefault();
   }
 });
@@ -867,10 +892,12 @@ document
     const input = button.dataset.input as keyof typeof keyMap | undefined;
     if (input && input in keyMap) {
       const press = () => {
-        inputMask |= keyMap[input];
+        touchMask |= keyMap[input];
+        updateInputMask();
       };
       const release = () => {
-        inputMask &= ~keyMap[input];
+        touchMask &= ~keyMap[input];
+        updateInputMask();
       };
       button.addEventListener(
         'touchstart',
@@ -1086,9 +1113,9 @@ function frame(now: number): void {
       const inputView = new DataView(memory.buffer);
 
       // Keyboard input
-      // Layout: [u8 buttons][u8 prev_buttons]
-      inputView.setUint8(INPUT_ADDR, inputMask);
-      inputView.setUint8(INPUT_ADDR + 1, prevInputMask);
+      // Layout: [u16 buttons][u16 prev_buttons], little-endian
+      inputView.setUint16(INPUT_BUTTONS_ADDR, inputMask, true);
+      inputView.setUint16(INPUT_BUTTONS_PREV_ADDR, prevInputMask, true);
 
       // Mouse input
       // Layout: [i16 x][i16 y][u8 buttons][u8 prev_buttons]
@@ -1165,7 +1192,7 @@ function frame(now: number): void {
   updatesEl.textContent = String(updates);
   accEl.textContent = String(Math.round(acc));
   inputEl.textContent =
-    '0x' + inputMask.toString(16).padStart(2, '0').toUpperCase();
+    '0x' + inputMask.toString(16).padStart(3, '0').toUpperCase();
   mouseEl.textContent = `${mouseX}, ${mouseY}`;
   mouseButtonsEl.textContent =
     '0x' + mouseButtons.toString(16).padStart(2, '0').toUpperCase();
