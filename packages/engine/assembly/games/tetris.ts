@@ -15,11 +15,13 @@ import {
   getU8,
   SCREEN_HEIGHT,
   log,
+  playMusic,
   playSfx,
   RAM_START,
   randomRange,
   setU8,
   SCREEN_WIDTH,
+  stopMusic,
 } from "../sdk";
 
 // === Constants ===
@@ -99,6 +101,7 @@ const GRAVITY_FRAMES: u8[] = [
   2, 2, 2, 2, 2, 2, 2, 2, 2, 2, // 19-28
 ];
 const MAX_SPEED_FRAMES: u8 = 1; // level 29 and up
+const FRAMES_PER_SECOND: i32 = 60;
 
 // === Board Helpers ===
 function boardIndex(x: i32, y: i32): usize {
@@ -236,6 +239,7 @@ function spawnPiece(): void {
 
   if (!canPlace(nextType, nextX, nextY, nextRotation)) {
     vars.state = GameState.GAME_OVER as u8;
+    stopMusic();
     playSfx("tetris_gameover", 0.8);
     log("Game Over!");
     return;
@@ -295,6 +299,23 @@ function hardDrop(): void {
   lockPiece();
 }
 
+// Fall speed in rows per second with one decimal, e.g. "1.3 ROWS/S".
+// Drawn digit by digit so it doesn't allocate a string every frame.
+function drawSpeed(x: i32, y: i32, color: u32): void {
+  const delay = vars.fallDelay as i32;
+  if (delay == 0) return;
+  const tenths = (FRAMES_PER_SECOND * 10 + delay / 2) / delay;
+  const whole = tenths / 10;
+  drawNumber(x, y, whole, color);
+
+  let digits: i32 = 1;
+  for (let n = whole; n >= 10; n /= 10) digits++;
+  const dotX = x + digits * 8 - 1;
+  fillRect(dotX, y + 8, 2, 2, color);
+  drawNumber(dotX + 4, y, tenths % 10, color);
+  drawString(dotX + 18, y, "ROWS/S", c(0x888888));
+}
+
 // === Lifecycle ===
 export function init(): void {
   clearBoard();
@@ -313,6 +334,8 @@ export function update(): void {
   // Start game from start screen
   if (state == GameState.START_SCREEN && buttonPressed(Button.START)) {
     vars.state = GameState.PLAYING as u8;
+    // Audio only starts after a user gesture, so start music on START.
+    playMusic("tetris_theme", 0.45);
     spawnPiece();
     return;
   }
@@ -421,6 +444,8 @@ export function draw(): void {
   drawNumber(8, 50, vars.lines, c(0xffffff));
   drawString(8, 68, "LEVEL", c(0xaaaaaa));
   drawNumber(8, 80, vars.level as i32, c(0xffffff));
+  drawString(8, 98, "SPEED", c(0xaaaaaa));
+  drawSpeed(8, 110, c(0xffffff));
 
   // Next piece preview
   drawString(PREVIEW_X, PREVIEW_Y - 14, "NEXT", c(0xaaaaaa));

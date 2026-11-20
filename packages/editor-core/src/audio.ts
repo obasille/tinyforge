@@ -17,11 +17,22 @@ export class AudioPlayer {
     this.ctx = ctx ?? new AudioContext();
   }
 
+  /** Load (or reload) the given sounds; anything not listed is dropped. */
   async load(sfx: AssetRef[], music: AssetRef[]): Promise<void> {
+    const nextSfx = new Map<string, AudioBuffer>();
+    const nextMusic = new Map<string, AudioBuffer>();
     await Promise.all([
-      ...sfx.map((ref) => this.loadOne(this.sfx, ref, 'SFX')),
-      ...music.map((ref) => this.loadOne(this.music, ref, 'Music')),
+      ...sfx.map((ref) => this.loadOne(nextSfx, ref, 'SFX')),
+      ...music.map((ref) => this.loadOne(nextMusic, ref, 'Music')),
     ]);
+    // Swap only once everything decoded, so sounds keep playing meanwhile.
+    this.replace(this.sfx, nextSfx);
+    this.replace(this.music, nextMusic);
+  }
+
+  private replace(into: Map<string, AudioBuffer>, from: Map<string, AudioBuffer>): void {
+    into.clear();
+    for (const [id, buffer] of from) into.set(id, buffer);
   }
 
   get counts(): { sfx: number; music: number } {

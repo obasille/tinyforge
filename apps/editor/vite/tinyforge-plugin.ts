@@ -7,7 +7,9 @@
 //   GET /assets/...                    the repo's shared assets/ folder
 // When an engine file changes, the affected games that were already compiled
 // are rebuilt and the client gets a `tf:cartridges` HMR event (or Vite's error
-// overlay with the compiler output).
+// overlay with the compiler output). When a file in assets/sfx or assets/music
+// is added, changed or removed, the client gets a `tf:audio` event and reloads
+// its sounds.
 //
 // Build: emits release cartridges, the manifest and the assets into dist/.
 
@@ -23,6 +25,7 @@ import {
 } from '../../../packages/engine/tooling/compile-game.ts';
 
 export const CARTRIDGES_EVENT = 'tf:cartridges';
+export const AUDIO_EVENT = 'tf:audio';
 
 export interface CartridgesEvent {
   games: string[];
@@ -112,6 +115,20 @@ export function tinyforge({ assetsDir }: { assetsDir: string }): Plugin {
     configureServer(dev) {
       server = dev;
       dev.watcher.add(ENGINE_ROOT);
+      dev.watcher.add(assetsDir);
+
+      // Audio files: tell the client once a burst of changes (e.g. a git
+      // checkout or a generator script) has settled.
+      const audioDirs = ['sfx', 'music'].map((sub) => path.join(assetsDir, sub) + path.sep);
+      let audioTimer: ReturnType<typeof setTimeout> | null = null;
+      const onAudioChange = (file: string) => {
+        if (!audioDirs.some((dir) => file.startsWith(dir))) return;
+        if (audioTimer) clearTimeout(audioTimer);
+        audioTimer = setTimeout(() => {
+          audioTimer = null;
+          dev.ws.send({ type: 'custom', event: AUDIO_EVENT, data: {} });
+        }, 200);
+      };
 
       const onChange = async (file: string) => {
         const affected = gamesAffectedBy(file);
@@ -139,6 +156,9 @@ export function tinyforge({ assetsDir }: { assetsDir: string }): Plugin {
       dev.watcher.on('change', onChange);
       dev.watcher.on('add', onChange);
       dev.watcher.on('unlink', onChange);
+      dev.watcher.on('change', onAudioChange);
+      dev.watcher.on('add', onAudioChange);
+      dev.watcher.on('unlink', onAudioChange);
 
       dev.middlewares.use(async (req, res, next) => {
         const url = new URL(req.url ?? '/', 'http://localhost');
