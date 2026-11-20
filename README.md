@@ -897,6 +897,19 @@ Then open http://localhost:8080/. `pnpm serve` alone serves without rebuilding.
 It maps `/` to `apps/classic/` and `/assets/` to the shared `assets/` folder,
 the same layout as the deployed site.
 
+#### VS Code Live Server
+
+`.vscode/settings.json` sets Live Server's root to `/apps/classic`. Live Server
+can only serve files under that root, so link the shared `assets/` folder into
+it once:
+
+- Windows: run `scripts\link-classic-assets.cmd` (creates a directory junction
+  with `mklink /J`; no admin rights needed).
+- macOS/Linux: `ln -s ../../assets apps/classic/assets`
+
+The link is gitignored. Build first (`pnpm build:classic`), then use
+"Go Live" and open the page Live Server shows.
+
 ---
 
 ## The Editor

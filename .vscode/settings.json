@@ -1,4 +1,7 @@
 {
+  // Serve the classic host; run scripts\\link-classic-assets.cmd once so
+  // apps/classic/assets points to the shared assets/ folder.
+  "liveServer.settings.root": "/apps/classic",
   "liveServer.settings.ignoreFiles": [
     // Don't watch any source file
     "**/src/**"
