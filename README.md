@@ -805,6 +805,14 @@ pnpm build:host
 
 ### Watch (build on save)
 
+**Everything at once (host + games):**
+
+```
+pnpm watch
+```
+
+This runs every `watch:*` script in parallel, with each line of output prefixed by its source (`[host]`, `[games]`) in its own color. Press Ctrl+C once to stop them all. If one watcher exits on its own, the others are stopped too.
+
 **Web runtime:**
 
 ```
@@ -829,6 +837,7 @@ pnpm watch:games
 
 **Watch scripts:**
 
+- `pnpm watch` - Run all watch scripts below in parallel (Ctrl+C stops them all)
 - `pnpm watch:host` - Auto-rebuild host on file changes
 - `pnpm watch:games` - Auto-rebuild games on file changes
 
