@@ -24,6 +24,7 @@ import {
 const TITLE = "Pong";
 const DESCRIPTION = "Two-player pong with horizontal paddles";
 const AUTHOR = "Olivier Basille";
+const COVER = "pong_cover"; // sprite in assets/sprites
 
 // === Constants ===
 const PADDLE_WIDTH: i32 = 40;

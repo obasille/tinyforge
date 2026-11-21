@@ -6,7 +6,8 @@
   "type": "module",
   "exports": {
     "./memory-map": "./memory-map.ts",
-    "./tooling/compile-game": "./tooling/compile-game.ts"
+    "./tooling/compile-game": "./tooling/compile-game.ts",
+    "./tooling/cartridge-meta": "./tooling/cartridge-meta.ts"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",

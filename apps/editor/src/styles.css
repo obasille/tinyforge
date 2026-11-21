@@ -58,6 +58,119 @@ button:disabled {
   margin-right: 8px;
 }
 
+/* Game picker: a button in the toolbar and a scrollable list of games. */
+.tf-picker {
+  position: relative;
+}
+
+.tf-picker-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 160px;
+  padding: 2px 6px;
+}
+
+.tf-picker-caret {
+  margin-left: auto;
+  color: var(--tf-muted);
+}
+
+.tf-picker-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 1000;
+  width: 380px;
+  max-width: calc(100vw - 20px);
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--tf-panel);
+  border: 1px solid #3a3a48;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 50%);
+}
+
+.tf-picker-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 6px;
+  text-align: left;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.tf-picker-option:hover,
+.tf-picker-option:focus-visible {
+  background: #2a2a35;
+  outline: none;
+}
+
+.tf-picker-option[aria-selected="true"] {
+  border-color: var(--tf-accent);
+}
+
+.tf-picker-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tf-picker-title {
+  font-weight: 600;
+}
+
+.tf-picker-desc {
+  color: var(--tf-text);
+  opacity: 0.85;
+}
+
+.tf-picker-author {
+  color: var(--tf-muted);
+  font-size: 12px;
+}
+
+.tf-cover {
+  flex: none;
+  image-rendering: pixelated;
+  border-radius: 3px;
+  background: #000;
+}
+
+.tf-cover-small {
+  width: 20px;
+  height: 20px;
+}
+
+.tf-cover-large {
+  width: 64px;
+  height: 64px;
+}
+
+.tf-cover-placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--tf-muted);
+  font-family: var(--tf-mono);
+  font-weight: 600;
+  border: 1px solid #3a3a48;
+}
+
+.tf-cover-small.tf-cover-placeholder {
+  font-size: 9px;
+}
+
+.tf-cover-large.tf-cover-placeholder {
+  font-size: 20px;
+}
+
 .tf-spacer {
   flex: 1;
 }

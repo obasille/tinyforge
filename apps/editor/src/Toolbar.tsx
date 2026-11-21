@@ -1,9 +1,9 @@
 import { useEditor } from './EditorContext.ts';
+import { GamePicker } from './GamePicker.tsx';
 import { useStore } from './hooks.ts';
 
 export function Toolbar({ onResetLayout }: { onResetLayout: () => void }) {
   const editor = useEditor();
-  const project = useStore(editor.project);
   const stack = useStore(editor.commands);
   const session = useStore(editor.host.session);
   const sound = useStore(editor.audioSettings);
@@ -12,25 +12,7 @@ export function Toolbar({ onResetLayout }: { onResetLayout: () => void }) {
   return (
     <header className="tf-toolbar">
       <strong className="tf-brand">TinyForge</strong>
-      <label>
-        Game{' '}
-        <select
-          data-testid="game-select"
-          value={project.game ?? ''}
-          onChange={(e) => {
-            editor.selectGame(e.target.value);
-            // Hand the keyboard back to the game so it can be played right away.
-            editor.viewport.focus();
-          }}
-        >
-          {project.game === null && <option value="">Choose…</option>}
-          {editor.manifest.games.map((g) => (
-            <option key={g} value={g}>
-              {g}
-            </option>
-          ))}
-        </select>
-      </label>
+      <GamePicker />
       <button type="button" disabled={!stack.canUndo} onClick={() => editor.commands.undo()} title="Undo (Ctrl+Z)">
         Undo{stack.undoLabel ? ` ${stack.undoLabel}` : ''}
       </button>
