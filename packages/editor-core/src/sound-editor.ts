@@ -299,8 +299,10 @@ export class SoundEditor {
       const target = dir + wavFileName(this.path.slice(dir.length));
       const ops: FileOp[] = [{ write: target, data: bytes }];
       if (target !== this.path) {
-        if (this.host.files.entry(target)) throw new Error(`${target} already exists`);
-        const side = await this.host.files.readBytes(sidecarPath(this.path));
+        if (this.host.files.exists(target)) throw new Error(`${target} already exists`);
+        const side = this.host.files.exists(sidecarPath(this.path))
+          ? await this.host.files.readBytes(sidecarPath(this.path))
+          : null;
         ops.push({ delete: this.path });
         if (side) ops.push({ delete: sidecarPath(this.path) }, { write: sidecarPath(target), data: side });
       }
@@ -325,7 +327,7 @@ export class SoundEditor {
     const mine = changes.find((c) => c.path === this.path);
     if (!mine || this.disposed) return;
     if (mine.kind === 'unlink') {
-      if (this.state.getState().saving || this.host.files.entry(this.path)) return;
+      if (this.state.getState().saving || this.host.files.exists(this.path)) return;
       this.update({ conflict: 'deleted', dirty: true });
       return;
     }

@@ -172,7 +172,7 @@ export async function importCommand(
     if (own) sidecar = sidecarText(own);
     for (const old of replacedBy(draft, assets)) {
       const oldSidecar = sidecarPath(old.path);
-      const oldBytes = await files.readBytes(oldSidecar);
+      const oldBytes = files.exists(oldSidecar) ? await files.readBytes(oldSidecar) : null;
       if (oldBytes) {
         sidecar ??= oldBytes;
         if (oldSidecar !== sidecarPath(path)) ops.push({ delete: oldSidecar });

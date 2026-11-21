@@ -118,7 +118,7 @@ export class Workbench {
   /** Create a file (empty unless `text` is given), and open it. */
   async createFile(path: string, text = ''): Promise<void> {
     if (!isWritablePath(path)) throw new Error(`Cannot create ${path} here`);
-    if (this.files.entry(path)) throw new Error(`${path} already exists`);
+    if (this.files.exists(path)) throw new Error(`${path} already exists`);
     await this.commands.runFile(await writeFile(this.files, path, text, `New file ${path.split('/').pop()}`));
     this.openFile(path);
   }
@@ -130,7 +130,7 @@ export class Workbench {
     if (sources.length === 0) throw new Error(`${path} not found`);
     const moves = sources.map((from): [string, string] => [from, to + from.slice(path.length)]);
     // A renamed asset file takes its sidecar along (in a folder, it moves with the folder).
-    if (sources.length === 1 && assetKindOf(path) && (await this.files.readBytes(sidecarPath(path)))) {
+    if (sources.length === 1 && assetKindOf(path) && this.files.exists(sidecarPath(path))) {
       moves.push([sidecarPath(path), sidecarPath(to)]);
     }
     for (const [from, target] of moves) {
@@ -152,7 +152,7 @@ export class Workbench {
   private async withSidecars(paths: string[]): Promise<string[]> {
     const out = new Set(paths);
     for (const p of paths) {
-      if (assetKindOf(p) && (await this.files.readBytes(sidecarPath(p)))) out.add(sidecarPath(p));
+      if (assetKindOf(p) && this.files.exists(sidecarPath(p))) out.add(sidecarPath(p));
     }
     return [...out];
   }
@@ -183,7 +183,7 @@ export class Workbench {
     );
     const name = assetPath.split('/').pop();
     if (empty) {
-      if (await this.files.readBytes(path))
+      if (this.files.exists(path))
         await this.commands.runFile(await deleteFiles(this.files, [path], `Clear ${name} info`));
       return;
     }

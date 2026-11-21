@@ -165,8 +165,13 @@ test('selects, trims and saves a sound', async ({ page }) => {
   await panel.getByTestId('sound-trim').click();
   await expect(panel.getByTestId('sound-status')).toContainText(/0\.[45]\d\d s · 8000 Hz/);
   await panel.getByTestId('sound-save').click();
-  await expect.poll(() => samplesIn(`${id}.wav`)).toBeGreaterThan(3500);
-  expect(samplesIn(`${id}.wav`)).toBeLessThan(4200);
+  // Half the samples are left (the file may be mid-write: -1).
+  await expect
+    .poll(() => {
+      const n = samplesIn(`${id}.wav`);
+      return n > 3500 && n < 4200;
+    })
+    .toBe(true);
   // Undo outside the panel puts the file back.
   await page.locator('.dv-tab', { hasText: 'Library' }).click();
   await page.keyboard.press('Control+z');

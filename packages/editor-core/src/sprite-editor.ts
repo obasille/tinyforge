@@ -644,8 +644,10 @@ export class SpriteEditor {
       const target = dir + spriteFileName(this.path.slice(dir.length), s.cols, s.rows);
       const ops: FileOp[] = [{ write: target, data: bytes }];
       if (target !== this.path) {
-        if (this.host.files.entry(target)) throw new Error(`${target} already exists`);
-        const side = await this.host.files.readBytes(sidecarPath(this.path));
+        if (this.host.files.exists(target)) throw new Error(`${target} already exists`);
+        const side = this.host.files.exists(sidecarPath(this.path))
+          ? await this.host.files.readBytes(sidecarPath(this.path))
+          : null;
         ops.push({ delete: this.path });
         if (side) ops.push({ delete: sidecarPath(this.path) }, { write: sidecarPath(target), data: side });
       }
@@ -674,7 +676,7 @@ export class SpriteEditor {
     const s = this.state.getState();
     if (mine.kind === 'unlink') {
       // Our own save to a new name, or a delete (by undo, or another program).
-      if (s.saving || this.host.files.entry(this.path)) return;
+      if (s.saving || this.host.files.exists(this.path)) return;
       this.update({ conflict: 'deleted', dirty: true });
       return;
     }
