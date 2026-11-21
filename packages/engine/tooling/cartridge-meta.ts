@@ -187,6 +187,44 @@ export function findCustomSection(wasm: Uint8Array, name: string): Uint8Array | 
 }
 
 /**
+ * Point the module's `sourceMappingURL` section at `url` (debuggers load the
+ * source map from it). The section goes last, replacing any earlier one, so
+ * code offsets do not move.
+ */
+export function withSourceMapUrl(wasm: Uint8Array, url: string): Uint8Array<ArrayBuffer> {
+  if (!isWasm(wasm)) throw new Error('Not a WASM module');
+  const decoder = new TextDecoder();
+  const parts: Uint8Array[] = [wasm.subarray(0, 8)];
+  let pos = 8;
+  while (pos < wasm.length) {
+    const sectionStart = pos;
+    const id = wasm[pos++];
+    const size = readLeb128(wasm, pos);
+    const end = size.next + size.value;
+    if (end > wasm.length) throw new Error('Truncated WASM module');
+    let keep = true;
+    if (id === 0) {
+      const len = readLeb128(wasm, size.next);
+      keep = decoder.decode(wasm.subarray(len.next, len.next + len.value)) !== 'sourceMappingURL';
+    }
+    if (keep) parts.push(wasm.subarray(sectionStart, end));
+    pos = end;
+  }
+  const name = new TextEncoder().encode('sourceMappingURL');
+  const value = new TextEncoder().encode(url);
+  const content = [...leb128(name.length), ...name, ...leb128(value.length)];
+  const head = new Uint8Array([0x00, ...leb128(content.length + value.length), ...content]);
+  parts.push(head, value);
+  const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+  let at = 0;
+  for (const p of parts) {
+    out.set(p, at);
+    at += p.length;
+  }
+  return out;
+}
+
+/**
  * Limits of the memory a module imports, in 64 KB pages, or null when it
  * imports none. Reads the import section; does not compile the module.
  */

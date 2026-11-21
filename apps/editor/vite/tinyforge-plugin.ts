@@ -1,45 +1,45 @@
-// Vite plugin that serves TinyForge cartridges and assets to the editor.
+// Vite plugin that serves the TinyForge project to the editor: the server
+// side of the Workspace's HTTP protocol (editor-core http-workspace.ts).
 //
 // Dev server:
-//   GET /__tf/manifest.json            games and asset lists
-//   GET /__tf/cartridges/<game>.wasm   debug build, compiled on first request
-//   GET /__tf/cartridges/<game>.wasm.map
-//   GET /assets/...                    the repo's shared assets/ folder
-// When an engine file changes, the affected games that were already compiled
-// are rebuilt and the client gets a `tf:cartridges` HMR event (or Vite's error
-// overlay with the compiler output). Adding or removing a library file
-// rebuilds them too (an asset ID may have become valid or unknown). When any
-// file in assets/sprites, assets/sfx or assets/music is added, changed or
-// removed, the client gets a `tf:assets` event and reloads the game's sprites
-// and sounds. Asset URLs carry the file's modification time, so a changed
-// file has a new URL and an unchanged one stays cached.
+//   GET    /__tf/files.json         { writable, watch, files: [{ path, size, mtime, readonly? }] }
+//   GET    /__tf/files/<path>       a file's bytes
+//   PUT    /__tf/files/<path>       create or replace a file
+//   DELETE /__tf/files/<path>       delete a file (and folders it leaves empty)
+//   POST   /__tf/rename             { from, to }: move a file; `to` must not exist
+//   GET    /__tf/events             server-sent events: { changes: [{ path, kind }] }
 //
-// Build: emits release cartridges, the manifest and the assets into dist/.
+// Paths are project paths (packages/engine/tooling/project-layout.ts): games/,
+// engine/ (read-only) and assets/. Only games/<name>/ and the library folders
+// are writable. Requests that change files need an `X-TinyForge: 1` header,
+// so another web page cannot make them (a custom header needs a CORS
+// preflight, which this server does not grant).
+//
+// The server only serves and watches files: the editor compiles in a Worker.
+// A change on disk, from the editor or from any other program, reaches the
+// editor the same way, through /__tf/events.
+//
+// Build: emits the same files.json (read-only, no events) and every project
+// file under __tf/files/, so a static host serves the same protocol.
 
-import { createReadStream, existsSync, promises as fs, statSync } from 'node:fs';
+import { createReadStream, existsSync, promises as fs } from 'node:fs';
+import type { ServerResponse } from 'node:http';
 import path from 'node:path';
-import type { Plugin, ViteDevServer } from 'vite';
+import type { Plugin } from 'vite';
 import {
-  type CompileResult,
-  compileGame,
-  ENGINE_ROOT,
-  gamesAffectedBy,
-  gamesAffectedByAsset,
-  listGames,
+  diskPath,
+  listProjectFiles,
+  MEMORY_MAP_FILE,
+  PROJECT_DIRS,
+  type ProjectDirs,
+  type ProjectFile,
+  projectPathOfFile,
 } from '../../../packages/engine/tooling/compile-game.ts';
+import { isProjectPath, isWritablePath } from '../../../packages/engine/tooling/project-layout.ts';
 
-export const CARTRIDGES_EVENT = 'tf:cartridges';
-export const ASSETS_EVENT = 'tf:assets';
-
-export interface CartridgesEvent {
-  games: string[];
-}
-
-interface AssetRef {
-  id: string;
-  format: string;
-  url: string;
-}
+export const MUTATION_HEADER = 'x-tinyforge';
+/** Largest file the editor can write (64 MB). */
+const MAX_WRITE = 64 * 1024 * 1024;
 
 const MIME: Record<string, string> = {
   '.png': 'image/png',
@@ -48,208 +48,212 @@ const MIME: Record<string, string> = {
   '.wav': 'audio/wav',
   '.mp3': 'audio/mpeg',
   '.ogg': 'audio/ogg',
+  '.json': 'application/json',
+  '.ts': 'text/plain; charset=utf-8',
+  '.md': 'text/plain; charset=utf-8',
+  '.txt': 'text/plain; charset=utf-8',
 };
 
-function parseId(file: string): { id: string; format: string } | null {
-  const name = file.replace(/\.[^/.]+$/, '');
-  const tilde = name.indexOf('~');
-  const dash = name.indexOf('-');
-  if (tilde >= 0) {
-    const rest = name.slice(tilde + 1);
-    const restDash = rest.indexOf('-');
-    return { id: name.slice(0, tilde), format: restDash >= 0 ? rest.slice(0, restDash) : rest };
-  }
-  const id = dash >= 0 ? name.slice(0, dash) : name;
-  return id ? { id, format: '' } : null;
+type ChangeKind = 'add' | 'change' | 'unlink';
+
+interface Listing {
+  writable: boolean;
+  watch: boolean;
+  files: Array<ProjectFile & { readonly?: true }>;
 }
 
-async function listAssets(
-  assetsDir: string,
-  sub: string,
-  pattern: RegExp,
-  base: string,
-  versioned: boolean,
-): Promise<AssetRef[]> {
-  const dir = path.join(assetsDir, sub);
-  if (!existsSync(dir)) return [];
-  const files = (await fs.readdir(dir)).filter((f) => pattern.test(f)).sort();
-  return files.flatMap((file) => {
-    const parsed = parseId(file);
-    if (!parsed) return [];
-    const version = versioned ? `?v=${Math.floor(statSync(path.join(dir, file)).mtimeMs)}` : '';
-    return [{ ...parsed, url: `${base}assets/${sub}/${encodeURIComponent(file)}${version}` }];
-  });
-}
-
-/** Games and the asset library. Dev URLs are versioned by modification time. */
-async function manifest(assetsDir: string, base: string, versioned: boolean) {
-  return {
-    games: listGames(),
-    sprites: await listAssets(assetsDir, 'sprites', /\.(png|jpe?g)$/i, base, versioned),
-    sfx: await listAssets(assetsDir, 'sfx', /\.(wav|mp3|ogg)$/i, base, versioned),
-    music: await listAssets(assetsDir, 'music', /\.(wav|mp3|ogg)$/i, base, versioned),
-  };
-}
-
-/** Rewrite absolute source paths to Vite's /@fs/ URLs so DevTools can open them. */
-function sourceMapForBrowser(map: string): string {
-  const parsed = JSON.parse(map) as { sources?: string[] };
-  parsed.sources = parsed.sources?.map((s) =>
-    path.isAbsolute(s) ? `/@fs/${s.split(path.sep).join('/').replace(/^\//, '')}` : s,
+async function listing(dirs: ProjectDirs, live: boolean): Promise<Listing> {
+  const files = (await listProjectFiles(dirs)).map((f) =>
+    live && isWritablePath(f.path) ? f : { ...f, readonly: true as const },
   );
-  return JSON.stringify(parsed);
+  return { writable: live, watch: live, files };
+}
+
+class HttpError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+function send(res: ServerResponse, status: number, body: string, type = 'text/plain; charset=utf-8'): void {
+  res.statusCode = status;
+  res.setHeader('Content-Type', type);
+  res.setHeader('Cache-Control', 'no-store');
+  res.end(body);
+}
+
+async function readBody(req: NodeJS.ReadableStream): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of req) {
+    const buf = typeof chunk === 'string' ? Buffer.from(chunk) : (chunk as Buffer);
+    size += buf.length;
+    if (size > MAX_WRITE) throw new HttpError(413, 'File too large');
+    chunks.push(buf);
+  }
+  return Buffer.concat(chunks);
+}
+
+/** The file to write at a project path, or an HTTP error. */
+function writableFile(p: string, dirs: ProjectDirs): string {
+  if (!isProjectPath(p)) throw new HttpError(400, `Invalid path "${p}"`);
+  if (!isWritablePath(p)) throw new HttpError(403, `${p} is read-only`);
+  const file = diskPath(p, dirs);
+  if (!file) throw new HttpError(403, `${p} is read-only`);
+  return file;
+}
+
+/** The folders that hold everything the editor may write; they are never pruned. */
+function rootDirs(dirs: ProjectDirs): string[] {
+  return [
+    dirs.games,
+    path.join(dirs.assets, 'sprites'),
+    path.join(dirs.assets, 'sfx'),
+    path.join(dirs.assets, 'music'),
+  ];
+}
+
+/** Remove the folders a delete or a move left empty, up to a root folder. */
+async function pruneEmpty(file: string, dirs: ProjectDirs): Promise<void> {
+  const roots = rootDirs(dirs);
+  let dir = path.dirname(file);
+  while (!roots.includes(dir) && roots.some((r) => dir.startsWith(r + path.sep))) {
+    if ((await fs.readdir(dir)).length > 0) return;
+    await fs.rmdir(dir);
+    dir = path.dirname(dir);
+  }
 }
 
 export function tinyforge({ assetsDir }: { assetsDir: string }): Plugin {
-  const cache = new Map<string, Promise<CompileResult>>();
-  let server: ViteDevServer | null = null;
-
-  const build = (game: string): Promise<CompileResult> => {
-    let result = cache.get(game);
-    if (!result) {
-      const started = Date.now();
-      result = compileGame(game, 'debug').then((r) => {
-        server?.config.logger.info(
-          `[tinyforge] ${r.ok ? 'compiled' : 'failed to compile'} ${game} in ${Date.now() - started} ms`,
-          {
-            timestamp: true,
-          },
-        );
-        return r;
-      });
-      cache.set(game, result);
-    }
-    return result;
-  };
+  const dirs: ProjectDirs = { ...PROJECT_DIRS, assets: assetsDir };
 
   return {
     name: 'tinyforge',
 
     configureServer(dev) {
-      server = dev;
-      dev.watcher.add(ENGINE_ROOT);
-      dev.watcher.add(assetsDir);
+      dev.watcher.add([dirs.games, dirs.sdk, MEMORY_MAP_FILE, ...rootDirs(dirs).slice(1)]);
 
-      // Rebuild the affected games someone has loaded; the rest compile on request.
-      const rebuild = async (affected: string[]) => {
-        const loaded = affected.filter((g) => cache.has(g));
-        for (const g of affected) cache.delete(g);
-        if (loaded.length === 0) return;
-        const results = await Promise.all(loaded.map(async (g) => [g, await build(g)] as const));
-        const failed = results.find(([, r]) => !r.ok);
-        if (failed) {
-          dev.ws.send({
-            type: 'error',
-            err: { message: `AssemblyScript: ${failed[0]} failed to compile\n\n${failed[1].log}`, stack: '' },
-          });
-          dev.ws.send({
-            type: 'custom',
-            event: CARTRIDGES_EVENT,
-            data: { games: [], failed: failed[0], log: failed[1].log },
-          });
-          return;
-        }
-        dev.ws.send({ type: 'custom', event: CARTRIDGES_EVENT, data: { games: loaded } satisfies CartridgesEvent });
+      // Change stream: watcher events, batched, to every connected editor.
+      const clients = new Set<ServerResponse>();
+      let pending = new Map<string, ChangeKind>();
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      const flush = () => {
+        timer = null;
+        const changes = [...pending].map(([p, kind]) => ({ path: p, kind }));
+        pending = new Map();
+        const message = `data: ${JSON.stringify({ changes })}\n\n`;
+        for (const client of clients) client.write(message);
       };
-
-      // Library files: once a burst of changes (e.g. a git checkout or a
-      // generator script) has settled, tell the client to reload its assets,
-      // then rebuild the games it affects (in that order, so a hot reload
-      // finds the new files in the library).
-      let assetsTimer: ReturnType<typeof setTimeout> | null = null;
-      const assetGames = new Set<string>();
-      const assetsChanged = (games: string[]) => {
-        for (const g of games) assetGames.add(g);
-        if (assetsTimer) clearTimeout(assetsTimer);
-        assetsTimer = setTimeout(() => {
-          assetsTimer = null;
-          const affected = [...assetGames];
-          assetGames.clear();
-          dev.ws.send({ type: 'custom', event: ASSETS_EVENT, data: {} });
-          void rebuild(affected);
-        }, 200);
+      const onEvent = (kind: ChangeKind) => (file: string) => {
+        const p = projectPathOfFile(file, dirs);
+        if (!p) return;
+        const before = pending.get(p);
+        // add then change is still an add; unlink then add is a change.
+        pending.set(
+          p,
+          before === 'add' && kind === 'change' ? 'add' : before === 'unlink' && kind === 'add' ? 'change' : kind,
+        );
+        if (timer === null) timer = setTimeout(flush, 50);
       };
-
-      const onChange = (event: 'add' | 'change' | 'unlink') => async (file: string) => {
-        const engine = gamesAffectedBy(file);
-        if (engine) return rebuild(engine);
-        const asset = gamesAffectedByAsset(file, event);
-        if (asset) assetsChanged(asset);
-      };
-      dev.watcher.on('change', onChange('change'));
-      dev.watcher.on('add', onChange('add'));
-      dev.watcher.on('unlink', onChange('unlink'));
+      dev.watcher.on('add', onEvent('add'));
+      dev.watcher.on('change', onEvent('change'));
+      dev.watcher.on('unlink', onEvent('unlink'));
+      const heartbeat = setInterval(() => {
+        for (const client of clients) client.write(': keep-alive\n\n');
+      }, 15000);
+      dev.httpServer?.on('close', () => clearInterval(heartbeat));
 
       dev.middlewares.use(async (req, res, next) => {
         const url = new URL(req.url ?? '/', 'http://localhost');
-        const pathname = decodeURIComponent(url.pathname);
+        const pathname = url.pathname;
+        if (!pathname.startsWith('/__tf/')) return next();
+        const method = req.method ?? 'GET';
         try {
-          if (pathname === '/__tf/manifest.json') {
-            res.setHeader('Content-Type', 'application/json');
-            res.setHeader('Cache-Control', 'no-store');
-            res.end(JSON.stringify(await manifest(assetsDir, dev.config.base, true)));
+          if (pathname === '/__tf/files.json' && method === 'GET') {
+            send(res, 200, JSON.stringify(await listing(dirs, true)), 'application/json');
             return;
           }
-          const cart = pathname.match(/^\/__tf\/cartridges\/([A-Za-z0-9_-]+)\.wasm(\.map)?$/);
-          if (cart) {
-            const [, game, isMap] = cart;
-            const result = await build(game);
-            res.setHeader('Cache-Control', 'no-store');
-            if (!result.ok) {
-              res.statusCode = listGames().includes(game) ? 500 : 404;
-              res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-              res.end(result.log);
-              return;
-            }
-            if (isMap) {
-              res.setHeader('Content-Type', 'application/json');
-              res.end(result.sourceMap ? sourceMapForBrowser(result.sourceMap) : '{}');
-            } else {
-              res.setHeader('Content-Type', 'application/wasm');
-              res.end(Buffer.from(result.wasm));
-            }
+          if (pathname === '/__tf/events' && method === 'GET') {
+            res.writeHead(200, {
+              'Content-Type': 'text/event-stream',
+              'Cache-Control': 'no-cache',
+              Connection: 'keep-alive',
+            });
+            res.write('retry: 1000\n\n');
+            clients.add(res);
+            req.on('close', () => clients.delete(res));
             return;
           }
-          if (pathname.startsWith('/assets/')) {
-            const file = path.resolve(assetsDir, pathname.slice('/assets/'.length));
-            if (!file.startsWith(assetsDir + path.sep) || !existsSync(file) || !statSync(file).isFile()) {
-              res.statusCode = 404;
-              res.end();
-              return;
+          const mutating = method !== 'GET' && method !== 'HEAD';
+          if (mutating && req.headers[MUTATION_HEADER] !== '1') {
+            throw new HttpError(403, `Missing ${MUTATION_HEADER} header`);
+          }
+          if (pathname === '/__tf/rename' && method === 'POST') {
+            const body = JSON.parse((await readBody(req)).toString('utf8')) as { from?: unknown; to?: unknown };
+            if (typeof body.from !== 'string' || typeof body.to !== 'string') {
+              throw new HttpError(400, 'Expected { from, to }');
             }
+            const from = writableFile(body.from, dirs);
+            const to = writableFile(body.to, dirs);
+            if (!existsSync(from)) throw new HttpError(404, `${body.from} not found`);
+            if (existsSync(to)) throw new HttpError(409, `${body.to} already exists`);
+            await fs.mkdir(path.dirname(to), { recursive: true });
+            await fs.rename(from, to);
+            await pruneEmpty(from, dirs);
+            send(res, 204, '');
+            return;
+          }
+          if (!pathname.startsWith('/__tf/files/')) throw new HttpError(404, 'Not found');
+          const p = decodeURIComponent(pathname.slice('/__tf/files/'.length));
+          if (method === 'GET' || method === 'HEAD') {
+            const file = isProjectPath(p) ? diskPath(p, dirs) : null;
+            const stat = file ? await fs.stat(file).catch(() => null) : null;
+            if (!file || !stat?.isFile()) throw new HttpError(404, `${p} not found`);
             res.setHeader('Content-Type', MIME[path.extname(file).toLowerCase()] ?? 'application/octet-stream');
-            createReadStream(file).pipe(res);
+            res.setHeader('Content-Length', stat.size);
+            // A URL with ?v= (the modification time) names one version of the file.
+            res.setHeader('Cache-Control', url.searchParams.has('v') ? 'max-age=31536000, immutable' : 'no-store');
+            if (method === 'HEAD') res.end();
+            else createReadStream(file).pipe(res);
             return;
           }
+          if (method === 'PUT') {
+            const file = writableFile(p, dirs);
+            const body = await readBody(req);
+            await fs.mkdir(path.dirname(file), { recursive: true });
+            await fs.writeFile(file, body);
+            send(res, 204, '');
+            return;
+          }
+          if (method === 'DELETE') {
+            const file = writableFile(p, dirs);
+            const stat = await fs.stat(file).catch(() => null);
+            if (!stat?.isFile()) throw new HttpError(404, `${p} not found`);
+            await fs.unlink(file);
+            await pruneEmpty(file, dirs);
+            send(res, 204, '');
+            return;
+          }
+          throw new HttpError(405, `${method} not allowed`);
         } catch (e) {
-          res.statusCode = 500;
-          res.end(e instanceof Error ? e.message : String(e));
-          return;
+          if (e instanceof HttpError) send(res, e.status, e.message);
+          else if (e instanceof SyntaxError) send(res, 400, e.message);
+          else send(res, 500, e instanceof Error ? e.message : String(e));
         }
-        next();
       });
     },
 
+    // A static copy of the project: the same protocol, read-only.
     async generateBundle() {
-      const base = '';
-      const m = await manifest(assetsDir, base, false);
-      this.emitFile({ type: 'asset', fileName: '__tf/manifest.json', source: JSON.stringify(m) });
-      for (const game of m.games) {
-        const r = await compileGame(game, 'release');
-        if (!r.ok) this.error(`AssemblyScript: ${game} failed to compile\n${r.log}`);
-        this.emitFile({ type: 'asset', fileName: `__tf/cartridges/${game}.wasm`, source: r.wasm });
-      }
-      for (const sub of ['sprites', 'sfx', 'music']) {
-        const dir = path.join(assetsDir, sub);
-        if (!existsSync(dir)) continue;
-        for (const file of await fs.readdir(dir)) {
-          if (!MIME[path.extname(file).toLowerCase()]) continue;
-          this.emitFile({
-            type: 'asset',
-            fileName: `assets/${sub}/${file}`,
-            source: await fs.readFile(path.join(dir, file)),
-          });
-        }
+      const list = await listing(dirs, false);
+      this.emitFile({ type: 'asset', fileName: '__tf/files.json', source: JSON.stringify(list) });
+      for (const f of list.files) {
+        const file = diskPath(f.path, dirs);
+        if (!file) continue;
+        this.emitFile({ type: 'asset', fileName: `__tf/files/${f.path}`, source: await fs.readFile(file) });
       }
     },
   };

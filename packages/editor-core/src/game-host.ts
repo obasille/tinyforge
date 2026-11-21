@@ -81,8 +81,9 @@ export class GameHost {
     this.start();
   }
 
-  load(name: string, url: string, { keepState = false, seed = null as number | null } = {}): void {
-    this.lastLoad = { type: 'load', name, url, keepState, seed };
+  /** Run a cartridge (its bytes are copied). */
+  load(name: string, wasm: Uint8Array, { keepState = false, seed = null as number | null } = {}): void {
+    this.lastLoad = { type: 'load', name, wasm: wasm.slice().buffer as ArrayBuffer, keepState, seed };
     this.send(this.lastLoad);
   }
 

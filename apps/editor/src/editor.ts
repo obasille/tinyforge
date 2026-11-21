@@ -6,20 +6,29 @@ import {
   type AssetManifest,
   AudioPlayer,
   CommandStack,
+  CompilerHost,
   createStore,
   emptyProject,
+  type FileChange,
   GameCatalog,
   GameHost,
+  type GameMetaInfo,
   InputTracker,
   type PixelInfo,
   PixelProbe,
+  type ProjectFiles,
   type ProjectState,
   projectCommands,
   type ShortcutAction,
   type Store,
   Viewport,
+  Workbench,
 } from '@tinyforge/editor-core';
+import CompileWorker from '@tinyforge/editor-core/compile-worker?worker';
 import GameWorker from '@tinyforge/editor-core/game-worker?worker';
+import { assetId } from '@tinyforge/engine/tooling/asset-scan';
+import { parseGameMeta } from '@tinyforge/engine/tooling/game-meta';
+import { assetKindOf, gameEntryPath } from '@tinyforge/engine/tooling/project-layout';
 import { createLogStore, type LogStore } from './log-store.ts';
 
 const PROJECT_KEY = 'tinyforge.editor.project';
@@ -56,8 +65,7 @@ function loadAudioSettings(): AudioSettings {
   }
 }
 
-const absolute = (url: string) => new URL(url, document.baseURI).href;
-const absoluteRefs = (refs: AssetManifest['sprites']) => refs.map((r) => ({ ...r, url: absolute(r.url) }));
+const IMAGE = /\.(png|jpe?g)$/i;
 
 export class Editor {
   readonly project: Store<ProjectState>;
@@ -73,23 +81,27 @@ export class Editor {
   readonly pixel = createStore<PixelInfo | null>(null);
   readonly pixelProbe: PixelProbe;
   readonly audioSettings = createStore<AudioSettings>(loadAudioSettings());
-  /** Title, description, author and cover of every game, read from its cartridge. */
+  /** Title, description, author and cover of every game, read from its main.ts. */
   readonly catalog: GameCatalog;
+  /** Compiles games in a Worker; caches builds until their files change. */
+  readonly compiler: CompilerHost;
+  /** Open code editors, file operations, and the assets the game uses. */
+  readonly workbench: Workbench;
   /** The asset library (refreshed when files change) and the current game's part of it. */
   private library: AssetManifest;
   private gameAssets: AssetList | null = null;
   /** The library refresh in progress, if any; a hot reload waits for it. */
   private refreshing: Promise<void> = Promise.resolve();
+  /** Bumped by each loadGame, so a slow compile does not load a game the user left. */
+  private loadSeq = 0;
 
-  constructor(readonly manifest: AssetManifest) {
-    this.library = manifest;
-    this.project = createStore(loadProject(manifest.games));
-    this.catalog = new GameCatalog(manifest.games, async (game) => {
-      const res = await fetch(this.cartridgeUrl(game), { cache: 'no-store' });
-      if (!res.ok) throw new Error(`${game}: HTTP ${res.status}`);
-      return new Uint8Array(await res.arrayBuffer());
-    });
-    this.commands = new CommandStack(this.project);
+  constructor(readonly files: ProjectFiles) {
+    this.library = files.library;
+    this.project = createStore(loadProject(files.games));
+    this.catalog = new GameCatalog(files.games, (game) => this.readGameInfo(game));
+    this.compiler = new CompilerHost(files, () => new CompileWorker({ name: 'tinyforge-compiler' }));
+    this.commands = new CommandStack(this.project, (message) => this.logs.add('ERROR', message));
+    this.workbench = new Workbench(files, this.commands, this.compiler, () => this.project.getState().game);
     this.audio = new AudioPlayer((m) => this.logs.add('WARN', m));
     const applyAudio = () => {
       const { volume, muted } = this.audioSettings.getState();
@@ -116,7 +128,7 @@ export class Editor {
     this.host = new GameHost({
       createWorker: () => new GameWorker({ name: 'tinyforge-game' }),
       createCanvas: () => this.viewport.createCanvas(),
-      sprites: absoluteRefs(manifest.sprites),
+      sprites: this.library.sprites,
       onLog: (level, message) => this.logs.add(level, message),
       onAudio: (command) => this.audio.play(command),
       onAssets: (game, assets) => {
@@ -135,9 +147,49 @@ export class Editor {
       } catch {
         // Storage may be unavailable; the project still works for this session.
       }
-      if (next.game !== current.game) this.loadGame();
+      if (next.game !== current.game) {
+        this.workbench.gameChanged();
+        void this.loadGame();
+      }
       current = next;
     });
+
+    // Every file change, from the editor or from another program, comes here.
+    files.onChange((changes) => this.filesChanged(changes));
+  }
+
+  /** The games in the project. */
+  get games(): string[] {
+    return this.files.games;
+  }
+
+  private async readGameInfo(game: string): Promise<GameMetaInfo> {
+    const entry = gameEntryPath(game);
+    const source = await this.files.readText(entry);
+    if (source === null) throw new Error(`${entry} not found`);
+    const meta = parseGameMeta(entry, source);
+    let cover: GameMetaInfo['cover'] = null;
+    if (meta.cover) {
+      const id = meta.cover;
+      const file = this.files.assetFiles.sprites.find((f) => IMAGE.test(f) && assetId(f) === id);
+      const bytes = file ? await this.files.readBytes(`assets/sprites/${file}`) : null;
+      if (file && bytes) cover = { type: /\.png$/i.test(file) ? 'image/png' : 'image/jpeg', bytes };
+    }
+    return { title: meta.title, description: meta.description, author: meta.author, cover };
+  }
+
+  private filesChanged(changes: FileChange[]): void {
+    const games = this.files.games;
+    const affected = this.compiler.invalidate(changes);
+    this.workbench.filesChanged(changes, affected);
+    void this.catalog.setGames(games);
+    // Titles and covers: a game's main.ts or a sprite changed.
+    const sprites = changes.some((c) => assetKindOf(c.path) === 'sprites');
+    const metaChanged = games.filter((g) => sprites || changes.some((c) => c.path === gameEntryPath(g)));
+    if (metaChanged.length > 0) void this.catalog.load(metaChanged);
+    if (changes.some((c) => assetKindOf(c.path))) void this.reloadAssets();
+    const { game } = this.project.getState();
+    if (game && affected.includes(game) && games.includes(game)) this.hotReload(game);
   }
 
   setVolume(volume: number): void {
@@ -149,14 +201,15 @@ export class Editor {
   }
 
   async start(): Promise<void> {
-    if (!this.project.getState().game && this.manifest.games.length > 0) {
+    const games = this.files.games;
+    if (!this.project.getState().game && games.length > 0) {
       // First run: pick a game without recording an undo step.
       this.project.setState((p) => ({
         ...p,
-        game: this.manifest.games.includes('pong') ? 'pong' : this.manifest.games[0],
+        game: games.includes('pong') ? 'pong' : games[0],
       }));
     } else {
-      this.loadGame();
+      void this.loadGame();
     }
     // The picker's titles and covers: the current game first, then the rest.
     void this.catalog.load(undefined, this.project.getState().game);
@@ -166,7 +219,7 @@ export class Editor {
   private async loadGameAudio(): Promise<void> {
     const assets = this.gameAssets;
     if (!assets) return;
-    const pick = (refs: AssetManifest['sfx'], ids: string[]) => absoluteRefs(refs.filter((r) => ids.includes(r.id)));
+    const pick = (refs: AssetManifest['sfx'], ids: string[]) => refs.filter((r) => ids.includes(r.id));
     await this.audio.load(pick(this.library.sfx, assets.sfx), pick(this.library.music, assets.music));
     if (assets !== this.gameAssets) return;
     const { sfx, music } = this.audio.counts;
@@ -174,26 +227,17 @@ export class Editor {
   }
 
   /**
-   * Files in the asset library changed (dev server): reload the game's
-   * sprites in place and its sounds. URLs change only for changed files, so
-   * only those are fetched again.
+   * Files in the asset library changed: reload the game's sprites in place
+   * and its sounds. URLs change only for changed files, so only those are
+   * fetched again.
    */
   reloadAssets(): Promise<void> {
     this.refreshing = (async () => {
-      const res = await fetch(absolute('__tf/manifest.json'), { cache: 'no-store' });
-      if (!res.ok) {
-        this.logs.add('WARN', `Could not reload assets: manifest HTTP ${res.status}`);
-        return;
-      }
-      this.library = (await res.json()) as AssetManifest;
-      this.host.setSprites(absoluteRefs(this.library.sprites));
+      this.library = this.files.library;
+      this.host.setSprites(this.library.sprites);
       await this.loadGameAudio();
     })();
     return this.refreshing;
-  }
-
-  cartridgeUrl(game: string): string {
-    return absolute(`__tf/cartridges/${game}.wasm?v=${Date.now()}`);
   }
 
   selectGame(game: string): void {
@@ -204,11 +248,21 @@ export class Editor {
     this.commands.run(projectCommands.setSeed(this.project.getState(), seed));
   }
 
-  loadGame({ keepState = false } = {}): void {
+  /** Compile the project's game (or reuse its build) and run it. */
+  async loadGame({ keepState = false } = {}): Promise<void> {
     const { game, seed } = this.project.getState();
     if (!game) return;
+    const seq = ++this.loadSeq;
+    const result = await this.compiler.build(game);
+    if (seq !== this.loadSeq || game !== this.project.getState().game) return;
+    if (!result.ok) {
+      this.logs.add('ERROR', `${game} failed to compile:\n${result.log}`);
+      return;
+    }
+    const ms = this.compiler.builds.getState()[game]?.ms;
+    if (ms != null) this.logs.add('HOST', `Compiled ${game} in ${ms} ms`);
     this.audio.stopMusic();
-    this.host.load(game, this.cartridgeUrl(game), { keepState, seed });
+    this.host.load(game, result.wasm, { keepState, seed });
   }
 
   restart(): void {
@@ -216,12 +270,9 @@ export class Editor {
     this.host.restart(this.project.getState().seed);
   }
 
-  /** Hot reload after the cartridge was rebuilt: memory (game state) is kept. */
-  hotReload(games: string[]): void {
-    void this.catalog.load(games);
-    const { game } = this.project.getState();
-    if (!game || !games.includes(game)) return;
-    this.logs.add('HOST', `${game} rebuilt, hot reloading (state kept)`);
+  /** Hot reload after the game's files changed: memory (game state) is kept. */
+  private hotReload(game: string): void {
+    this.logs.add('HOST', `${game} changed, rebuilding and hot reloading (state kept)`);
     void this.refreshing.then(() => this.loadGame({ keepState: true }));
   }
 
@@ -241,7 +292,7 @@ export class Editor {
   runShortcut(action: ShortcutAction): void {
     switch (action) {
       case 'reload':
-        this.loadGame();
+        void this.loadGame();
         break;
       case 'restart':
         this.restart();
@@ -270,6 +321,6 @@ export class Editor {
   kill(): void {
     this.audio.stopMusic();
     this.host.kill({ reload: false });
-    this.loadGame();
+    void this.loadGame();
   }
 }

@@ -25,12 +25,7 @@ function harness() {
     requestFrame: (cb) => {
       pendingFrame = cb;
     },
-    fetch: async (url) => ({
-      ok: url.endsWith('pong.wasm'),
-      status: url.endsWith('pong.wasm') ? 200 : 404,
-      arrayBuffer: async () => pong.slice(0),
-      text: async () => 'not found',
-    }),
+    fetch: async () => ({ ok: false, status: 404, arrayBuffer: async () => new ArrayBuffer(0), text: async () => '' }),
   });
   const frames = (n: number) => {
     for (let i = 0; i < n; i++) {
@@ -47,7 +42,7 @@ function harness() {
 
 async function loaded(seed = 1234) {
   const h = harness();
-  await h.core.handle({ type: 'load', url: '/pong.wasm', name: 'pong', keepState: false, seed });
+  await h.core.handle({ type: 'load', wasm: pong.slice(0), name: 'pong', keepState: false, seed });
   return h;
 }
 
@@ -105,7 +100,7 @@ describe('GameWorkerCore', () => {
     const snap = h.posted.length;
     await h.core.handle({ type: 'snapshot', requestId: 1 });
     const before = new Uint8Array((h.posted[snap] as { bytes: ArrayBuffer }).bytes).slice(RAM_START, RAM_START + 512);
-    await h.core.handle({ type: 'load', url: '/pong.wasm', name: 'pong', keepState: true, seed: null });
+    await h.core.handle({ type: 'load', wasm: pong.slice(0), name: 'pong', keepState: true, seed: null });
     expect(h.of('status').at(-1)?.status).toBe('paused');
     await h.core.handle({ type: 'snapshot', requestId: 2 });
     const after = new Uint8Array((h.of('snapshot').at(-1) as { bytes: ArrayBuffer }).bytes).slice(
@@ -131,7 +126,13 @@ describe('GameWorkerCore', () => {
 
   it('reports a failed load without crashing', async () => {
     const h = harness();
-    await h.core.handle({ type: 'load', url: '/missing.wasm', name: 'missing', keepState: false, seed: null });
+    await h.core.handle({
+      type: 'load',
+      wasm: new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0]).buffer,
+      name: 'missing',
+      keepState: false,
+      seed: null,
+    });
     expect(h.of('status').at(-1)?.status).toBe('aborted');
     expect(h.of('log').some((l) => l.level === 'ERROR' && l.message.includes('Failed to load missing'))).toBe(true);
   });
@@ -166,7 +167,7 @@ describe('GameWorkerCore sprites', () => {
         return {
           ok: true,
           status: 200,
-          arrayBuffer: async () => (url.endsWith('.wasm') ? dino.slice(0) : new ArrayBuffer(1)),
+          arrayBuffer: async () => new ArrayBuffer(1),
           text: async () => '',
         };
       },
@@ -184,7 +185,7 @@ describe('GameWorkerCore sprites', () => {
     const h = spriteHarness();
     await h.core.handle({ type: 'init', canvas: fakeCanvas(), sprites: library });
     expect(h.sprites()).toEqual([]); // nothing until a game loads
-    await h.core.handle({ type: 'load', url: '/dinoWorld.wasm', name: 'dinoWorld', keepState: false, seed: 1 });
+    await h.core.handle({ type: 'load', wasm: dino.slice(0), name: 'dinoWorld', keepState: false, seed: 1 });
     expect(h.sprites().sort()).toEqual(['/s/coin.png?v=1', '/s/dino.png?v=1']);
     expect(h.of('sprites').at(-1)).toMatchObject({ game: 'dinoWorld', spriteCount: 2 });
     expect(h.of('assets').at(-1)).toEqual({
@@ -208,7 +209,7 @@ describe('GameWorkerCore sprites', () => {
   it('reloads a changed sprite in place, fetching only that file', async () => {
     const h = spriteHarness();
     await h.core.handle({ type: 'init', canvas: fakeCanvas(), sprites: library });
-    await h.core.handle({ type: 'load', url: '/dinoWorld.wasm', name: 'dinoWorld', keepState: false, seed: 1 });
+    await h.core.handle({ type: 'load', wasm: dino.slice(0), name: 'dinoWorld', keepState: false, seed: 1 });
     const before = h.sprites().length;
     await h.core.handle({
       type: 'library',
@@ -217,14 +218,14 @@ describe('GameWorkerCore sprites', () => {
     expect(h.sprites().slice(before)).toEqual(['/s/dino.png?v=2']);
     expect(h.of('sprites').at(-1)).toMatchObject({ spriteCount: 2 });
     // A hot reload reuses the decoded sprites.
-    await h.core.handle({ type: 'load', url: '/dinoWorld.wasm', name: 'dinoWorld', keepState: true, seed: null });
+    await h.core.handle({ type: 'load', wasm: dino.slice(0), name: 'dinoWorld', keepState: true, seed: null });
     expect(h.sprites().length).toBe(before + 1);
   });
 
   it('reports a sprite missing from the library', async () => {
     const h = spriteHarness();
     await h.core.handle({ type: 'init', canvas: fakeCanvas(), sprites: [ref('coin', 1, '8x1')] });
-    await h.core.handle({ type: 'load', url: '/dinoWorld.wasm', name: 'dinoWorld', keepState: false, seed: 1 });
+    await h.core.handle({ type: 'load', wasm: dino.slice(0), name: 'dinoWorld', keepState: false, seed: 1 });
     expect(h.of('sprites').at(-1)).toMatchObject({ spriteCount: 1 });
     expect(h.of('log').map((m) => m.message)).toContain('Sprite dino is not in the library');
   });

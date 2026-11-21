@@ -1,4 +1,4 @@
-import type { AssetManifest } from '@tinyforge/editor-core';
+import { HttpWorkspace, ProjectFiles } from '@tinyforge/editor-core';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.tsx';
@@ -11,6 +11,7 @@ declare global {
     /** Dev-only hook for tests and agents: set up state without clicking. */
     __tf?: {
       editor: Editor;
+      files: ProjectFiles;
       project: Editor['project'];
       session: Editor['host']['session'];
       run: (fn: (editor: Editor) => void) => void;
@@ -20,21 +21,15 @@ declare global {
 }
 
 async function boot(): Promise<void> {
-  const res = await fetch(new URL('__tf/manifest.json', document.baseURI), { cache: 'no-store' });
-  if (!res.ok) throw new Error(`Could not load the game manifest (HTTP ${res.status})`);
-  const manifest = (await res.json()) as AssetManifest;
-  const editor = new Editor(manifest);
+  // The project's files: served by the dev server (or a static copy of them).
+  const files = new ProjectFiles(new HttpWorkspace(document.baseURI));
+  await files.start();
+  const editor = new Editor(files);
 
-  if (import.meta.hot) {
-    import.meta.hot.on('tf:cartridges', (data: { games: string[]; failed?: string; log?: string }) => {
-      if (data.failed) editor.logs.add('ERROR', `${data.failed} failed to compile:\n${data.log ?? ''}`);
-      else editor.hotReload(data.games);
-    });
-    import.meta.hot.on('tf:assets', () => void editor.reloadAssets());
-  }
   if (import.meta.env.DEV) {
     window.__tf = {
       editor,
+      files,
       project: editor.project,
       session: editor.host.session,
       run: (fn) => fn(editor),
