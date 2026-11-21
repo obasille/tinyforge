@@ -686,6 +686,10 @@ button.tf-files-row.tf-files-selected {
   flex-direction: column;
   gap: 6px;
 }
+/* The pane scrolls; its parts keep their height instead of shrinking under each other. */
+.tf-lib-details > * {
+  flex-shrink: 0;
+}
 .tf-lib-preview {
   display: flex;
   flex-direction: column;
