@@ -24,6 +24,12 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
+/** Open the game picker and choose a game. */
+async function chooseGame(page: Page, game: string): Promise<void> {
+  await page.getByTestId('game-select').click();
+  await page.getByTestId(`game-option-${game}`).click();
+}
+
 test('loads, docks the panels and runs the default game in the worker', async ({ page }) => {
   const errors = trackErrors(page);
   await page.goto('/');
@@ -83,14 +89,35 @@ test('pause, step and resume through the run panel', async ({ page }) => {
   await expect(page.getByTestId('run-status')).toHaveText('running');
 });
 
+test('the game picker lists games with their title, description, author and cover', async ({ page }) => {
+  const errors = trackErrors(page);
+  await page.goto('/');
+  await expect(page.getByTestId('run-status')).toHaveText('running');
+  await page.getByTestId('game-select').click();
+  const pong = page.getByTestId('game-option-pong');
+  await expect(pong).toHaveAttribute('aria-selected', 'true');
+  await expect(pong).toContainText('Pong');
+  await expect(pong).toContainText('Two-player pong with horizontal paddles');
+  await expect(pong).toContainText('by Olivier Basille');
+  // The cover comes from the cartridge's tinyforge.meta section.
+  await expect(pong.locator('img')).toHaveAttribute('src', /^blob:/);
+  await expect(pong.locator('img')).toHaveJSProperty('naturalWidth', 64);
+  // Games without a cover show their initials.
+  await expect(page.getByTestId('game-option-snake')).toContainText('Classic snake game');
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('game-picker')).toHaveCount(0);
+  await expect(page.getByTestId('viewport')).toBeFocused();
+  expect(errors).toEqual([]);
+});
+
 test('switching games is undoable', async ({ page }) => {
   const errors = trackErrors(page);
   await page.goto('/');
   await expect(page.getByTestId('run-status')).toHaveText('running');
-  await page.getByTestId('game-select').selectOption('snake');
+  await chooseGame(page, 'snake');
   await expect.poll(async () => (await session(page))?.game).toBe('snake');
   await page.getByRole('button', { name: /^Undo/ }).click();
-  await expect(page.getByTestId('game-select')).toHaveValue('pong');
+  await expect(page.getByTestId('game-select')).toHaveAttribute('data-game', 'pong');
   await expect.poll(async () => (await session(page))?.game).toBe('pong');
   expect(errors).toEqual([]);
 });
@@ -153,7 +180,7 @@ test('seed fields are plain text, not color pickers', async ({ page }) => {
 test('choosing a game gives the keyboard back to the game view', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByTestId('run-status')).toHaveText('running');
-  await page.getByTestId('game-select').selectOption('snake');
+  await chooseGame(page, 'snake');
   await expect(page.getByTestId('viewport')).toBeFocused();
 });
 
@@ -252,7 +279,7 @@ test('the Ctrl keys are game triggers and Ctrl+Z still undoes', async ({ page })
   await page.keyboard.up('ControlLeft');
 
   // Editor shortcuts keep working from the game view.
-  await page.getByTestId('game-select').selectOption('snake');
+  await chooseGame(page, 'snake');
   await expect.poll(async () => (await session(page))?.game).toBe('snake');
   await page.getByTestId('viewport').focus();
   await page.keyboard.press('Control+KeyZ');

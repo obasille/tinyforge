@@ -7,6 +7,7 @@ import {
   CommandStack,
   createStore,
   emptyProject,
+  GameCatalog,
   GameHost,
   InputTracker,
   type PixelInfo,
@@ -70,9 +71,16 @@ export class Editor {
   readonly pixel = createStore<PixelInfo | null>(null);
   readonly pixelProbe: PixelProbe;
   readonly audioSettings = createStore<AudioSettings>(loadAudioSettings());
+  /** Title, description, author and cover of every game, read from its cartridge. */
+  readonly catalog: GameCatalog;
 
   constructor(readonly manifest: AssetManifest) {
     this.project = createStore(loadProject(manifest.games));
+    this.catalog = new GameCatalog(manifest.games, async (game) => {
+      const res = await fetch(this.cartridgeUrl(game), { cache: 'no-store' });
+      if (!res.ok) throw new Error(`${game}: HTTP ${res.status}`);
+      return new Uint8Array(await res.arrayBuffer());
+    });
     this.commands = new CommandStack(this.project);
     this.audio = new AudioPlayer((m) => this.logs.add('WARN', m));
     const applyAudio = () => {
@@ -138,6 +146,8 @@ export class Editor {
     } else {
       this.loadGame();
     }
+    // The picker's titles and covers: the current game first, then the rest.
+    void this.catalog.load(undefined, this.project.getState().game);
   }
 
   private async loadAudio(manifest: AssetManifest, version = ''): Promise<void> {
@@ -184,6 +194,7 @@ export class Editor {
 
   /** Hot reload after the cartridge was rebuilt: memory (game state) is kept. */
   hotReload(games: string[]): void {
+    void this.catalog.load(games);
     const { game } = this.project.getState();
     if (!game || !games.includes(game)) return;
     this.logs.add('HOST', `${game} rebuilt, hot reloading (state kept)`);

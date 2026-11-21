@@ -1,5 +1,6 @@
 export * from './audio.ts';
 export * from './commands.ts';
+export * from './game-catalog.ts';
 export * from './game-host.ts';
 export * from './input.ts';
 export * from './memory-regions.ts';
