@@ -4,11 +4,15 @@
 import type { Store } from '@tinyforge/editor-core';
 import { type PixelInfo, pixelAbgr, pixelHex } from '@tinyforge/editor-core';
 
-export function mountPixelReadout(el: HTMLElement, pixel: Store<PixelInfo | null>): () => void {
+export function mountPixelReadout(
+  el: HTMLElement,
+  pixel: Store<PixelInfo | null>,
+  copied: Store<string | null>,
+): () => void {
   el.innerHTML =
-    '<span class="tf-swatch" aria-hidden="true"></span><span class="tf-pixel-text" data-testid="pixel-color"></span>';
-  const swatch = el.firstElementChild as HTMLElement;
-  const text = el.lastElementChild as HTMLElement;
+    '<span class="tf-swatch" aria-hidden="true"></span><span class="tf-pixel-text" data-testid="pixel-color"></span>' +
+    '<span class="tf-pixel-copied" role="status" data-testid="pixel-copied"></span>';
+  const [swatch, text, flash] = Array.from(el.children) as HTMLElement[];
   const render = () => {
     const p = pixel.getState();
     if (!p) {
@@ -17,8 +21,18 @@ export function mountPixelReadout(el: HTMLElement, pixel: Store<PixelInfo | null
       return;
     }
     swatch.style.background = `rgba(${p.r}, ${p.g}, ${p.b}, ${p.a / 255})`;
-    text.textContent = `${p.x}, ${p.y}   ${pixelHex(p)}   ${pixelAbgr(p)}   (C copies)`;
+    text.textContent = `${p.x}, ${p.y}   ${pixelHex(p)}   ${pixelAbgr(p)}   (F4 or C copies)`;
+  };
+  const renderCopied = () => {
+    const hex = copied.getState();
+    flash.textContent = hex ? `Copied ${hex}` : '';
   };
   render();
-  return pixel.subscribe(render);
+  renderCopied();
+  const offPixel = pixel.subscribe(render);
+  const offCopied = copied.subscribe(renderCopied);
+  return () => {
+    offPixel();
+    offCopied();
+  };
 }

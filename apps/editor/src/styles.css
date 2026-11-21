@@ -344,6 +344,11 @@ button:disabled {
   white-space: pre;
 }
 
+.tf-pixel-copied {
+  margin-left: auto;
+  color: #7fd88f;
+}
+
 .tf-swatch {
   width: 14px;
   height: 14px;

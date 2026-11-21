@@ -18,6 +18,7 @@ import {
   PixelProbe,
   type ProjectFiles,
   type ProjectState,
+  pixelHex,
   projectCommands,
   type ShortcutAction,
   type Store,
@@ -79,6 +80,9 @@ export class Editor {
   readonly hasSavedState = createStore(false);
   /** Color of the game pixel under the mouse, or null when not over the game. */
   readonly pixel = createStore<PixelInfo | null>(null);
+  /** The color just copied with F4 or C, shown briefly under the game; null otherwise. */
+  readonly copiedColor = createStore<string | null>(null);
+  private copiedTimer: ReturnType<typeof setTimeout> | undefined;
   readonly pixelProbe: PixelProbe;
   readonly audioSettings = createStore<AudioSettings>(loadAudioSettings());
   /** Title, description, author and cover of every game, read from its main.ts. */
@@ -303,6 +307,9 @@ export class Editor {
       case 'step':
         this.host.step(1);
         break;
+      case 'copyColor':
+        this.copyPixelColor();
+        break;
       case 'undo':
         this.commands.undo();
         break;
@@ -310,6 +317,26 @@ export class Editor {
         this.commands.redo();
         break;
     }
+  }
+
+  /** Copy the hovered pixel's color (#RRGGBB) to the clipboard. Does nothing off the game. */
+  copyPixelColor(): void {
+    const p = this.pixel.getState();
+    if (!p) return;
+    const hex = pixelHex(p);
+    if (!navigator.clipboard) {
+      this.logs.add('WARN', 'Could not copy to the clipboard');
+      return;
+    }
+    navigator.clipboard.writeText(hex).then(
+      () => {
+        this.logs.add('HOST', `Copied ${hex}`);
+        this.copiedColor.setState(hex);
+        clearTimeout(this.copiedTimer);
+        this.copiedTimer = setTimeout(() => this.copiedColor.setState(null), 1200);
+      },
+      () => this.logs.add('WARN', 'Could not copy to the clipboard'),
+    );
   }
 
   togglePause(): void {
