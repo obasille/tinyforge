@@ -300,7 +300,9 @@ import { Button, buttonDown, buttonPressed } from "../sdk";
 // Button values:
 // UP = 1 << 0, DOWN = 1 << 1, LEFT = 1 << 2, RIGHT = 1 << 3
 // A = 1 << 4, B = 1 << 5, START = 1 << 6, X = 1 << 7, Y = 1 << 8
+// LT = 1 << 9, RT = 1 << 10
 // P2_UP = Y, P2_DOWN = A, P2_LEFT = X, P2_RIGHT = B
+// P1_FIRE = RT, P2_FIRE = LT
 ```
 
 Default keys (both hosts):
@@ -313,12 +315,23 @@ Default keys (both hosts):
 | A | S (also Z) | `P2_DOWN` |
 | B | D (also X) | `P2_RIGHT` |
 | START | Enter or Space | |
+| LT (left trigger) | Left Ctrl | `P2_FIRE` |
+| RT (right trigger) | Right Ctrl | `P1_FIRE` |
 
 The four action buttons sit in a diamond on WASD, so a two-player game can
 give player 1 the arrow keys and player 2 the WASD keys. Read player 2 with
 `buttonDown(Button.P2_LEFT)` and friends, or with the axis helpers
 `p2AxisX()` / `p2AxisY()` (-1, 0 or 1; `p1AxisX()` / `p1AxisY()` do the same
 for the arrows). A single-player game can use all four as action buttons.
+
+The triggers give each player a fire or dash key next to their hand:
+`Button.P2_FIRE` (Left Ctrl) for the WASD player and `Button.P1_FIRE`
+(Right Ctrl) for the arrows player. Two caveats:
+
+- Many laptop keyboards, including most Mac keyboards, have no Right Ctrl
+  key, so a game should not require RT on its own for single-player play.
+- Ctrl+W closes the browser tab and no page can stop it, so while a trigger
+  is held both hosts ask before the page unloads.
 
 Detecting button press (not hold):
 

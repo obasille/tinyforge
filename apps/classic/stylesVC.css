@@ -155,3 +155,9 @@ canvas {
     margin-top: 16px;
   }
 }
+/* Shoulder buttons: smaller than the other text buttons so the controls
+   still fit on a phone. */
+.btn-trigger {
+  height: 32px;
+  margin-bottom: 12px;
+}

@@ -6,7 +6,8 @@ import { Button, type InputState, NO_INPUT } from '@tinyforge/runtime';
 /**
  * Same keys as the classic host. The action buttons form a diamond on WASD
  * (Y top, X left, A bottom, B right) so games can use them as player 2's
- * D-pad. Z and X stay as aliases for A and B.
+ * D-pad. Z and X stay as aliases for A and B. Left and Right Ctrl are the
+ * LT and RT triggers (player 2's and player 1's fire keys).
  */
 export const DEFAULT_KEYS: Readonly<Record<string, number>> = {
   ArrowUp: Button.up,
@@ -21,6 +22,8 @@ export const DEFAULT_KEYS: Readonly<Record<string, number>> = {
   KeyX: Button.b,
   Enter: Button.start,
   Space: Button.start,
+  ControlLeft: Button.lt,
+  ControlRight: Button.rt,
 };
 
 /** Map a DOM mouse button (0 left, 1 middle, 2 right) to the SDK's bit. */

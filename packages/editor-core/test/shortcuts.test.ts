@@ -27,6 +27,9 @@ describe('shortcuts', () => {
     expect(matchShortcut(key('KeyZ'))).toBeNull();
     expect(matchShortcut(key('F8', { alt: true }))).toBeNull();
     expect(matchShortcut(key('KeyC'))).toBeNull();
+    // A bare Ctrl press is a game trigger, never a shortcut.
+    expect(matchShortcut(key('ControlLeft', { ctrl: true }))).toBeNull();
+    expect(matchShortcut(key('ControlRight', { ctrl: true }))).toBeNull();
   });
 
   it('never uses a game key without a modifier', () => {

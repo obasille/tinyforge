@@ -230,3 +230,31 @@ test('F-key shortcuts pause, step, resume, restart and reload', async ({ page })
   expect(await page.evaluate(() => (window as unknown as { marker?: number }).marker)).toBe(1);
   expect(errors).toEqual([]);
 });
+
+test('the Ctrl keys are game triggers and Ctrl+Z still undoes', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('viewport')).toBeFocused();
+  await expect(page.getByTestId('run-status')).toHaveText('running');
+  const buttons = () => page.evaluate(() => window.__tf?.editor.input.current.buttons);
+  await page.keyboard.down('ControlLeft');
+  await expect.poll(buttons).toBe(1 << 9);
+  await page.keyboard.down('ControlRight');
+  await expect.poll(buttons).toBe((1 << 9) | (1 << 10));
+  await page.keyboard.up('ControlRight');
+  await page.keyboard.up('ControlLeft');
+  await expect.poll(buttons).toBe(0);
+
+  // A game key pressed with a trigger held still reaches the game.
+  await page.keyboard.down('ControlLeft');
+  await page.keyboard.down('KeyS');
+  await expect.poll(buttons).toBe((1 << 9) | (1 << 4));
+  await page.keyboard.up('KeyS');
+  await page.keyboard.up('ControlLeft');
+
+  // Editor shortcuts keep working from the game view.
+  await page.getByTestId('game-select').selectOption('snake');
+  await expect.poll(async () => (await session(page))?.game).toBe('snake');
+  await page.getByTestId('viewport').focus();
+  await page.keyboard.press('Control+KeyZ');
+  await expect.poll(async () => (await session(page))?.game).toBe('pong');
+});

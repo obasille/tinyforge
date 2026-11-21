@@ -18,7 +18,12 @@ export const Button = {
   start: 1 << 6,
   x: 1 << 7,
   y: 1 << 8,
+  lt: 1 << 9,
+  rt: 1 << 10,
 } as const;
+
+/** The trigger bits (Left / Right Ctrl). */
+export const TRIGGERS = Button.lt | Button.rt;
 
 /** Mouse button bits: 0 = left, 1 = right, 2 = middle. */
 export const MouseButton = {
