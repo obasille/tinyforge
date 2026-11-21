@@ -35,8 +35,13 @@ export interface CommandStackState {
   canRedo: boolean;
   undoLabel: string | null;
   redoLabel: string | null;
+  /** Labels of the most recent changes that can be undone, newest first. */
+  history: readonly string[];
   dirty: boolean;
 }
+
+/** How many entries `CommandStackState.history` lists at most. */
+export const HISTORY_LIMIT = 20;
 
 export class CommandStack<T> {
   private done: Entry<T>[] = [];
@@ -101,6 +106,13 @@ export class CommandStack<T> {
     return true;
   }
 
+  /** Undo the last `steps` changes, newest first. Returns how many were undone. */
+  undoMany(steps: number): number {
+    let count = 0;
+    while (count < steps && this.undo()) count++;
+    return count;
+  }
+
   redo(): boolean {
     const entry = this.undone.pop();
     if (!entry) return false;
@@ -153,6 +165,10 @@ export class CommandStack<T> {
       canRedo: this.undone.length > 0,
       undoLabel: last?.command.label ?? null,
       redoLabel: next?.command.label ?? null,
+      history: this.done
+        .slice(-HISTORY_LIMIT)
+        .reverse()
+        .map((e) => e.command.label),
       // A redo can bring the stack back to the saved point.
       dirty: this.done.length !== this.savedAt,
     };

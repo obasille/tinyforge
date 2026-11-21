@@ -56,6 +56,19 @@ describe('CommandStack', () => {
     expect(stack.state.redoLabel).toBe('Set seed');
   });
 
+  it('lists recent history and undoes back to an entry', () => {
+    const { store, stack, run } = setup();
+    run((s) => projectCommands.setGame(s, 'pong'));
+    run((s) => projectCommands.setSeed(s, 7));
+    run((s) => projectCommands.setGame(s, 'snake'));
+    expect(stack.state.history).toEqual(['Select game', 'Set seed', 'Select game']);
+    expect(stack.undoMany(2)).toBe(2);
+    expect(store.getState()).toEqual({ version: 1, game: 'pong', seed: null });
+    expect(stack.state.history).toEqual(['Select game']);
+    expect(stack.undoMany(5)).toBe(1);
+    expect(stack.state.history).toEqual([]);
+  });
+
   it('keeps seeds in the SDK range', () => {
     const { store, run } = setup();
     run((s) => projectCommands.setSeed(s, -1));

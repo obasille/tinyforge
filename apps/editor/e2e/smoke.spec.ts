@@ -128,6 +128,25 @@ test('switching games is undoable', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test('the history dropdown undoes back to a picked change', async ({ page }) => {
+  const errors = trackErrors(page);
+  await page.goto('/');
+  await expect(page.getByTestId('run-status')).toHaveText('running');
+  const start = (await session(page))?.game;
+  await chooseGame(page, 'snake');
+  await chooseGame(page, 'tetris');
+  await page.getByTestId('undo-history').click();
+  const items = page.getByRole('menuitem');
+  await expect(items).toHaveText(['Select game', 'Select game']);
+  await items.nth(1).hover();
+  await expect(page.getByRole('menu')).toContainText('Undo 2 changes');
+  await items.nth(1).click();
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(page.getByTestId('game-select')).toHaveAttribute('data-game', start ?? '');
+  await expect(page.getByTestId('undo-history')).toBeDisabled();
+  expect(errors).toEqual([]);
+});
+
 // update() spins forever after 30 ticks. Built from:
 //   export function update(): void { n++; if (n > 30) { while (true) { n++; } } }
 // with: asc hang.ts --runtime stub --importMemory -O1, then a tinyforge.meta
