@@ -85,4 +85,50 @@ describe('AudioPlayer master volume', () => {
       globalThis.fetch = realFetch;
     }
   });
+
+  it("keeps unchanged sounds, refetches changed ones and drops the previous game's", async () => {
+    const { ctx } = fakeContext();
+    const realFetch = globalThis.fetch;
+    const fetched: string[] = [];
+    globalThis.fetch = (async (url: string) => {
+      fetched.push(url);
+      return new Response(new ArrayBuffer(4));
+    }) as typeof fetch;
+    try {
+      const p = new AudioPlayer(() => {}, ctx);
+      const ref = (id: string, v: number) => ({ id, format: '', url: `${id}.wav?v=${v}` });
+      await p.load([ref('a', 1), ref('b', 1)], [ref('m', 1)]);
+      await p.load([ref('a', 1), ref('b', 2)], []);
+      expect(fetched).toEqual(['a.wav?v=1', 'b.wav?v=1', 'm.wav?v=1', 'b.wav?v=2']);
+      expect(p.counts).toEqual({ sfx: 2, music: 0 });
+      // Overlapping loads: the last one called wins.
+      const first = p.load([ref('x', 1)], []);
+      const second = p.load([ref('y', 1)], []);
+      await Promise.all([first, second]);
+      expect(p.counts).toEqual({ sfx: 1, music: 0 });
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it('plays a sound requested while it is still loading, once it is loaded', async () => {
+    const { ctx, sources } = fakeContext();
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async () => new Response(new ArrayBuffer(4))) as typeof fetch;
+    const warnings: string[] = [];
+    try {
+      const p = new AudioPlayer((w) => warnings.push(w), ctx);
+      const loading = p.load([{ id: 'hit', format: '', url: 'hit.wav' }], [{ id: 'theme', format: '', url: 't.ogg' }]);
+      p.play({ type: 'music', id: 'theme', volume: 1 });
+      p.play({ type: 'sfx', id: 'hit', volume: 1 });
+      p.play({ type: 'sfx', id: 'other', volume: 1 });
+      expect(sources).toHaveLength(0);
+      await loading;
+      await Promise.resolve();
+      expect(sources.map((s) => s.loop)).toEqual([true, false]);
+      expect(warnings).toEqual(['SFX other not loaded']);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
 });

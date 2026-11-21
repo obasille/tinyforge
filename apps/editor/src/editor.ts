@@ -2,6 +2,7 @@
 // Plain TS; React components get this object and subscribe to its stores.
 
 import {
+  type AssetList,
   type AssetManifest,
   AudioPlayer,
   CommandStack,
@@ -56,6 +57,7 @@ function loadAudioSettings(): AudioSettings {
 }
 
 const absolute = (url: string) => new URL(url, document.baseURI).href;
+const absoluteRefs = (refs: AssetManifest['sprites']) => refs.map((r) => ({ ...r, url: absolute(r.url) }));
 
 export class Editor {
   readonly project: Store<ProjectState>;
@@ -73,8 +75,14 @@ export class Editor {
   readonly audioSettings = createStore<AudioSettings>(loadAudioSettings());
   /** Title, description, author and cover of every game, read from its cartridge. */
   readonly catalog: GameCatalog;
+  /** The asset library (refreshed when files change) and the current game's part of it. */
+  private library: AssetManifest;
+  private gameAssets: AssetList | null = null;
+  /** The library refresh in progress, if any; a hot reload waits for it. */
+  private refreshing: Promise<void> = Promise.resolve();
 
   constructor(readonly manifest: AssetManifest) {
+    this.library = manifest;
     this.project = createStore(loadProject(manifest.games));
     this.catalog = new GameCatalog(manifest.games, async (game) => {
       const res = await fetch(this.cartridgeUrl(game), { cache: 'no-store' });
@@ -108,9 +116,14 @@ export class Editor {
     this.host = new GameHost({
       createWorker: () => new GameWorker({ name: 'tinyforge-game' }),
       createCanvas: () => this.viewport.createCanvas(),
-      sprites: manifest.sprites.map((s) => ({ ...s, url: absolute(s.url) })),
+      sprites: absoluteRefs(manifest.sprites),
       onLog: (level, message) => this.logs.add(level, message),
       onAudio: (command) => this.audio.play(command),
+      onAssets: (game, assets) => {
+        if (game !== this.project.getState().game) return;
+        this.gameAssets = assets;
+        void this.loadGameAudio();
+      },
     });
 
     // Persist the project and follow game changes (including undo/redo).
@@ -136,7 +149,6 @@ export class Editor {
   }
 
   async start(): Promise<void> {
-    await this.loadAudio(this.manifest);
     if (!this.project.getState().game && this.manifest.games.length > 0) {
       // First run: pick a game without recording an undo step.
       this.project.setState((p) => ({
@@ -150,22 +162,34 @@ export class Editor {
     void this.catalog.load(undefined, this.project.getState().game);
   }
 
-  private async loadAudio(manifest: AssetManifest, version = ''): Promise<void> {
-    const ref = (s: AssetManifest['sfx'][number]) => ({ ...s, url: absolute(s.url) + version });
-    await this.audio.load(manifest.sfx.map(ref), manifest.music.map(ref));
+  /** Load the sounds the current game uses (its cartridge lists them). */
+  private async loadGameAudio(): Promise<void> {
+    const assets = this.gameAssets;
+    if (!assets) return;
+    const pick = (refs: AssetManifest['sfx'], ids: string[]) => absoluteRefs(refs.filter((r) => ids.includes(r.id)));
+    await this.audio.load(pick(this.library.sfx, assets.sfx), pick(this.library.music, assets.music));
+    if (assets !== this.gameAssets) return;
     const { sfx, music } = this.audio.counts;
     this.logs.add('HOST', `Audio loaded: ${sfx} SFX, ${music} music tracks`);
   }
 
-  /** Reload sounds after files in assets/sfx or assets/music changed (dev server). */
-  async reloadAudio(): Promise<void> {
-    const res = await fetch(absolute('__tf/manifest.json'), { cache: 'no-store' });
-    if (!res.ok) {
-      this.logs.add('WARN', `Could not reload audio: manifest HTTP ${res.status}`);
-      return;
-    }
-    // Cache-bust so changed files are fetched again under the same URL.
-    await this.loadAudio((await res.json()) as AssetManifest, `?v=${Date.now()}`);
+  /**
+   * Files in the asset library changed (dev server): reload the game's
+   * sprites in place and its sounds. URLs change only for changed files, so
+   * only those are fetched again.
+   */
+  reloadAssets(): Promise<void> {
+    this.refreshing = (async () => {
+      const res = await fetch(absolute('__tf/manifest.json'), { cache: 'no-store' });
+      if (!res.ok) {
+        this.logs.add('WARN', `Could not reload assets: manifest HTTP ${res.status}`);
+        return;
+      }
+      this.library = (await res.json()) as AssetManifest;
+      this.host.setSprites(absoluteRefs(this.library.sprites));
+      await this.loadGameAudio();
+    })();
+    return this.refreshing;
   }
 
   cartridgeUrl(game: string): string {
@@ -198,7 +222,7 @@ export class Editor {
     const { game } = this.project.getState();
     if (!game || !games.includes(game)) return;
     this.logs.add('HOST', `${game} rebuilt, hot reloading (state kept)`);
-    this.loadGame({ keepState: true });
+    void this.refreshing.then(() => this.loadGame({ keepState: true }));
   }
 
   async saveState(): Promise<void> {

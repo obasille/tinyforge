@@ -9,6 +9,7 @@ function cartridge(title: string, cover = false): Uint8Array {
     title,
     description: `${title} description`,
     author: 'Someone',
+    assets: { sprites: [], sfx: [], music: [] },
     cover: cover ? { type: 'image/png', bytes: new Uint8Array([1, 2, 3]) } : null,
   }).wasm;
 }

@@ -7,10 +7,16 @@
 // Payload layout (little-endian):
 //   u32  JSON length in bytes
 //   ...  JSON (UTF-8): { "format": 1, "title", "description", "author",
+//                        "assets": { "sprites": [...], "sfx": [...], "music": [...] },
 //                        "cover"?: { "type", "offset", "length" } }
 //   ...  binary blobs; `offset` is relative to the end of the JSON
 //
+// `assets` lists the IDs of the library assets the game uses (found by the
+// asset scan at compile time), so a host loads only those.
+//
 // Plain TS with no Node or DOM APIs: used by the build tooling and by hosts.
+
+import type { AssetList } from './asset-scan.ts';
 
 export const META_SECTION = 'tinyforge.meta';
 export const META_FORMAT = 1;
@@ -19,6 +25,8 @@ export interface CartridgeMeta {
   title: string;
   description: string;
   author: string;
+  /** IDs of the library sprites, sound effects and music the game uses. */
+  assets: AssetList;
   /** Cover image file bytes (PNG), or null when the game has none. */
   cover: { type: string; bytes: Uint8Array } | null;
 }
@@ -28,6 +36,7 @@ interface MetaJson {
   title: string;
   description: string;
   author: string;
+  assets: AssetList;
   cover?: { type: string; offset: number; length: number };
 }
 
@@ -69,6 +78,7 @@ export function encodeMeta(meta: CartridgeMeta): Uint8Array {
     title: meta.title,
     description: meta.description,
     author: meta.author,
+    assets: meta.assets,
   };
   if (meta.cover) json.cover = { type: meta.cover.type, offset: 0, length: meta.cover.bytes.length };
   const text = new TextEncoder().encode(JSON.stringify(json));
@@ -86,7 +96,9 @@ export function decodeMeta(payload: Uint8Array): CartridgeMeta {
   const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
   const jsonLength = view.getUint32(0, true);
   if (4 + jsonLength > payload.length) throw new Error('tinyforge.meta is truncated');
-  const json = JSON.parse(new TextDecoder().decode(payload.subarray(4, 4 + jsonLength))) as MetaJson;
+  const json = JSON.parse(new TextDecoder().decode(payload.subarray(4, 4 + jsonLength))) as Omit<MetaJson, 'assets'> & {
+    assets?: Partial<AssetList>;
+  };
   if (json.format !== META_FORMAT) throw new Error(`Unsupported tinyforge.meta format ${json.format}`);
   const blobs = payload.subarray(4 + jsonLength);
   let cover: CartridgeMeta['cover'] = null;
@@ -95,7 +107,14 @@ export function decodeMeta(payload: Uint8Array): CartridgeMeta {
     if (offset < 0 || offset + length > blobs.length) throw new Error('tinyforge.meta cover is out of range');
     cover = { type, bytes: blobs.slice(offset, offset + length) };
   }
-  return { title: json.title, description: json.description, author: json.author, cover };
+  const assets = json.assets ?? {};
+  return {
+    title: json.title,
+    description: json.description,
+    author: json.author,
+    assets: { sprites: assets.sprites ?? [], sfx: assets.sfx ?? [], music: assets.music ?? [] },
+    cover,
+  };
 }
 
 /**

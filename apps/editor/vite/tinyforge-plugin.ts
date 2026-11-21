@@ -7,9 +7,12 @@
 //   GET /assets/...                    the repo's shared assets/ folder
 // When an engine file changes, the affected games that were already compiled
 // are rebuilt and the client gets a `tf:cartridges` HMR event (or Vite's error
-// overlay with the compiler output). When a file in assets/sfx or assets/music
-// is added, changed or removed, the client gets a `tf:audio` event and reloads
-// its sounds.
+// overlay with the compiler output). Adding or removing a library file
+// rebuilds them too (an asset ID may have become valid or unknown). When any
+// file in assets/sprites, assets/sfx or assets/music is added, changed or
+// removed, the client gets a `tf:assets` event and reloads the game's sprites
+// and sounds. Asset URLs carry the file's modification time, so a changed
+// file has a new URL and an unchanged one stays cached.
 //
 // Build: emits release cartridges, the manifest and the assets into dist/.
 
@@ -21,11 +24,12 @@ import {
   compileGame,
   ENGINE_ROOT,
   gamesAffectedBy,
+  gamesAffectedByAsset,
   listGames,
 } from '../../../packages/engine/tooling/compile-game.ts';
 
 export const CARTRIDGES_EVENT = 'tf:cartridges';
-export const AUDIO_EVENT = 'tf:audio';
+export const ASSETS_EVENT = 'tf:assets';
 
 export interface CartridgesEvent {
   games: string[];
@@ -59,22 +63,31 @@ function parseId(file: string): { id: string; format: string } | null {
   return id ? { id, format: '' } : null;
 }
 
-async function listAssets(assetsDir: string, sub: string, pattern: RegExp, base: string): Promise<AssetRef[]> {
+async function listAssets(
+  assetsDir: string,
+  sub: string,
+  pattern: RegExp,
+  base: string,
+  versioned: boolean,
+): Promise<AssetRef[]> {
   const dir = path.join(assetsDir, sub);
   if (!existsSync(dir)) return [];
   const files = (await fs.readdir(dir)).filter((f) => pattern.test(f)).sort();
   return files.flatMap((file) => {
     const parsed = parseId(file);
-    return parsed ? [{ ...parsed, url: `${base}assets/${sub}/${encodeURIComponent(file)}` }] : [];
+    if (!parsed) return [];
+    const version = versioned ? `?v=${Math.floor(statSync(path.join(dir, file)).mtimeMs)}` : '';
+    return [{ ...parsed, url: `${base}assets/${sub}/${encodeURIComponent(file)}${version}` }];
   });
 }
 
-async function manifest(assetsDir: string, base: string) {
+/** Games and the asset library. Dev URLs are versioned by modification time. */
+async function manifest(assetsDir: string, base: string, versioned: boolean) {
   return {
     games: listGames(),
-    sprites: await listAssets(assetsDir, 'sprites', /\.(png|jpe?g)$/i, base),
-    sfx: await listAssets(assetsDir, 'sfx', /\.(wav|mp3|ogg)$/i, base),
-    music: await listAssets(assetsDir, 'music', /\.(wav|mp3|ogg)$/i, base),
+    sprites: await listAssets(assetsDir, 'sprites', /\.(png|jpe?g)$/i, base, versioned),
+    sfx: await listAssets(assetsDir, 'sfx', /\.(wav|mp3|ogg)$/i, base, versioned),
+    music: await listAssets(assetsDir, 'music', /\.(wav|mp3|ogg)$/i, base, versioned),
   };
 }
 
@@ -117,23 +130,8 @@ export function tinyforge({ assetsDir }: { assetsDir: string }): Plugin {
       dev.watcher.add(ENGINE_ROOT);
       dev.watcher.add(assetsDir);
 
-      // Audio files: tell the client once a burst of changes (e.g. a git
-      // checkout or a generator script) has settled.
-      const audioDirs = ['sfx', 'music'].map((sub) => path.join(assetsDir, sub) + path.sep);
-      let audioTimer: ReturnType<typeof setTimeout> | null = null;
-      const onAudioChange = (file: string) => {
-        if (!audioDirs.some((dir) => file.startsWith(dir))) return;
-        if (audioTimer) clearTimeout(audioTimer);
-        audioTimer = setTimeout(() => {
-          audioTimer = null;
-          dev.ws.send({ type: 'custom', event: AUDIO_EVENT, data: {} });
-        }, 200);
-      };
-
-      const onChange = async (file: string) => {
-        const affected = gamesAffectedBy(file);
-        if (!affected) return;
-        // Only rebuild games someone has loaded; the rest compile on request.
+      // Rebuild the affected games someone has loaded; the rest compile on request.
+      const rebuild = async (affected: string[]) => {
         const loaded = affected.filter((g) => cache.has(g));
         for (const g of affected) cache.delete(g);
         if (loaded.length === 0) return;
@@ -153,12 +151,34 @@ export function tinyforge({ assetsDir }: { assetsDir: string }): Plugin {
         }
         dev.ws.send({ type: 'custom', event: CARTRIDGES_EVENT, data: { games: loaded } satisfies CartridgesEvent });
       };
-      dev.watcher.on('change', onChange);
-      dev.watcher.on('add', onChange);
-      dev.watcher.on('unlink', onChange);
-      dev.watcher.on('change', onAudioChange);
-      dev.watcher.on('add', onAudioChange);
-      dev.watcher.on('unlink', onAudioChange);
+
+      // Library files: once a burst of changes (e.g. a git checkout or a
+      // generator script) has settled, tell the client to reload its assets,
+      // then rebuild the games it affects (in that order, so a hot reload
+      // finds the new files in the library).
+      let assetsTimer: ReturnType<typeof setTimeout> | null = null;
+      const assetGames = new Set<string>();
+      const assetsChanged = (games: string[]) => {
+        for (const g of games) assetGames.add(g);
+        if (assetsTimer) clearTimeout(assetsTimer);
+        assetsTimer = setTimeout(() => {
+          assetsTimer = null;
+          const affected = [...assetGames];
+          assetGames.clear();
+          dev.ws.send({ type: 'custom', event: ASSETS_EVENT, data: {} });
+          void rebuild(affected);
+        }, 200);
+      };
+
+      const onChange = (event: 'add' | 'change' | 'unlink') => async (file: string) => {
+        const engine = gamesAffectedBy(file);
+        if (engine) return rebuild(engine);
+        const asset = gamesAffectedByAsset(file, event);
+        if (asset) assetsChanged(asset);
+      };
+      dev.watcher.on('change', onChange('change'));
+      dev.watcher.on('add', onChange('add'));
+      dev.watcher.on('unlink', onChange('unlink'));
 
       dev.middlewares.use(async (req, res, next) => {
         const url = new URL(req.url ?? '/', 'http://localhost');
@@ -167,7 +187,7 @@ export function tinyforge({ assetsDir }: { assetsDir: string }): Plugin {
           if (pathname === '/__tf/manifest.json') {
             res.setHeader('Content-Type', 'application/json');
             res.setHeader('Cache-Control', 'no-store');
-            res.end(JSON.stringify(await manifest(assetsDir, dev.config.base)));
+            res.end(JSON.stringify(await manifest(assetsDir, dev.config.base, true)));
             return;
           }
           const cart = pathname.match(/^\/__tf\/cartridges\/([A-Za-z0-9_-]+)\.wasm(\.map)?$/);
@@ -212,8 +232,7 @@ export function tinyforge({ assetsDir }: { assetsDir: string }): Plugin {
 
     async generateBundle() {
       const base = '';
-      const m = await manifest(assetsDir, base);
-      m.sprites = m.sprites.map((a) => ({ ...a, url: a.url.replace(/^\//, '') }));
+      const m = await manifest(assetsDir, base, false);
       this.emitFile({ type: 'asset', fileName: '__tf/manifest.json', source: JSON.stringify(m) });
       for (const game of m.games) {
         const r = await compileGame(game, 'release');

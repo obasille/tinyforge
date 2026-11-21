@@ -809,6 +809,8 @@ const items = ArrayView.fromAddress<u16>(RAM_START + Var.ITEMS_START);
 
    Other source files go in the same folder. The SDK is imported from `"../../sdk"`.
 
+   Library assets are named by ID with a string literal: `s("coin")`, `playSfx("jump", 1.0)`, `playMusic("theme", 0.7)` (a `cond ? "a" : "b"` choice between literals also works). The build checks every ID against `assets/sprites`, `assets/sfx` and `assets/music`: an unknown ID, or an ID that is not a literal, is a compile error. The IDs found are recorded in the cartridge, and the editor loads only those.
+
 2. **Import required APIs**:
 
    ```ts

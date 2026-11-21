@@ -3,6 +3,7 @@
 // it in Node with real cartridges and no browser.
 
 import { SCREEN_HEIGHT, SCREEN_WIDTH } from '@tinyforge/engine/memory-map';
+import { readMeta } from '@tinyforge/engine/tooling/cartridge-meta';
 import {
   FixedStepClock,
   GameMachine,
@@ -43,7 +44,12 @@ export class GameWorkerCore {
   private game: string | null = null;
   private input: InputState = { ...NO_INPUT };
   private readonly watches = new Map<number, Watch>();
-  private sprites: SpriteImage[] = [];
+  /** The sprite library by ID (every sprite a game could use). */
+  private library = new Map<string, AssetRef>();
+  /** Decoded sprites by URL; a changed file gets a new URL. */
+  private readonly decoded = new Map<string, SpriteImage>();
+  /** The current game's sprite IDs, in sprite table order. */
+  private gameSprites: string[] = [];
   private frameQueued = false;
   private loadSeq = 0;
   // Stats
@@ -64,7 +70,15 @@ export class GameWorkerCore {
     switch (msg.type) {
       case 'init':
         this.ctx = msg.canvas.getContext('2d', { alpha: false });
-        await this.loadSprites(msg.sprites);
+        this.setLibrary(msg.sprites);
+        break;
+      case 'library':
+        this.setLibrary(msg.sprites);
+        if (this.game && this.machine.loaded) {
+          // Sprite hot reload: same IDs in the same order, new pixels.
+          await this.writeSprites(this.game, this.gameSprites);
+          if (this.status !== 'running') this.present();
+        }
         break;
       case 'load':
         await this.load(msg.url, msg.name, msg.keepState, msg.seed);
@@ -117,27 +131,47 @@ export class GameWorkerCore {
     }
   }
 
-  private async loadSprites(refs: AssetRef[]): Promise<void> {
-    const decode = this.env.decodeImage;
-    const sprites: SpriteImage[] = [];
-    if (decode) {
-      for (const ref of refs) {
-        try {
-          const res = await this.env.fetch(ref.url);
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const { width, height, rgba } = await decode(await res.arrayBuffer());
-          const { cols, rows } = sheetLayout(ref.format);
-          const sheet = splitSheet(rgba, width, height, cols, rows);
-          sprites.push({ id: ref.id, cols, rows, ...sheet });
-        } catch (e) {
-          this.hostLog(`Failed to load sprite ${ref.id} from ${ref.url}: ${errorText(e)}`);
-        }
-      }
+  private setLibrary(refs: AssetRef[]): void {
+    this.library = new Map(refs.map((ref) => [ref.id, ref]));
+    const urls = new Set(refs.map((ref) => ref.url));
+    for (const url of this.decoded.keys()) if (!urls.has(url)) this.decoded.delete(url);
+  }
+
+  /** Decode one sprite (cached by URL), or null with a log line. */
+  private async sprite(id: string): Promise<SpriteImage | null> {
+    const ref = this.library.get(id);
+    if (!ref) {
+      this.hostLog(`Sprite ${id} is not in the library`);
+      return null;
     }
-    this.sprites = sprites;
+    const cached = this.decoded.get(ref.url);
+    if (cached) return cached;
+    const decode = this.env.decodeImage;
+    if (!decode) return null;
+    try {
+      const res = await this.env.fetch(ref.url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const { width, height, rgba } = await decode(await res.arrayBuffer());
+      const { cols, rows } = sheetLayout(ref.format);
+      const image = { id, cols, rows, ...splitSheet(rgba, width, height, cols, rows) };
+      this.decoded.set(ref.url, image);
+      return image;
+    } catch (e) {
+      this.hostLog(`Failed to load sprite ${id} from ${ref.url}: ${errorText(e)}`);
+      return null;
+    }
+  }
+
+  /** Decode the given sprites and write the sprite table the SDK reads. */
+  private async writeSprites(game: string, ids: string[]): Promise<void> {
+    const sprites: SpriteImage[] = [];
+    for (const id of ids) {
+      const image = await this.sprite(id);
+      if (image) sprites.push(image);
+    }
     const { bytes, warnings } = writeSpriteTable(this.machine.memory.buffer, sprites);
     for (const w of warnings) this.hostLog(w);
-    this.env.post({ type: 'ready', spriteCount: sprites.length, spriteBytes: bytes });
+    this.env.post({ type: 'sprites', game, spriteCount: sprites.length, spriteBytes: bytes });
   }
 
   private async load(url: string, name: string, keepState: boolean, seed: number | null): Promise<void> {
@@ -149,12 +183,23 @@ export class GameWorkerCore {
       if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`);
       const bytes = await res.arrayBuffer();
       if (seq !== this.loadSeq) return; // a newer load won
-      // A fresh load starts from clean memory; the sprite table is host data.
+      const meta = readMeta(new Uint8Array(bytes));
+      if (!meta) this.hostLog(`${name} has no tinyforge.meta section: no assets loaded`);
+      const used = meta?.assets ?? { sprites: [], sfx: [], music: [] };
+      // The sprite table is host data. A hot reload keeps the order the game
+      // saw (it may hold sprite IDs in memory) and appends new sprites.
+      const ids = keepState
+        ? [...this.gameSprites, ...used.sprites.filter((id) => !this.gameSprites.includes(id))]
+        : used.sprites;
       if (!keepState) {
+        // A fresh load starts from clean memory.
         new Uint8Array(this.machine.memory.buffer).fill(0);
-        writeSpriteTable(this.machine.memory.buffer, this.sprites);
         this.machine.seed = pickSeed(seed);
       }
+      await this.writeSprites(name, ids);
+      if (seq !== this.loadSeq) return;
+      this.gameSprites = ids;
+      this.env.post({ type: 'assets', game: name, assets: used });
       await this.machine.load(bytes, { keepState });
       this.game = name;
       if (!keepState) this.hostLog(`RNG seed: ${formatSeed(this.machine.seed)}`);

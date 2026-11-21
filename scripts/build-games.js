@@ -10,10 +10,13 @@
 //   node build-games.js debug <g1> <g2>... - build several games (debug)
 // A game can be given by name (pong) or by any path inside its folder
 // (packages/engine/assembly/games/pong/main.ts).
+//
+// Builds go through the same compileGame() as the editor, so a cartridge from
+// here has the same asset checks and the same tinyforge.meta section.
 
-import { existsSync, mkdirSync, readdirSync, statSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'fs';
 import path from 'path';
-import { runAsc } from './lib/asc.js';
+import { compileGame } from '../packages/engine/tooling/compile-game.ts';
 
 const GAMES_DIR = 'packages/engine/assembly/games';
 const entryOf = (game) => `${GAMES_DIR}/${game}/main.ts`;
@@ -33,27 +36,22 @@ const files = isDebug ? args.slice(1) : args;
 const mode = isDebug ? 'debug' : 'release';
 const target = isDebug ? 'debug' : 'release';
 
-function buildGame(fileName, showMode = false) {
+async function buildGame(fileName, showMode = false) {
   const modeLabel = showMode && isDebug ? ' (debug)' : '';
   console.log(`Building ${fileName}${modeLabel}...`);
 
-  try {
-    mkdirSync(outputDir, { recursive: true });
-    runAsc([
-      entryOf(fileName),
-      '-o',
-      `${outputDir}/${fileName}.wasm`,
-      '--config',
-      `${GAMES_DIR}/asconfig.json`,
-      '--target',
-      target,
-    ]);
-    console.log(`✓ ${fileName}`);
-    return true;
-  } catch {
+  const result = await compileGame(fileName, target);
+  if (result.log) process.stderr.write(result.log);
+  if (!result.ok) {
     console.error(`✗ ${fileName} failed`);
     return false;
   }
+  mkdirSync(outputDir, { recursive: true });
+  const outFile = `${outputDir}/${fileName}.wasm`;
+  writeFileSync(outFile, result.wasm);
+  if (result.sourceMap) writeFileSync(`${outFile}.map`, result.sourceMap);
+  console.log(`✓ ${fileName}`);
+  return true;
 }
 
 // Mode 1: Build all games
@@ -71,7 +69,7 @@ if (files.length === 0) {
 
   let failed = 0;
   for (const game of games) {
-    if (!buildGame(game)) failed++;
+    if (!(await buildGame(game))) failed++;
   }
 
   if (failed > 0) {
@@ -95,7 +93,7 @@ for (const arg of files) {
     continue;
   }
 
-  if (!buildGame(game, true)) failed++;
+  if (!(await buildGame(game, true))) failed++;
 }
 
 if (failed > 0) {
