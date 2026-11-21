@@ -999,11 +999,31 @@ Then open the URL Vite prints (http://localhost:5173/).
 - **Assets while typing:** the code panel checks `s()`, `playSfx()` and
   `playMusic()` IDs as you type (an unknown ID is underlined before any
   compile) and completes IDs from the library.
+- **Asset library:** the Library panel (a tab next to the Console) shows the
+  sprites as a grid and the sound effects and music as lists you can play.
+  Search by ID, file name or tag (`#tag` matches a tag exactly, and the tag
+  chips toggle it). Each asset shows the games that use it: their code (from
+  a scan of every game's sources, plus unsaved edits of the current game) and
+  their `COVER`. Duplicate IDs and bad sheet formats are flagged. Select an
+  asset to see its frames, edit its tags, license and source, rename its ID
+  or delete it (undoable; renaming does not change the games' code).
+- **Importing assets:** drop images or sounds on the Library panel (or use
+  Import…). Each file gets an ID from its name, checked like the compiler
+  checks it (letters, digits and `_`, at most 16 characters, unique), and an
+  image gets a sheet-split preview: the frame grid over the image and the
+  frames played in order, with the split refused until it divides the image
+  evenly. An existing ID can be replaced on purpose. The whole import is one
+  undo step.
+- **Asset metadata:** tags, license and source live in a sidecar next to the
+  file, `<file>.json` (`coin~8x1.png.json`). It is optional, and other keys
+  (such as `prompt` for a generated asset) are kept. Renaming or deleting an
+  asset in the editor takes its sidecar along.
 - **Debugging:** debug builds carry their source map, so Chrome DevTools can
   set breakpoints in the AssemblyScript source.
 - **Panels:** Game, Run (pause, single step, restart, save/load state, seed),
-  Memory (hex view of the visible range, refreshed every frame), Console.
-  The layout is saved in the browser.
+  Memory (hex view of the visible range, refreshed every frame), Console,
+  Library. The layout is saved in the browser; Reset layout brings back the
+  default.
 - **Sound:** the speaker button and slider in the toolbar set the master volume
   and mute for every game. The setting is saved in the browser.
 - **Shortcuts:** they work anywhere in the editor and stay clear of game keys

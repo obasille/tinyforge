@@ -1,3 +1,5 @@
+export * from './asset-import.ts';
+export * from './asset-library.ts';
 export * from './audio.ts';
 export * from './code-editor.ts';
 export * from './commands.ts';

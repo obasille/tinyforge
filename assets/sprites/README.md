@@ -60,3 +60,16 @@ every frame, since `s()` scans the table.
 - The layout (header, 16-character id entries, 16-byte info entries, pixel
   data) is defined in `packages/engine/memory-map.ts` and written by
   `writeSpriteTable` in `packages/runtime/src/assets.ts`.
+
+## Metadata (optional)
+
+A `<file>.json` next to a file holds its tags, license and source, for the
+editor's asset library:
+
+```json
+{ "tags": ["ui", "coin"], "license": "CC0", "source": "https://example.com/pack" }
+```
+
+Hosts ignore these files. The editor keeps keys it does not know (for
+example `prompt` for a generated asset) and moves or deletes the sidecar with
+its asset.

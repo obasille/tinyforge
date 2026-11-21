@@ -3,7 +3,7 @@
 // (Ctrl+Z outside a text field). Names are typed in place, never in a dialog.
 
 import { buildTree, isTextFile, type TreeNode } from '@tinyforge/editor-core';
-import { GAME_NAME, isWritablePath } from '@tinyforge/engine/tooling/project-layout';
+import { assetKindOf, GAME_NAME, isWritablePath } from '@tinyforge/engine/tooling/project-layout';
 import { useMemo, useState } from 'react';
 import { useEditor } from '../EditorContext.ts';
 import { useStore } from '../hooks.ts';
@@ -126,6 +126,7 @@ export function FilesPanel() {
               setError(null);
               if (node.kind === 'folder') toggle(node.path);
               else if (isTextFile(node.path)) editor.workbench.openFile(node.path);
+              else if (assetKindOf(node.path)) editor.showAsset(node.path);
             }}
             onKeyDown={(e) => {
               if (e.key === 'F2' && !node.readonly && !isFixedFolder(node)) setEdit({ kind: 'rename', node });

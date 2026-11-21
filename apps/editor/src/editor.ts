@@ -2,6 +2,7 @@
 // Plain TS; React components get this object and subscribe to its stores.
 
 import {
+  AssetLibrary,
   type AssetList,
   type AssetManifest,
   AudioPlayer,
@@ -91,6 +92,10 @@ export class Editor {
   readonly compiler: CompilerHost;
   /** Open code editors, file operations, and the assets the game uses. */
   readonly workbench: Workbench;
+  /** The asset library panel's model: every asset, its sidecar and the games using it. */
+  readonly assets: AssetLibrary;
+  /** The asset the library panel shows (a project path), set from elsewhere (the file tree). */
+  readonly assetFocus = createStore<string | null>(null);
   /** The asset library (refreshed when files change) and the current game's part of it. */
   private library: AssetManifest;
   private gameAssets: AssetList | null = null;
@@ -106,6 +111,10 @@ export class Editor {
     this.compiler = new CompilerHost(files, () => new CompileWorker({ name: 'tinyforge-compiler' }));
     this.commands = new CommandStack(this.project, (message) => this.logs.add('ERROR', message));
     this.workbench = new Workbench(files, this.commands, this.compiler, () => this.project.getState().game);
+    this.assets = new AssetLibrary(files);
+    this.workbench.usedAssets.subscribe(() =>
+      this.assets.setLiveUses(this.project.getState().game, this.workbench.usedAssets.getState()),
+    );
     this.audio = new AudioPlayer((m) => this.logs.add('WARN', m));
     const applyAudio = () => {
       const { volume, muted } = this.audioSettings.getState();
@@ -186,6 +195,7 @@ export class Editor {
     const games = this.files.games;
     const affected = this.compiler.invalidate(changes);
     this.workbench.filesChanged(changes, affected);
+    void this.assets.filesChanged(changes);
     void this.catalog.setGames(games);
     // Titles and covers: a game's main.ts or a sprite changed.
     const sprites = changes.some((c) => assetKindOf(c.path) === 'sprites');
@@ -206,6 +216,7 @@ export class Editor {
 
   async start(): Promise<void> {
     const games = this.files.games;
+    void this.assets.start();
     if (!this.project.getState().game && games.length > 0) {
       // First run: pick a game without recording an undo step.
       this.project.setState((p) => ({
@@ -242,6 +253,22 @@ export class Editor {
       await this.loadGameAudio();
     })();
     return this.refreshing;
+  }
+
+  /** Show an asset in the library panel. */
+  showAsset(path: string): void {
+    this.assetFocus.setState(path);
+    for (const listener of [...this.showLibraryListeners]) listener();
+  }
+
+  private readonly showLibraryListeners = new Set<() => void>();
+
+  /** The UI opens or focuses the library panel. */
+  onShowLibrary(listener: () => void): () => void {
+    this.showLibraryListeners.add(listener);
+    return () => {
+      this.showLibraryListeners.delete(listener);
+    };
   }
 
   selectGame(game: string): void {

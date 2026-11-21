@@ -6,11 +6,13 @@
 // before the code compiles.
 
 import { ASSET_KINDS, type AssetLibrary, type AssetList, libraryFromFiles } from '@tinyforge/engine/tooling/asset-scan';
-import { isWritablePath } from '@tinyforge/engine/tooling/project-layout';
+import { assetKindOf, isWritablePath } from '@tinyforge/engine/tooling/project-layout';
+import { type ImportDraft, importCommand, sidecarText } from './asset-import.ts';
+import { type LibraryAsset, type Sidecar, sidecarPath } from './asset-library.ts';
 import { CodeEditor } from './code-editor.ts';
 import type { FileCommand } from './commands.ts';
 import type { CompilerHost } from './compiler-host.ts';
-import { createGame, deleteFiles, renameFiles, writeFile } from './file-commands.ts';
+import { createGame, deleteFiles, fileBatch, renameFiles, writeFile } from './file-commands.ts';
 import { filesUnder } from './file-tree.ts';
 import type { AssetUse } from './live-scan.ts';
 import type { ProjectFiles } from './project-files.ts';
@@ -126,6 +128,10 @@ export class Workbench {
     const sources = filesUnder(this.files.files, path);
     if (sources.length === 0) throw new Error(`${path} not found`);
     const moves = sources.map((from): [string, string] => [from, to + from.slice(path.length)]);
+    // A renamed asset file takes its sidecar along (in a folder, it moves with the folder).
+    if (sources.length === 1 && assetKindOf(path) && (await this.files.readBytes(sidecarPath(path)))) {
+      moves.push([sidecarPath(path), sidecarPath(to)]);
+    }
     for (const [from, target] of moves) {
       if (!isWritablePath(from) || !isWritablePath(target)) throw new Error(`Cannot move ${from} to ${target}`);
     }
@@ -135,10 +141,41 @@ export class Workbench {
 
   /** Delete a file, or a folder with everything in it. */
   async delete(path: string): Promise<void> {
-    const paths = filesUnder(this.files.files, path);
+    const paths = await this.withSidecars(filesUnder(this.files.files, path));
     if (paths.length === 0) throw new Error(`${path} not found`);
     for (const p of paths) if (!isWritablePath(p)) throw new Error(`${p} is read-only`);
     await this.commands.runFile(await deleteFiles(this.files, paths, `Delete ${path.split('/').pop()}`));
+  }
+
+  /** Asset files with their sidecars (`<file>.json`) added. */
+  private async withSidecars(paths: string[]): Promise<string[]> {
+    const out = new Set(paths);
+    for (const p of paths) {
+      if (assetKindOf(p) && (await this.files.readBytes(sidecarPath(p)))) out.add(sidecarPath(p));
+    }
+    return [...out];
+  }
+
+  /** Import files into the asset library as one undoable command. */
+  async importAssets(drafts: readonly ImportDraft[], assets: readonly LibraryAsset[]): Promise<void> {
+    await this.commands.runFile(await importCommand(this.files, drafts, assets));
+  }
+
+  /** Write an asset's sidecar; an empty one deletes it. */
+  async saveSidecar(assetPath: string, sidecar: Sidecar): Promise<void> {
+    const path = sidecarPath(assetPath);
+    const empty = Object.values(sidecar).every(
+      (v) => v === undefined || v === '' || (Array.isArray(v) && v.length === 0),
+    );
+    const name = assetPath.split('/').pop();
+    if (empty) {
+      if (await this.files.readBytes(path))
+        await this.commands.runFile(await deleteFiles(this.files, [path], `Clear ${name} info`));
+      return;
+    }
+    await this.commands.runFile(
+      await fileBatch(this.files, [{ write: path, data: sidecarText(sidecar) }], `Edit ${name} info`, 'assets.sidecar'),
+    );
   }
 
   /**
