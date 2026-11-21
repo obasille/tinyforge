@@ -10,7 +10,7 @@ This section provides detailed instructions for AI agents tasked with creating g
 
 - pnpm workspace: `packages/*` and `apps/*`
 - `packages/engine/assembly/sdk/` contains the AssemblyScript SDK
-- `packages/engine/assembly/games/` contains game cartridges (AssemblyScript) and `asconfig.json`
+- `packages/engine/assembly/games/` contains one folder per game (`<name>/main.ts` plus any other sources) and `asconfig.json`
 - `packages/engine/memory-map.ts` is the shared memory map source
 - `packages/runtime/` is the plain-TS host runtime (no DOM) used by the new editor
 - `packages/editor-core/` and `apps/editor/` are the new editor (see `CLAUDE.md`)
@@ -25,7 +25,7 @@ This section provides detailed instructions for AI agents tasked with creating g
 
 Every game follows this structure:
 
-- **Import helpers from the SDK** (`packages/engine/assembly/sdk/`, imported as `"../sdk"`): All drawing functions and system APIs
+- **Import helpers from the SDK** (`packages/engine/assembly/sdk/`, imported as `"../../sdk"` from a game's main.ts): All drawing functions and system APIs
 - **Define constants**: Grid sizes, speeds, scores using `@inline` or `const`
 - **Define enums**: Game states, directions, flags for type safety
 - **Define RAM layout**: Memory addresses for all game state via `enum Var`
@@ -143,7 +143,7 @@ import {
   drawString,
   drawNumber,
   c,
-} from "../sdk";
+} from "../../sdk";
 ```
 
 **NEVER define local drawing helpers** - they belong in the SDK (`packages/engine/assembly/sdk/drawing.ts` and friends).
@@ -191,7 +191,7 @@ export function draw(): void {
 The host writes input state to memory before each `update()`. `update()` takes no arguments; use the SDK helpers:
 
 ```ts
-import { Button, buttonDown, buttonPressed } from "../sdk";
+import { Button, buttonDown, buttonPressed } from "../../sdk";
 
 export function update(): void {
   if (buttonPressed(Button.A)) {
@@ -560,21 +560,13 @@ function spawnItem(itemType: i32): void {
 
 #### 13. Build Configuration
 
-**Update package.json when creating new games:**
-
-```json
-{
-  "scripts": {
-    "build:debug": "asc packages/engine/assembly/games/gameName.ts -o assets/cartridges/gameName.wasm ..."
-  }
-}
-```
-
-**Or use asconfig.json targets** in the packages/engine/assembly/games/ directory.
+Games need no build configuration of their own: `scripts/build-games.js` builds
+every folder in `packages/engine/assembly/games/` that has a `main.ts`, using the
+shared `asconfig.json` there.
 
 **Build optimization - selective rebuilds:**
 
-- When modifying a **game file** (e.g., `packages/engine/assembly/games/dinoWorld.ts`), rebuild only that game:
+- When modifying a **game file** (e.g., `packages/engine/assembly/games/dinoWorld/main.ts`), rebuild only that game:
   ```bash
   npm run build:games gameName
   # Example: npm run build:games dinoWorld
@@ -690,7 +682,7 @@ warni("Player {} at ({}, {})", id, x, y);
 **2. Use UncheckedArrayView for static-size arrays:**
 
 ```ts
-import { UncheckedArrayView, RAM_START } from "../sdk";
+import { UncheckedArrayView, RAM_START } from "../../sdk";
 
 // Calculate memory size needed
 const GRID_SIZE = 100;
@@ -719,7 +711,7 @@ const val = grid[10];
 **3. Use ArrayView for dynamic-length tracking:**
 
 ```ts
-import { ArrayView, RAM_START } from "../sdk";
+import { ArrayView, RAM_START } from "../../sdk";
 
 // Calculate memory size (includes length/capacity metadata)
 const CAPACITY = 50;
@@ -753,7 +745,7 @@ const x = items[0];
 **4. Use Vec2i.fromAddress() for coordinate pairs (NEVER use new Vec2i()):**
 
 ```ts
-import { Vec2i, RAM_START } from "../sdk";
+import { Vec2i, RAM_START } from "../../sdk";
 
 // Vec2i is @unmanaged but 'new' STILL ALLOCATES!
 // ❌ WRONG - Triggers __alloc even with @unmanaged
@@ -807,7 +799,15 @@ const items = ArrayView.fromAddress<u16>(RAM_START + Var.ITEMS_START);
 
 ### Complete Workflow for Creating a New Game
 
-1. **Create game file**: `packages/engine/assembly/games/gameName.ts`
+1. **Create the game folder and entry file**: `packages/engine/assembly/games/gameName/main.ts`, with the game's metadata as top-level string literals after the imports:
+
+   ```ts
+   const TITLE = "Game Name";
+   const DESCRIPTION = "One line about the game";
+   const AUTHOR = "Your Name";
+   ```
+
+   Other source files go in the same folder. The SDK is imported from `"../../sdk"`.
 
 2. **Import required APIs**:
 
@@ -832,7 +832,7 @@ const items = ArrayView.fromAddress<u16>(RAM_START + Var.ITEMS_START);
      UncheckedArrayView,
      ArrayView,
      RAM_START,
-   } from "../sdk";
+   } from "../../sdk";
    ```
 
 3. **Define constants and enums**:

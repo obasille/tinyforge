@@ -36,7 +36,12 @@ import {
   s,
   UncheckedArrayObjView,
   Vec2i,
-} from "../sdk";
+} from "../../sdk";
+
+// Game metadata, read by the TinyForge tooling (string literals only).
+const TITLE = "Example";
+const DESCRIPTION = "TinyForge game example";
+const AUTHOR = "Olivier Basille";
 
 // === RAM Variable System ===
 // RAM allocation for persistent game state

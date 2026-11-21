@@ -32,7 +32,12 @@ import {
   SCREEN_WIDTH,
   stopMusic,
   warni,
-} from "../sdk";
+} from "../../sdk";
+
+// Game metadata, read by the TinyForge tooling (string literals only).
+const TITLE = "Tank Duel";
+const DESCRIPTION = "Two-player top-down tank battle with bouncing shells";
+const AUTHOR = "Olivier Basille";
 
 // === Constants ===
 const TILE: i32 = 16;

@@ -97,7 +97,7 @@ tinyforge/
 │  ├─ engine/                 # Shared by both hosts
 │  │  ├─ assembly/
 │  │  │  ├─ sdk/              # Game SDK (AssemblyScript)
-│  │  │  ├─ games/            # Game cartridges + asconfig.json (build settings)
+│  │  │  ├─ games/            # One folder per game (<name>/main.ts) + asconfig.json
 │  │  │  └─ tsconfig.json     # AssemblyScript config
 │  │  ├─ memory-map.ts        # Shared memory constants
 │  │  └─ tooling/             # compile-game.ts: asc JS API wrapper (editor, tests)
@@ -147,31 +147,38 @@ The cartridge is treated as **ROM‑like code**.
 
 #### Game File Organization
 
-**Main game file:** `{gameName}.ts`
+Each game is a folder named after the game, with its entry file `main.ts`.
 
-Contains the exported lifecycle functions: `init()`, `update()`, `draw()`.
+**Entry file:** `{gameName}/main.ts`
 
-**Supporting files:** `{gameName}/` subfolder
+Contains the exported lifecycle functions `init()`, `update()`, `draw()`, and
+the game's metadata as top-level string literals, read by the TinyForge tooling:
 
-For complex games that need multiple modules, place supporting scripts in a subfolder named **exactly like the main game file** (without the `.ts` extension).
+```ts
+const TITLE = "Pong";
+const DESCRIPTION = "Two-player pong with horizontal paddles";
+const AUTHOR = "Olivier Basille";
+```
+
+**Supporting files:** any other `.ts` files in the same folder, imported with
+`./` paths. The SDK is imported from `../../sdk`.
 
 Example structure:
 
 ```
 packages/engine/assembly/games/
-├─ crocodiles.ts           # Main game file
-├─ crocodiles/             # Supporting files
-│  ├─ player.ts
-│  ├─ types.ts
-│  ├─ utils.ts
-│  └─ ...
-├─ starlinePursuit.ts      # Main game file
-└─ starlinePursuit/        # Supporting files
+├─ asconfig.json           # Build settings shared by all games
+├─ pong/
+│  └─ main.ts
+└─ crocodiles/
+   ├─ main.ts              # Entry file
+   ├─ player.ts            # Supporting files
    ├─ types.ts
-   ├─ generateStarmap.ts
-   ├─ drawStarmap.ts
    └─ ...
 ```
+
+The cartridge is built as `{gameName}.wasm`. A file anywhere in a game's folder
+only triggers a rebuild of that game.
 
 This keeps game code organized and isolated from other games.
 
@@ -295,7 +302,7 @@ Input is **snapshot‑based**, not event‑based.
 The `Button` enum is provided by the SDK:
 
 ```ts
-import { Button, buttonDown, buttonPressed } from "../sdk";
+import { Button, buttonDown, buttonPressed } from "../../sdk";
 
 // Button values:
 // UP = 1 << 0, DOWN = 1 << 1, LEFT = 1 << 2, RIGHT = 1 << 3
@@ -359,7 +366,7 @@ The SDK provides logging functions that output to the HTML console panel.
 ### Basic Logging (String Literals Only)
 
 ```ts
-import { log, warn, error } from "../sdk";
+import { log, warn, error } from "../../sdk";
 
 log("Player initialized"); // Blue entry [LOG]
 warn("Health low"); // Yellow entry [WARN]
@@ -371,7 +378,7 @@ error("Invalid state"); // Red entry [ERROR]
 To log dynamic values without string concatenation, use the interpolation variants:
 
 ```ts
-import { logi, logf, warni, warnf, errori, errorf } from "../sdk";
+import { logi, logf, warni, warnf, errori, errorf } from "../../sdk";
 
 // Integer parameters (i64)
 logi("Score: {}, Lives: {}", score, lives);
@@ -450,7 +457,7 @@ Only the ID is required, and it must be ≤ 16 characters.
 ### Audio API
 
 ```ts
-import { playSfx, playMusic, stopMusic } from "../sdk";
+import { playSfx, playMusic, stopMusic } from "../../sdk";
 
 // Play a sound effect
 playSfx(sfxId: string, volume: f32);  // volume: 0.0 - 1.0
@@ -498,7 +505,7 @@ export function update(): void {
 ### Example Usage
 
 ```ts
-import { Button, buttonPressed, playSfx, playMusic, stopMusic, RAM_START } from "../sdk";
+import { Button, buttonPressed, playSfx, playMusic, stopMusic, RAM_START } from "../../sdk";
 
 // Audio IDs
 const SFX_JUMP = "jump";
@@ -588,7 +595,7 @@ Each sprite: 32×32 pixels
 ### Sprite API
 
 ```ts
-import { drawSprite, s } from "../sdk";
+import { drawSprite, s } from "../../sdk";
 
 // Resolve sprite by name (and optional sheet coords)
 s(name: string, x: i32 = 0, y: i32 = 0): i32;
@@ -612,7 +619,7 @@ All pixels written to the framebuffer have alpha = 255 (fully opaque).
 ### Example Usage
 
 ```ts
-import { drawSprite, s } from "../sdk";
+import { drawSprite, s } from "../../sdk";
 
 // Draw a single sprite
 drawSprite(s("flag"), 100, 100);
@@ -680,7 +687,7 @@ This also enables:
 
 A cartridge is a **pure AssemblyScript module** that:
 
-- Imports the SDK (`packages/engine/assembly/sdk/`, imported as `"../sdk"` from a game file)
+- Imports the SDK (`packages/engine/assembly/sdk/`, imported as `"../../sdk"` from a game's main.ts from a game file)
 - Exports a small, fixed API: `init()`, `update()` and `draw()`, all with no arguments
 - Writes directly to the framebuffer
 - Stores game state in RAM (not module variables)
@@ -703,7 +710,7 @@ import {
   log,
   pset,
   RAM_START,
-} from "../sdk";
+} from "../../sdk";
 
 // Game state persisted in RAM using @unmanaged struct
 @unmanaged
@@ -1103,7 +1110,7 @@ Use `logi/logf`, `warni/warnf`, `errori/errorf` for interpolation (see Console L
 **`UncheckedArrayView<T>`** - Zero-allocation array backed by pre-allocated memory:
 
 ```ts
-import { UncheckedArrayView } from "../sdk";
+import { UncheckedArrayView } from "../../sdk";
 
 // Calculate memory size needed
 const GRID_SIZE = 100;
@@ -1133,7 +1140,7 @@ const val = grid[10];
 **`ArrayView<T, U>`** - Array with dynamic length tracking:
 
 ```ts
-import { ArrayView } from "../sdk";
+import { ArrayView } from "../../sdk";
 
 // Calculate memory size (includes metadata)
 const CAPACITY = 50;
@@ -1169,7 +1176,7 @@ const x = items[0];
 **`Vec2i`** - 2D integer vector for coordinate pairs:
 
 ```ts
-import { Vec2i, RAM_START } from "../sdk";
+import { Vec2i, RAM_START } from "../../sdk";
 
 // WARNING: Using 'new Vec2i()' allocates memory!
 // For zero allocation, pre-allocate in RAM and use fromAddress()
@@ -1199,7 +1206,7 @@ enemyPos.set(50, 100); // Set both coordinates at once
 The SDK provides `drawString()` and `drawNumber()` for rendering text:
 
 ```ts
-import { drawString, drawNumber } from "../sdk";
+import { drawString, drawNumber } from "../../sdk";
 
 // Draw text (UPPERCASE ONLY)
 drawString(10, 10, "SCORE:", 0xffffffff);

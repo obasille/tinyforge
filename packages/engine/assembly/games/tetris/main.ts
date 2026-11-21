@@ -22,7 +22,12 @@ import {
   setU8,
   SCREEN_WIDTH,
   stopMusic,
-} from "../sdk";
+} from "../../sdk";
+
+// Game metadata, read by the TinyForge tooling (string literals only).
+const TITLE = "Tetris";
+const DESCRIPTION = "Classic falling-block puzzle on a 10x20 grid";
+const AUTHOR = "Olivier Basille";
 
 // === Constants ===
 const BOARD_WIDTH: i32 = 10;

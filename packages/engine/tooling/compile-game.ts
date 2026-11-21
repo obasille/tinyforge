@@ -22,18 +22,22 @@ export type CompileResult =
   | { ok: true; wasm: Uint8Array<ArrayBuffer>; sourceMap: string | null; log: string }
   | { ok: false; log: string };
 
-/** Names of all games: each top-level .ts file in assembly/games. */
+/** Entry file of a game: games/<name>/main.ts. */
+export function gameEntry(name: string): string {
+  return path.join(GAMES_DIR, name, 'main.ts');
+}
+
+/** Names of all games: each folder in assembly/games that has a main.ts. */
 export function listGames(): string[] {
   return readdirSync(GAMES_DIR)
-    .filter((f: string) => f.endsWith('.ts') && statSync(path.join(GAMES_DIR, f)).isFile())
-    .map((f: string) => f.slice(0, -3))
+    .filter((f: string) => statSync(path.join(GAMES_DIR, f)).isDirectory() && existsSync(gameEntry(f)))
     .sort();
 }
 
 /**
  * Which games a changed file affects. A file in the SDK or the memory map
- * affects every game; a file in games/<name>/ affects <name>; games/<name>.ts
- * affects <name>. Returns null when the file is not engine source.
+ * affects every game; a file anywhere in games/<name>/ affects <name>.
+ * Returns null when the file is not engine source.
  */
 export function gamesAffectedBy(file: string): string[] | null {
   const abs = path.resolve(file);
@@ -43,8 +47,8 @@ export function gamesAffectedBy(file: string): string[] | null {
   }
   if (!abs.startsWith(GAMES_DIR + path.sep)) return null;
   const rel = path.relative(GAMES_DIR, abs).split(path.sep);
-  const name = rel.length === 1 ? rel[0].replace(/\.ts$/, '') : rel[0];
-  return existsSync(path.join(GAMES_DIR, `${name}.ts`)) ? [name] : [];
+  if (rel.length === 1) return [];
+  return existsSync(gameEntry(rel[0])) ? [rel[0]] : [];
 }
 
 /** Compile one game. Never throws for compile errors; they are in `log`. */
@@ -65,7 +69,7 @@ export async function compileGame(name: string, target: CompileTarget = 'debug')
 
   const { error } = await asc.main(
     [
-      path.join(GAMES_DIR, `${name}.ts`),
+      gameEntry(name),
       '--config',
       ASCONFIG_FILE,
       '--target',

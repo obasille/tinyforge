@@ -25,7 +25,12 @@ import {
   s,
   setU8,
   stopMusic,
-} from "../sdk";
+} from "../../sdk";
+
+// Game metadata, read by the TinyForge tooling (string literals only).
+const TITLE = "Minesweeper";
+const DESCRIPTION = "10x10 grid, 15 mines, retro terminal aesthetic";
+const AUTHOR = "Olivier Basille";
 
 // === Constants ===
 const GRID_SIZE: i32 = 10;

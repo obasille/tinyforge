@@ -20,7 +20,12 @@ import {
   playSfx,
   randomRange,
   s,
-} from "../sdk";
+} from "../../sdk";
+
+// Game metadata, read by the TinyForge tooling (string literals only).
+const TITLE = "Dino World";
+const DESCRIPTION = "Simple platformer";
+const AUTHOR = "Olivier Basille";
 
 // === Constants ===
 const GRAVITY: f32 = 0.5;

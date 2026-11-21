@@ -18,17 +18,17 @@ import {
   pset,
   randomRange,
   UncheckedArrayView,
-} from "../sdk";
+} from "../../sdk";
 
-import { withAlpha } from "../sdk/color";
-import { drawStarmap } from "./starlinePursuit/drawStarmap";
-import { generateStarmap } from "./starlinePursuit/generateStarmap";
-import { moveTarget } from "./starlinePursuit/moveTarget";
+import { withAlpha } from "../../sdk/color";
+import { drawStarmap } from "./drawStarmap";
+import { generateStarmap } from "./generateStarmap";
+import { moveTarget } from "./moveTarget";
 import {
   clearStarTrackingByBeacon,
   initializeStarTracking,
   updateStarTracking,
-} from "./starlinePursuit/starTracking";
+} from "./starTracking";
 import {
   BEACON_RANGE,
   beacons,
@@ -58,8 +58,13 @@ import {
   PopupState,
   TEMP_MEM_START,
   TRAIL_MAX_HEAT,
-} from "./starlinePursuit/types";
-import { starsDist2 } from "./starlinePursuit/utils";
+} from "./types";
+import { starsDist2 } from "./utils";
+
+// Game metadata, read by the TinyForge tooling (string literals only).
+const TITLE = "Starline Pursuit";
+const DESCRIPTION = "Turn-based space chase: hunt a target moving along hyperspace lanes";
+const AUTHOR = "Olivier Basille";
 
 const MIN_BASE_EXIT_JUMPS: i32 = 4;
 const ACTION_CP_COST: i32 = 1;

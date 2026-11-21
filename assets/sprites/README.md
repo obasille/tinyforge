@@ -38,7 +38,7 @@ handle (or -1 when the id or frame is missing). Pass that handle to the draw
 functions.
 
 ```typescript
-import { drawSprite, drawSpriteScaled, s } from "../sdk";
+import { drawSprite, drawSpriteScaled, s } from "../../sdk";
 
 drawSprite(s("heart"), 100, 100);                  // single sprite
 drawSprite(s("heart"), 100, 100, true);             // flipped horizontally

@@ -37,7 +37,12 @@ import {
   warn,
   warni,
   withAlpha,
-} from "../sdk";
+} from "../../sdk";
+
+// Game metadata, read by the TinyForge tooling (string literals only).
+const TITLE = "Sumo Push";
+const DESCRIPTION = "Two discs on a shrinking ring: shove the other one off the edge";
+const AUTHOR = "Olivier Basille";
 
 // === Constants ===
 const ARENA_X: f32 = 160.0;
