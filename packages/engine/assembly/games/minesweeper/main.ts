@@ -66,7 +66,9 @@ class Vars {
 }
 
 const vars = changetype<Vars>(RAM_START);
-const GRID_START = sizeof<Vars>(); // offset in RAM, 100 bytes - grid data (10×10)
+// Offset in RAM, after Vars: 100 bytes of grid data (10×10). offsetof<Vars>()
+// is the struct size; sizeof<Vars>() would be the size of a pointer (4).
+const GRID_START = offsetof<Vars>();
 
 // === Grid Helpers ===
 function getCellData(x: i32, y: i32): u8 {

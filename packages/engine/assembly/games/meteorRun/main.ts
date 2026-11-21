@@ -72,7 +72,9 @@ class Vars {
 }
 
 const vars = changetype<Vars>(RAM_START);
-const METEOR_DATA = sizeof<Vars>(); // offset in RAM, after Vars
+// Offset in RAM, after Vars. offsetof<Vars>() is the struct size;
+// sizeof<Vars>() would be the size of a pointer (4).
+const METEOR_DATA = offsetof<Vars>();
 
 // === Meteor Helpers ===
 function meteorBase(i: i32): usize {
