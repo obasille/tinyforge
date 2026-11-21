@@ -82,7 +82,7 @@ export class GameWorkerCore {
         }
         break;
       case 'load':
-        await this.load(msg.url, msg.name, msg.keepState, msg.seed);
+        await this.load(msg.wasm, msg.name, msg.keepState, msg.seed);
         break;
       case 'pause':
         if (this.status === 'running') this.setStatus('paused');
@@ -203,15 +203,12 @@ export class GameWorkerCore {
     });
   }
 
-  private async load(url: string, name: string, keepState: boolean, seed: number | null): Promise<void> {
+  private async load(wasm: ArrayBuffer, name: string, keepState: boolean, seed: number | null): Promise<void> {
     const seq = ++this.loadSeq;
     const resume = keepState && this.status === 'paused' ? 'paused' : 'running';
     this.setStatus('loading', name);
     try {
-      const res = await this.env.fetch(url);
-      if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`);
-      const bytes = await res.arrayBuffer();
-      if (seq !== this.loadSeq) return; // a newer load won
+      const bytes = wasm;
       const meta = cartridgeMeta(new Uint8Array(bytes));
       const used = meta.assets;
       // The sprite table is host data. A hot reload keeps the order the game

@@ -1,20 +1,13 @@
-import { withMeta } from '@tinyforge/engine/tooling/cartridge-meta';
 import { describe, expect, it } from 'vitest';
-import { GameCatalog } from '../src/game-catalog.ts';
+import { GameCatalog, type GameMetaInfo } from '../src/game-catalog.ts';
 
-const EMPTY = new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
-
-function cartridge(title: string, cover = false): Uint8Array {
-  return withMeta(EMPTY, {
-    layout: 1,
-    ram: 16,
-    memory: 0x60000,
+function cartridge(title: string, cover = false): GameMetaInfo {
+  return {
     title,
     description: `${title} description`,
     author: 'Someone',
-    assets: { sprites: [], sfx: [], music: [] },
     cover: cover ? { type: 'image/png', bytes: new Uint8Array([1, 2, 3]) } : null,
-  }).wasm;
+  };
 }
 
 describe('GameCatalog', () => {
@@ -48,9 +41,15 @@ describe('GameCatalog', () => {
     expect(catalog.games.getState()[0]).toMatchObject({ title: 'Pong', error: 'compile error', loading: false });
   });
 
-  it('reports a cartridge without metadata', async () => {
-    const catalog = new GameCatalog(['old'], async () => EMPTY);
+  it('follows games being added and removed', async () => {
+    const catalog = new GameCatalog(['pong'], async (game) => cartridge(game));
     await catalog.load();
-    expect(catalog.games.getState()[0]).toMatchObject({ title: 'old', error: 'No tinyforge.meta section' });
+    await catalog.setGames(['newGame', 'pong']);
+    expect(catalog.games.getState().map((g) => [g.name, g.title, g.loading])).toEqual([
+      ['newGame', 'newGame', false],
+      ['pong', 'pong', false],
+    ]);
+    await catalog.setGames(['newGame']);
+    expect(catalog.games.getState().map((g) => g.name)).toEqual(['newGame']);
   });
 });

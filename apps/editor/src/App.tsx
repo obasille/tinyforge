@@ -9,24 +9,58 @@ import {
 import { type FunctionComponent, useCallback, useEffect, useRef } from 'react';
 import { EditorContext } from './EditorContext.ts';
 import type { Editor } from './editor.ts';
+import { CodePanel } from './panels/CodePanel.tsx';
 import { ConsolePanel } from './panels/ConsolePanel.tsx';
+import { FilesPanel } from './panels/FilesPanel.tsx';
 import { GamePanel } from './panels/GamePanel.tsx';
 import { MemoryPanel } from './panels/MemoryPanel.tsx';
 import { withBoundary } from './panels/PanelBoundary.tsx';
 import { RunPanel } from './panels/RunPanel.tsx';
 import { Toolbar } from './Toolbar.tsx';
 
-const LAYOUT_KEY = 'tinyforge.editor.layout.v1';
+const LAYOUT_KEY = 'tinyforge.editor.layout.v2';
 
 const components: Record<string, FunctionComponent<IDockviewPanelProps>> = {
   game: withBoundary('Game', GamePanel),
   console: withBoundary('Console', ConsolePanel),
   memory: withBoundary('Memory', MemoryPanel),
   run: withBoundary('Run', RunPanel),
+  files: withBoundary('Files', FilesPanel),
+  code: withBoundary('Code', CodePanel as FunctionComponent<IDockviewPanelProps>),
 };
+
+/** Show a file: focus its panel, or open one next to the other code panels (left of the game). */
+function openCodePanel(api: DockviewApi, path: string): void {
+  const id = `code:${path}`;
+  const existing = api.getPanel(id);
+  if (existing) {
+    existing.api.setActive();
+    return;
+  }
+  const sibling = api.panels.find((p) => p.id.startsWith('code:'));
+  const anchor = api.getPanel('game') ?? api.panels[0];
+  api.addPanel({
+    id,
+    component: 'code',
+    title: path.slice(path.lastIndexOf('/') + 1),
+    params: { path },
+    position: sibling
+      ? { referencePanel: sibling.id, direction: 'within' }
+      : anchor
+        ? { referencePanel: anchor.id, direction: 'left' }
+        : undefined,
+  });
+}
 
 function defaultLayout(api: DockviewApi): void {
   api.addPanel({ id: 'game', component: 'game', title: 'Game' });
+  api.addPanel({
+    id: 'files',
+    component: 'files',
+    title: 'Files',
+    position: { referencePanel: 'game', direction: 'left' },
+    initialWidth: 220,
+  });
   api.addPanel({
     id: 'run',
     component: 'run',
@@ -73,6 +107,14 @@ export function App({ editor }: { editor: Editor }) {
       }
     });
   }, []);
+
+  useEffect(
+    () =>
+      editor.workbench.onOpenFile((path) => {
+        if (apiRef.current) openCodePanel(apiRef.current, path);
+      }),
+    [editor],
+  );
 
   const resetLayout = useCallback(() => {
     const api = apiRef.current;

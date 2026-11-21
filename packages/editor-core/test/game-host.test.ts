@@ -95,7 +95,7 @@ describe('GameHost', () => {
   it('kill replaces the worker, keeps watches and reloads the game fresh', async () => {
     const { host, workers } = setup();
     host.watch(0, 8, () => {});
-    host.load('pong', '/pong.wasm', { keepState: true });
+    host.load('pong', new Uint8Array([0, 97, 115, 109]), { keepState: true });
     const pending = host.snapshot();
     host.kill();
     expect(workers[0].terminated).toBe(true);

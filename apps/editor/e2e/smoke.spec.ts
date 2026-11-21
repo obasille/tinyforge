@@ -140,8 +140,7 @@ test('a game stuck in an infinite loop can be stopped without freezing the edito
   await expect(page.getByTestId('run-status')).toHaveText('running');
   await page.evaluate((b64) => {
     const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-    const url = URL.createObjectURL(new Blob([bytes], { type: 'application/wasm' }));
-    window.__tf?.editor.host.load('hang', url);
+    window.__tf?.editor.host.load('hang', bytes);
   }, HANGING_CARTRIDGE);
   await expect(page.getByTestId('run-status')).toHaveText('hung', { timeout: 10_000 });
   // The editor itself is still responsive: its controls react.

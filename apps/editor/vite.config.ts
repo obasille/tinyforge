@@ -24,6 +24,11 @@ export default defineConfig(({ command }) => ({
   worker: {
     format: 'es',
   },
+  // The compile Worker's dependencies are not found by Vite's first scan;
+  // listing them avoids a page reload when the editor first opens.
+  optimizeDeps: {
+    include: ['assemblyscript/asc'],
+  },
   build: {
     target: 'es2022',
     sourcemap: true,

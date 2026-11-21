@@ -100,9 +100,9 @@ tinyforge/
 │  │  │  ├─ games/            # One folder per game (<name>/main.ts) + asconfig.json
 │  │  │  └─ tsconfig.json     # AssemblyScript config
 │  │  ├─ memory-map.ts        # Shared memory constants
-│  │  └─ tooling/             # compile-game.ts: asc JS API wrapper (editor, tests)
+│  │  └─ tooling/             # compiler.ts (browser Worker and Node), compile-game.ts (Node, from disk)
 │  ├─ runtime/                # Host runtime in plain TS, no DOM (Worker/Node)
-│  └─ editor-core/            # Editor logic, no React: store, commands, game Worker bridge
+│  └─ editor-core/            # Editor logic, no React: Workspace, compiler and game Workers, code editor
 │
 ├─ apps/
 │  ├─ classic/                # The current host, deployed to the site root
@@ -980,13 +980,27 @@ Then open the URL Vite prints (http://localhost:5173/).
   code cannot stall the editor. Audio is played on the main thread
   (`AudioContext` does not exist in Workers). If a game hangs in an infinite
   loop, the editor notices within 3 s and offers to stop and reload it.
-- **Hot reload:** saving a file under `packages/engine/` recompiles the affected
-  games (debug build, using `asconfig.json`) and reloads the running one with
-  its memory, so game state is kept. Compile errors show in Vite's overlay and
-  in the Console panel. Changing the layout of a game's state struct can still
-  leave old state in memory; use Restart.
-- **Debugging:** debug builds ship source maps, so Chrome DevTools can set
-  breakpoints in the AssemblyScript source.
+- **Files and code:** the Files panel shows the games, the asset library and
+  the (read-only) SDK. Click a file to edit it in a code panel (CodeMirror).
+  Ctrl+S saves. New game, New file, Rename and Delete are in the panel, and
+  every file change can be undone with Ctrl+Z outside the text. If a file
+  changes on disk while you edit it, a clean buffer reloads and an edited one
+  asks which version to keep.
+- **Compiling in the browser:** the AssemblyScript compiler runs in its own
+  Worker. The dev server only serves and watches files; the editor reaches
+  them through one Workspace interface (an HTTP protocol, see
+  `apps/editor/vite/tinyforge-plugin.ts`), so the same editor build also runs
+  from a static copy of the project (`pnpm build:editor`), read-only.
+- **Hot reload:** a change to a game's files, from the editor or from any
+  other program, recompiles the game (debug build, using `asconfig.json`) and
+  reloads it with its memory, so game state is kept. Compile errors are
+  underlined in the code panel and listed in the Console. Changing the layout
+  of a game's state can still leave old state in memory; use Restart.
+- **Assets while typing:** the code panel checks `s()`, `playSfx()` and
+  `playMusic()` IDs as you type (an unknown ID is underlined before any
+  compile) and completes IDs from the library.
+- **Debugging:** debug builds carry their source map, so Chrome DevTools can
+  set breakpoints in the AssemblyScript source.
 - **Panels:** Game, Run (pause, single step, restart, save/load state, seed),
   Memory (hex view of the visible range, refreshed every frame), Console.
   The layout is saved in the browser.
@@ -1005,7 +1019,8 @@ Then open the URL Vite prints (http://localhost:5173/).
   | Ctrl+Shift+Z   | Redo (Cmd+Shift+Z on macOS)     |
 
 - **Dev hook:** in development, `window.__tf` exposes the editor, the project
-  and session stores, and `snapshot()`, for tests and agents.
+  files, the project and session stores, and `snapshot()`, for tests and
+  agents.
 
 The classic host and its deployment are unchanged by the editor.
 

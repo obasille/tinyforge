@@ -1,7 +1,7 @@
-import path from 'node:path';
 import { AS_CONSTANTS, assetId, createAssetScan, libraryFromFiles } from '@tinyforge/engine/tooling/asset-scan';
 import { readMeta } from '@tinyforge/engine/tooling/cartridge-meta';
-import { ASSETS_DIR, compileGame, gamesAffectedByAsset } from '@tinyforge/engine/tooling/compile-game';
+import { compileGame } from '@tinyforge/engine/tooling/compile-game';
+import { affectedGames } from '@tinyforge/engine/tooling/project-layout';
 import * as assemblyscript from 'assemblyscript';
 import asc from 'assemblyscript/asc';
 import type { Transform } from 'assemblyscript/transform';
@@ -94,11 +94,12 @@ describe('asset scan', () => {
   });
 
   it('knows which games a library change affects', () => {
-    const file = (kind: string, name: string) => path.join(ASSETS_DIR, kind, name);
-    expect(gamesAffectedByAsset(file('sfx', 'new.wav'), 'add')).toContain('pong');
-    expect(gamesAffectedByAsset(file('sfx', 'pong_wall.wav'), 'change')).toEqual([]);
-    expect(gamesAffectedByAsset(file('sprites', 'pong_cover.png'), 'change')).toEqual(['pong']);
-    expect(gamesAffectedByAsset(file('sprites', 'readme.txt'), 'add')).toBeNull();
-    expect(gamesAffectedByAsset('/elsewhere/a.png', 'add')).toBeNull();
+    const games = ['pong', 'snake'];
+    const cover = (g: string) => (g === 'pong' ? 'pong_cover' : null);
+    expect(affectedGames('assets/sfx/new.wav', 'add', games, cover)).toEqual(games);
+    expect(affectedGames('assets/sfx/pong_wall.wav', 'change', games, cover)).toEqual([]);
+    expect(affectedGames('assets/sprites/pong_cover.png', 'change', games, cover)).toEqual(['pong']);
+    expect(affectedGames('assets/sprites/readme.txt', 'add', games, cover)).toBeNull();
+    expect(affectedGames('elsewhere/a.png', 'add', games, cover)).toBeNull();
   });
 });

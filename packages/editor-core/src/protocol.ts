@@ -57,7 +57,8 @@ export type ToWorker =
   | { type: 'init'; canvas: OffscreenCanvas; sprites: AssetRef[] }
   /** The library changed (a URL changes when its file does). */
   | { type: 'library'; sprites: AssetRef[] }
-  | { type: 'load'; url: string; name: string; keepState: boolean; seed: number | null }
+  /** Run a cartridge; `wasm` is copied, not transferred (a kill replays the last load). */
+  | { type: 'load'; wasm: ArrayBuffer; name: string; keepState: boolean; seed: number | null }
   | { type: 'pause' }
   | { type: 'resume' }
   | { type: 'step'; count: number }

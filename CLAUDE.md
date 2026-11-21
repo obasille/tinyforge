@@ -8,14 +8,20 @@ covers the repo layout and the new editor.
 pnpm workspace. Two hosts share one engine:
 
 - `packages/engine`: AssemblyScript SDK, the games (one folder per game,
-  `assembly/games/<name>/main.ts`), `memory-map.ts`, and
-  `tooling/compile-game.ts` (asc JS API using `assembly/games/asconfig.json`).
+  `assembly/games/<name>/main.ts`), `memory-map.ts`, and the tooling:
+  `compiler.ts` (asc JS API using `assembly/games/asconfig.json`, no Node or
+  DOM APIs: the editor runs it in a Worker), `compile-game.ts` (the same from
+  disk, for Node: CLI builds and tests), `project-layout.ts` (project paths),
+  `game-meta.ts`, `asset-scan.ts`, `cartridge-meta.ts`.
 - `packages/runtime`: host runtime in plain TS with no DOM (cartridge imports,
   memory-mapped input, sprite table, fixed-step clock). Runs in a Worker or Node.
-- `packages/editor-core`: editor logic in plain TS: store, commands, the game
-  Worker (`worker-core.ts`, `game-worker.ts`) and its main-thread bridge
-  (`game-host.ts`), viewport, memory view.
-- `apps/editor`: React + Dockview UI, Vite, the `tinyforge` Vite plugin.
+- `packages/editor-core`: editor logic in plain TS: store, commands, the
+  Workspace (`workspace.ts`, `http-workspace.ts`, `project-files.ts`), the
+  compile Worker and its bridge (`compile-worker.ts`, `compiler-host.ts`), the
+  game Worker (`worker-core.ts`, `game-worker.ts`) and its bridge
+  (`game-host.ts`), the code editor and live asset scan, viewport, memory view.
+- `apps/editor`: React + Dockview UI, Vite, the `tinyforge` Vite plugin (serves
+  and watches project files; it does not compile).
 - `apps/classic`: the original host, deployed to the site root. Keep it working,
   with minimal changes and no code shared with the editor packages. What it
   does not do is listed in `apps/classic/README.md`.
@@ -45,6 +51,11 @@ itself. Build settings come from `asconfig.json`, plus the `memoryBase`
 5. The game runs in a Worker; the editor only talks to it through `GameHost`.
    Memory is read through watches (pushed every frame) or snapshots.
 6. Tweakpane and other DOM widgets subscribe to stores directly.
+7. Files are reached only through the Workspace (`ProjectFiles` in the editor),
+   by project path (`games/...`, `engine/...`, `assets/...`). Nothing checks
+   which deployment it runs in; a new one is a new Workspace adapter. A file
+   edit is a `FileCommand` on the same `CommandStack`. Every file change, the
+   editor's own included, arrives through `ProjectFiles.onChange`.
 
 ## How to verify
 

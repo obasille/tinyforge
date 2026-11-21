@@ -8,7 +8,10 @@
     "./memory-map": "./memory-map.ts",
     "./tooling/compile-game": "./tooling/compile-game.ts",
     "./tooling/cartridge-meta": "./tooling/cartridge-meta.ts",
-    "./tooling/asset-scan": "./tooling/asset-scan.ts"
+    "./tooling/asset-scan": "./tooling/asset-scan.ts",
+    "./tooling/compiler": "./tooling/compiler.ts",
+    "./tooling/game-meta": "./tooling/game-meta.ts",
+    "./tooling/project-layout": "./tooling/project-layout.ts"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
