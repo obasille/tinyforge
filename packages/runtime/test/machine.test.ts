@@ -88,6 +88,106 @@ describe('GameMachine with real cartridges', () => {
     });
   });
 
+  describe('sumoPush', () => {
+    // Offsets into sumoPush's Vars struct at RAM_START, then two Player structs.
+    const STATE = 0;
+    const ROUND_WINNER = 1;
+    const RADIUS = 16;
+    const PLAYER = (i: number) => 64 + i * 48;
+    const X = 0;
+    const VX = 8;
+    const VY = 12;
+    const SCORE = 16;
+    const FALLING = 36;
+    const PLAYING = 2;
+    const ROUND_OVER = 3;
+    const START: InputState = { ...NO_INPUT, buttons: Button.start };
+
+    const f32 = (m: GameMachine, off: number) => new DataView(m.read(RAM_START + off, 4).buffer).getFloat32(0, true);
+    const i32 = (m: GameMachine, off: number) => new DataView(m.read(RAM_START + off, 4).buffer).getInt32(0, true);
+    const u8 = (m: GameMachine, off: number) => m.read(RAM_START + off, 1)[0];
+
+    /** Press START and wait out the 3-2-1 countdown. */
+    function startPlaying(m: GameMachine): void {
+      m.tick(START);
+      for (let i = 0; i < 180; i++) m.tick(NO_INPUT);
+      expect(u8(m, STATE)).toBe(PLAYING);
+    }
+
+    /** Player 1 holds D (P2_RIGHT) until player 2 is off the ring, then brakes with A. */
+    function pushRight(m: GameMachine): number {
+      let ticks = 0;
+      while (i32(m, PLAYER(1) + FALLING) === 0 && ticks < 600) {
+        m.tick({ ...NO_INPUT, buttons: Button.b });
+        ticks++;
+      }
+      while (u8(m, STATE) === PLAYING && ticks < 900) {
+        m.tick({ ...NO_INPUT, buttons: Button.x });
+        ticks++;
+      }
+      return ticks;
+    }
+
+    it('gives player 1 the round for pushing player 2 off the ring', async () => {
+      const rec = recordingHost();
+      const m = await boot('sumoPush', rec.host);
+      startPlaying(m);
+      pushRight(m);
+      expect(u8(m, STATE)).toBe(ROUND_OVER);
+      expect(u8(m, ROUND_WINNER)).toBe(1);
+      expect(i32(m, PLAYER(0) + SCORE)).toBe(1);
+      expect(i32(m, PLAYER(1) + SCORE)).toBe(0);
+      const ids = rec.audio.flatMap((c) => (c.type === 'sfx' ? [c.id] : []));
+      expect(ids).toEqual(expect.arrayContaining(['sumo_count', 'sumo_go', 'sumo_bump', 'sumo_fall', 'sumo_point']));
+      expect(rec.audio[0]).toMatchObject({ type: 'music', id: 'sumo_theme' });
+    });
+
+    it('plays the same scripted round to the same frame', async () => {
+      const play = async () => {
+        const m = await boot('sumoPush');
+        startPlaying(m);
+        pushRight(m);
+        for (let i = 0; i < 30; i++) m.tick(NO_INPUT);
+        m.draw();
+        return hash(m.framebuffer()) + hash(m.read(RAM_START, 256));
+      };
+      expect(await play()).toBe(await play());
+    });
+
+    it('dashes on a double tap', async () => {
+      const m = await boot('sumoPush');
+      startPlaying(m);
+      const down = { ...NO_INPUT, buttons: Button.right };
+      m.tick(down);
+      m.tick(NO_INPUT);
+      const before = f32(m, PLAYER(1) + VX);
+      m.tick(down); // second tap: player 2 (arrows) dashes right
+      expect(before).toBeLessThan(1);
+      expect(f32(m, PLAYER(1) + VX)).toBeGreaterThan(4);
+    });
+
+    it('dashes on the Ctrl triggers', async () => {
+      const m = await boot('sumoPush');
+      startPlaying(m);
+      // Right Ctrl with nothing held: the arrows player dashes at the other disc (left).
+      m.tick({ ...NO_INPUT, buttons: Button.rt });
+      expect(f32(m, PLAYER(1) + VX)).toBeLessThan(-4);
+      // Left Ctrl while holding W: the WASD player dashes up.
+      m.tick({ ...NO_INPUT, buttons: Button.lt | Button.y });
+      expect(f32(m, PLAYER(0) + VY)).toBeLessThan(-4);
+    });
+
+    it('shrinks the ring after 5 seconds of play', async () => {
+      const m = await boot('sumoPush');
+      startPlaying(m);
+      for (let i = 0; i < 300; i++) m.tick(NO_INPUT);
+      const r = f32(m, RADIUS);
+      for (let i = 0; i < 60; i++) m.tick(NO_INPUT);
+      expect(f32(m, RADIUS)).toBeLessThan(r);
+      expect(f32(m, PLAYER(0) + X)).toBe(120); // nobody moved
+    });
+  });
+
   describe('tetris', () => {
     // Offsets into tetris's Vars struct at RAM_START.
     const LINES = 4;
