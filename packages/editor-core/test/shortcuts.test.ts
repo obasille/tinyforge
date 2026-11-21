@@ -16,6 +16,7 @@ describe('shortcuts', () => {
     expect(matchShortcut(key('F5', { shift: true }))?.action).toBe('restart');
     expect(matchShortcut(key('F8'))?.action).toBe('pauseResume');
     expect(matchShortcut(key('F10'))?.action).toBe('step');
+    expect(matchShortcut(key('F4'))?.action).toBe('copyColor');
   });
 
   it('treats Cmd like Ctrl for undo and redo', () => {

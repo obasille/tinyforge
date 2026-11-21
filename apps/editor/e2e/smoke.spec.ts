@@ -172,6 +172,22 @@ test('hovering the game shows the color of the pixel under the mouse', async ({ 
   await expect(readout).toContainText('Hover the game');
 });
 
+test('F4 copies the hovered pixel color and says so', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto('/');
+  await expect(page.getByTestId('run-status')).toHaveText('running');
+  const box = await page.getByTestId('game-canvas').boundingBox();
+  if (!box) throw new Error('no canvas');
+  await page.mouse.move(box.x + 1, box.y + 1);
+  const readout = page.getByTestId('pixel-color');
+  await expect(readout).toContainText(/#[0-9A-F]{6}/);
+  const hex = ((await readout.textContent()) ?? '').match(/#[0-9A-F]{6}/)?.[0];
+  await page.keyboard.press('F4');
+  await expect(page.getByTestId('pixel-copied')).toHaveText(`Copied ${hex}`);
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(hex);
+  await expect(page.getByTestId('pixel-copied')).toHaveText('');
+});
+
 test('seed fields are plain text, not color pickers', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByTestId('run-status')).toHaveText('running');
