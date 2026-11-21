@@ -1,80 +1,62 @@
 # Sprites
 
-This folder contains sprite image files for TinyForge.
+Image files for TinyForge sprites. They are not compiled into the cartridge:
+the host (editor or classic console) loads every file in this folder at
+runtime, decodes it, and writes a sprite table into the cartridge's WASM
+memory before the game runs. Games refer to sprites by string ID.
 
-## File Naming Convention
+## File Naming
 
-### Single Sprites
+`{id}~{COLS}x{ROWS}-{info}.png`
 
-- Format: `{ID}-description.png`
-- Examples: `0-player.png`, `1_enemy.png`, `2 coin.png`
+Only the id is required. It is everything before the first `~`, or the first
+`-` when there is no `~`.
 
-The numeric ID (0-255) at the start is extracted and used to reference the sprite in code.
+- `heart.png` gives id `heart`, a single sprite
+- `crocodile_bloody.png` gives id `crocodile_bloody` (underscores are part of the id)
+- `coin~8x1.png` gives id `coin`, a sheet with 8 columns and 1 row
+- `dino~9x1-run.png` gives id `dino`, a 9×1 sheet; `-run` is ignored
+- `flag-big.png` gives id `flag`; `-big` is ignored
+
+Ids are at most 16 characters and must be unique across the folder.
 
 ### Sprite Sheets
 
-Sprite sheets allow you to pack multiple sprites into a single image file, which are automatically split into individual sprites.
-
-- Format: `{ID}~{COLS}x{ROWS}-description.png`
-- Examples: 
-  - `10~4x3-tiles.png` - Sprite sheet starting at ID 10, with 4 columns and 3 rows (12 sprites total)
-  - `50~8x2-characters.png` - Sprite sheet starting at ID 50, with 8 columns and 2 rows (16 sprites total)
-  - `10~4x3.png` - Description is optional
-
-**How it works:**
-1. The image is divided into a grid of COLS × ROWS
-2. Each cell becomes a separate sprite
-3. Sprites are assigned sequential IDs starting from the base ID
-4. Order: left-to-right, top-to-bottom
-
-**Example:**
-```
-File: 10~4x3-tiles.png (128x96 image)
-Grid: 4 columns × 3 rows = 12 sprites
-Sprite size: 32x32 pixels each
-IDs assigned: 10, 11, 12, 13 (row 1)
-              14, 15, 16, 17 (row 2)
-              18, 19, 20, 21 (row 3)
-```
-
-**Notes:**
-- Format uses tilde (~) to separate ID from dimensions
-- Dimensions use 'x' separator: `COLS x ROWS`
-- Everything after dimensions is ignored (just like single sprite names)
-- Grid dimensions are calculated by dividing image size by columns/rows
-- All sprites in a sheet have the same dimensions
-- Maximum sprite ID is 255 (excess sprites are skipped)
+A `~COLSxROWS` format splits the image into a grid of equal frames, left to
+right, top to bottom. Frame size is the image size divided by the column and
+row counts. The whole sheet shares one id; pick a frame by column and row.
 
 ## Supported Formats
 
-- **PNG** - Recommended, supports transparency (alpha channel)
-- **JPEG/JPG** - No transparency support
-
-## Sprite Properties
-
-- **Transparency**: Alpha channel is preserved. Pixels with alpha < 128 are treated as transparent
-- **Color Format**: Images are converted to ABGR format internally
-- **Size**: No enforced limit, but keep sprites reasonably sized for performance
-- **Memory**: All loaded sprites are stored in WASM memory (starting at 0x0AB100)
+- **PNG**: recommended, keeps the alpha channel
+- **JPEG/JPG**: no transparency
 
 ## Usage in Games
 
+`s(id, col, row)` looks the id up in the sprite table and returns a numeric
+handle (or -1 when the id or frame is missing). Pass that handle to the draw
+functions.
+
 ```typescript
-import { drawSprite, drawSpriteFlip } from './console';
+import { drawSprite, drawSpriteScaled, s } from "../sdk";
 
-// Draw sprite 0 at position (100, 100)
-drawSprite(0, 100, 100);
-
-// Draw sprite 1 flipped horizontally
-drawSpriteFlip(1, 50, 50, true, false);
+drawSprite(s("heart"), 100, 100);                  // single sprite
+drawSprite(s("heart"), 100, 100, true);             // flipped horizontally
+drawSprite(s("heart"), 100, 100, false, false, 128); // 50% opacity
+drawSprite(s("coin", 3), 40, 20);                   // frame at column 3, row 0
+drawSpriteScaled(s("dino", 0), 10, 10, 2, 2);       // 2× scale
 ```
 
-## Sprite Data Structure
+Look up the handle once (for example in `init()`) when drawing the same sprite
+every frame, since `s()` scans the table.
 
-Each sprite entry in memory contains:
-- Offset +0: u16 width (pixels)
-- Offset +2: u16 height (pixels)
-- Offset +4: u32 dataOffset (pointer to pixel data)
-- Offset +8: Next sprite metadata...
+## Pixels and Memory
 
-Pixel data follows all metadata entries in RGBA format (4 bytes per pixel).
+- Pixels are stored as 4 bytes each (RGBA bytes, read as ABGR `u32` in the SDK).
+- Alpha is blended: alpha 0 is skipped, 255 is opaque, values in between blend.
+- The table lives at `SPRITE_TABLE_ADDR` (0x04B010) and holds up to 256
+  sprites and 128 KB of pixel data. Sprites past either limit are skipped or
+  truncated with a warning in the console.
+- The layout (header, 16-character id entries, 16-byte info entries, pixel
+  data) is defined in `packages/engine/memory-map.ts` and written by
+  `writeSpriteTable` in `packages/runtime/src/assets.ts`.
