@@ -5,6 +5,9 @@
 // after every drawn frame, so a viewer showing a small address range updates
 // every frame for the cost of a few KB per message.
 
+export type { AssetList } from '@tinyforge/engine/tooling/asset-scan';
+
+import type { AssetList } from '@tinyforge/engine/tooling/asset-scan';
 import type { AudioCommand, InputState, LogLevel } from '@tinyforge/runtime';
 
 export interface AssetRef {
@@ -34,7 +37,10 @@ export interface FrameStats {
 }
 
 export type ToWorker =
+  /** `sprites` is the whole library; each game loads the ones it uses. */
   | { type: 'init'; canvas: OffscreenCanvas; sprites: AssetRef[] }
+  /** The library changed (a URL changes when its file does). */
+  | { type: 'library'; sprites: AssetRef[] }
   | { type: 'load'; url: string; name: string; keepState: boolean; seed: number | null }
   | { type: 'pause' }
   | { type: 'resume' }
@@ -48,7 +54,10 @@ export type ToWorker =
   | { type: 'ping'; id: number };
 
 export type FromWorker =
-  | { type: 'ready'; spriteCount: number; spriteBytes: number }
+  /** The sprite table was written for `game`. */
+  | { type: 'sprites'; game: string; spriteCount: number; spriteBytes: number }
+  /** A cartridge loaded; these are the assets its metadata lists. */
+  | { type: 'assets'; game: string; assets: AssetList }
   | { type: 'status'; status: RunStatus; game: string | null }
   | { type: 'log'; level: LogLevel | 'HOST'; message: string }
   | { type: 'audio'; command: AudioCommand }

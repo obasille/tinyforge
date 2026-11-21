@@ -10,6 +10,10 @@ const repoRoot = path.resolve(__dirname, '..');
 const gamesDir = path.join(repoRoot, 'packages', 'engine', 'assembly', 'games');
 const sdkDir = path.join(repoRoot, 'packages', 'engine', 'assembly', 'sdk');
 const memoryMap = path.join(repoRoot, 'packages', 'engine', 'memory-map.ts');
+// Adding or removing a library file can make a game's asset IDs valid or
+// unknown: rebuild every game. (Editing a file needs no rebuild, except a
+// game's COVER image, which is copied into its cartridge.)
+const assetDirs = ['sprites', 'sfx', 'music'].map((sub) => path.join(repoRoot, 'assets', sub));
 
 let running = false;
 let queued = null;
@@ -64,12 +68,14 @@ function isSdkFile(filePath) {
   return filePath.startsWith(sdkDir + path.sep) && filePath.endsWith('.ts');
 }
 
-const watcher = chokidar.watch([gamesDir, sdkDir, memoryMap], {
+const watcher = chokidar.watch([gamesDir, sdkDir, memoryMap, ...assetDirs], {
   ignoreInitial: true,
 });
 
-function handleAssemblyChange(filePath) {
-  if (filePath === memoryMap || isSdkFile(filePath)) {
+function handleAssemblyChange(filePath, event) {
+  const isAsset = assetDirs.some((dir) => filePath.startsWith(dir + path.sep));
+  if (isAsset && event === 'change') return;
+  if (filePath === memoryMap || isSdkFile(filePath) || isAsset) {
     runBuild('all');
     return;
   }
@@ -80,9 +86,9 @@ function handleAssemblyChange(filePath) {
   }
 }
 
-watcher.on('change', handleAssemblyChange);
-watcher.on('add', handleAssemblyChange);
-watcher.on('unlink', handleAssemblyChange);
+watcher.on('change', (file) => handleAssemblyChange(file, 'change'));
+watcher.on('add', (file) => handleAssemblyChange(file, 'add'));
+watcher.on('unlink', (file) => handleAssemblyChange(file, 'unlink'));
 
 watcher.on('error', (error) => {
   console.error(`Watcher error: ${error.message}`);

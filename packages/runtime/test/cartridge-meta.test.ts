@@ -18,11 +18,12 @@ const EMPTY = new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
 const COVER = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
 
 describe('cartridge metadata section', () => {
-  it('round-trips title, description, author and cover', () => {
+  it('round-trips title, description, author, assets and cover', () => {
     const meta = {
       title: 'Pong',
       description: 'Two players',
       author: 'Olivier',
+      assets: { sprites: ['ball'], sfx: ['hit', 'wall'], music: [] },
       cover: { type: 'image/png', bytes: COVER },
     };
     expect(decodeMeta(encodeMeta(meta))).toEqual(meta);
@@ -30,7 +31,13 @@ describe('cartridge metadata section', () => {
   });
 
   it('is written first, right after the header, and found again without compiling', async () => {
-    const { wasm, inserted } = withMeta(EMPTY, { title: 'T', description: 'D', author: 'A', cover: null });
+    const { wasm, inserted } = withMeta(EMPTY, {
+      title: 'T',
+      description: 'D',
+      author: 'A',
+      assets: { sprites: [], sfx: [], music: [] },
+      cover: null,
+    });
     expect(wasm.length).toBe(EMPTY.length + inserted);
     expect(wasm[8]).toBe(0); // custom section id
     expect(readMeta(wasm)?.title).toBe('T');

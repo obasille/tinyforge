@@ -3,6 +3,7 @@
 // snapshots. It also watches for a hung game (an update() that never returns)
 // and can kill and restart the Worker without touching the editor.
 
+import type { AssetList } from '@tinyforge/engine/tooling/asset-scan';
 import type { AudioCommand, InputState, LogLevel } from '@tinyforge/runtime';
 import type { AssetRef, FrameStats, FromWorker, RunStatus, ToWorker } from './protocol.ts';
 import { createStore, type Store } from './store.ts';
@@ -22,9 +23,12 @@ export interface GameHostOptions {
    * after a kill the viewport has to swap in a new element.
    */
   createCanvas(): { transferControlToOffscreen(): OffscreenCanvas };
+  /** The sprite library; each game loads the sprites it uses. */
   sprites: AssetRef[];
   onLog?(level: LogLevel | 'HOST', message: string): void;
   onAudio?(command: AudioCommand): void;
+  /** A cartridge loaded: the assets its metadata lists (e.g. to load its sounds). */
+  onAssets?(game: string, assets: AssetList): void;
   /** Time without a reply to a ping before the game counts as hung. */
   hangTimeoutMs?: number;
   pingIntervalMs?: number;
@@ -58,8 +62,10 @@ export class GameHost {
   private readonly clearTimer: (id: unknown) => void;
   private disposed = false;
   private statusBeforeHang: RunStatus = 'running';
+  private sprites: AssetRef[];
 
   constructor(private readonly options: GameHostOptions) {
+    this.sprites = options.sprites;
     this.setTimer = options.setTimer ?? ((fn, ms) => setInterval(fn, ms));
     this.clearTimer = options.clearTimer ?? ((id) => clearInterval(id as ReturnType<typeof setInterval>));
     this.session = createStore<GameSession>({ status: 'idle', game: null, stats: null, spriteCount: 0, generation: 0 });
@@ -69,6 +75,12 @@ export class GameHost {
   load(name: string, url: string, { keepState = false, seed = null as number | null } = {}): void {
     this.lastLoad = { type: 'load', name, url, keepState, seed };
     this.send(this.lastLoad);
+  }
+
+  /** Replace the sprite library (files changed); the game's sprites reload in place. */
+  setSprites(sprites: AssetRef[]): void {
+    this.sprites = sprites;
+    this.send({ type: 'library', sprites });
   }
 
   pause(): void {
@@ -149,7 +161,7 @@ export class GameHost {
       this.options.onLog?.('ERROR', `Game worker error: ${event.message}`);
     };
     const canvas = this.options.createCanvas().transferControlToOffscreen();
-    worker.postMessage({ type: 'init', canvas, sprites: this.options.sprites }, [canvas]);
+    worker.postMessage({ type: 'init', canvas, sprites: this.sprites }, [canvas]);
     for (const [id, w] of this.watches) worker.postMessage({ type: 'watch', id, offset: w.offset, length: w.length });
     if (this.lastInput) worker.postMessage({ type: 'input', input: this.lastInput });
     this.session.setState((s) => ({ ...s, status: 'idle', stats: null, generation: s.generation + 1 }));
@@ -189,9 +201,15 @@ export class GameHost {
 
   private receive(msg: FromWorker): void {
     switch (msg.type) {
-      case 'ready':
+      case 'sprites':
         this.session.setState((s) => ({ ...s, spriteCount: msg.spriteCount }));
-        this.options.onLog?.('HOST', `Sprites loaded: ${msg.spriteCount} (${(msg.spriteBytes / 1024).toFixed(1)} KB)`);
+        this.options.onLog?.(
+          'HOST',
+          `Sprites loaded for ${msg.game}: ${msg.spriteCount} (${(msg.spriteBytes / 1024).toFixed(1)} KB)`,
+        );
+        break;
+      case 'assets':
+        this.options.onAssets?.(msg.game, msg.assets);
         break;
       case 'status':
         this.session.setState((s) => ({ ...s, status: msg.status, game: msg.game }));

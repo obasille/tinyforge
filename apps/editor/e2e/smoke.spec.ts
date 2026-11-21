@@ -1,4 +1,9 @@
+import { utimesSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { expect, type Page, test } from '@playwright/test';
+
+const ASSETS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'assets');
 
 /** Collect console errors and page errors; any of them fails the test. */
 function trackErrors(page: Page): string[] {
@@ -38,7 +43,8 @@ test('loads, docks the panels and runs the default game in the worker', async ({
   }
   await expect(page.getByTestId('run-status')).toHaveText('running');
   await expect.poll(async () => (await session(page))?.stats?.ticks ?? 0).toBeGreaterThan(30);
-  await expect(page.getByTestId('console')).toContainText('Sprites loaded');
+  await expect(page.getByTestId('console')).toContainText('Sprites loaded for pong');
+  await expect(page.getByTestId('console')).toContainText('Audio loaded: 8 SFX, 1 music tracks');
   expect(errors).toEqual([]);
 });
 
@@ -284,4 +290,33 @@ test('the Ctrl keys are game triggers and Ctrl+Z still undoes', async ({ page })
   await page.getByTestId('viewport').focus();
   await page.keyboard.press('Control+KeyZ');
   await expect.poll(async () => (await session(page))?.game).toBe('pong');
+});
+
+test('each game loads only its own sprites and sounds, and a changed sprite reloads in place', async ({ page }) => {
+  const errors = trackErrors(page);
+  await page.goto('/');
+  await expect(page.getByTestId('run-status')).toHaveText('running');
+  const loaded = () =>
+    page.evaluate(() => ({
+      sprites: window.__tf?.session.getState().spriteCount,
+      audio: window.__tf?.editor.audio.counts,
+    }));
+  // Pong: no sprites (its cover is metadata), 8 sound effects and its theme.
+  await expect.poll(loaded).toEqual({ sprites: 0, audio: { sfx: 8, music: 1 } });
+
+  await chooseGame(page, 'dinoWorld');
+  await expect(page.getByTestId('run-status')).toHaveText('running');
+  await expect.poll(loaded).toEqual({ sprites: 2, audio: { sfx: 1, music: 0 } });
+
+  // Touch the dino sprite sheet: the sprite table is rewritten, the game keeps running.
+  const reloads = () => page.getByTestId('console').getByText('Sprites loaded for dinoWorld').count();
+  const before = await reloads();
+  const ticks = (await session(page))?.stats?.ticks ?? 0;
+  const file = path.join(ASSETS, 'sprites', 'dino~9x1.png');
+  const now = new Date();
+  utimesSync(file, now, now);
+  await expect.poll(reloads, { timeout: 10_000 }).toBeGreaterThan(before);
+  expect((await session(page))?.stats?.ticks ?? 0).toBeGreaterThanOrEqual(ticks);
+  await expect(page.getByTestId('run-status')).toHaveText('running');
+  expect(errors).toEqual([]);
 });

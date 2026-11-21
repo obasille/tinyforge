@@ -30,7 +30,7 @@ async function boot(): Promise<void> {
       if (data.failed) editor.logs.add('ERROR', `${data.failed} failed to compile:\n${data.log ?? ''}`);
       else editor.hotReload(data.games);
     });
-    import.meta.hot.on('tf:audio', () => void editor.reloadAudio());
+    import.meta.hot.on('tf:assets', () => void editor.reloadAssets());
   }
   if (import.meta.env.DEV) {
     window.__tf = {

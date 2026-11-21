@@ -6,13 +6,27 @@
 // of being written to assets/cartridges, so the editor's dev server can serve
 // debug builds without touching the classic host's release builds.
 //
+// The asset scan (asset-scan.ts) runs as a compiler hook: an unknown asset ID
+// is a compile error, and the IDs the game uses go into its metadata.
+//
 // After compiling, the game's metadata (TITLE, DESCRIPTION, AUTHOR and the
-// optional COVER sprite, declared in its main.ts) is written into the module
-// as a `tinyforge.meta` custom section (see cartridge-meta.ts).
+// optional COVER sprite, declared in its main.ts, plus the assets used) is
+// written into the module as a `tinyforge.meta` custom section (see
+// cartridge-meta.ts).
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { Transform } from 'assemblyscript/transform';
+import {
+  ASSET_KINDS,
+  ASSET_PATTERNS,
+  type AssetKind,
+  type AssetLibrary,
+  assetId,
+  createAssetScan,
+  libraryFromFiles,
+} from './asset-scan.ts';
 import { type CartridgeMeta, shiftSourceMap, withMeta } from './cartridge-meta.ts';
 
 export const ENGINE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -58,12 +72,36 @@ export function gamesAffectedBy(file: string): string[] | null {
   return existsSync(gameEntry(rel[0])) ? [rel[0]] : [];
 }
 
+/**
+ * Which games a change in the asset library affects, or null when the file is
+ * not in the library. Adding or removing a file can make an asset ID valid or
+ * unknown, so it affects every game; editing a file affects only the games
+ * that use it as their COVER (copied into the cartridge). Sprites and sounds
+ * the game uses are loaded by the host, so their edits need no rebuild.
+ */
+export function gamesAffectedByAsset(file: string, event: 'add' | 'change' | 'unlink'): string[] | null {
+  const abs = path.resolve(file);
+  const kind = ASSET_KINDS.find((k) => abs.startsWith(path.join(ASSETS_DIR, k) + path.sep));
+  if (!kind || !ASSET_PATTERNS[kind].test(abs)) return null;
+  if (event !== 'change') return listGames();
+  if (kind !== 'sprites') return [];
+  const id = assetId(path.basename(abs));
+  return listGames().filter((game) => {
+    try {
+      return coverId(game) === id;
+    } catch {
+      return false;
+    }
+  });
+}
+
 /** Compile one game. Never throws for compile errors; they are in `log`. */
 export async function compileGame(name: string, target: CompileTarget = 'debug'): Promise<CompileResult> {
   if (!/^[A-Za-z0-9_-]+$/.test(name) || !listGames().includes(name)) {
     return { ok: false, log: `Unknown game "${name}"` };
   }
   const asc = (await import('assemblyscript/asc')).default;
+  const scan = createAssetScan(readLibrary());
   const outName = `${name}.wasm`;
   const outputs = new Map<string, Uint8Array | string>();
   let log = '';
@@ -86,6 +124,9 @@ export async function compileGame(name: string, target: CompileTarget = 'debug')
       ...(target === 'debug' ? ['--sourceMap'] : []),
     ],
     {
+      // asc instantiates class transforms and uses objects as they are; its
+      // typings only describe the class form.
+      transforms: [scan.transform as unknown as Transform],
       stdout: sink,
       stderr: sink,
       writeFile(filename: string, contents: Uint8Array | string) {
@@ -100,7 +141,7 @@ export async function compileGame(name: string, target: CompileTarget = 'debug')
   }
   let meta: CartridgeMeta;
   try {
-    meta = readGameMeta(name);
+    meta = { ...readGameMeta(name), assets: scan.used() };
   } catch (e) {
     return { ok: false, log: `${log}${e instanceof Error ? e.message : String(e)}\n` };
   }
@@ -132,17 +173,18 @@ function absoluteSources(mapJson: string): string {
 }
 
 const META_FIELDS = ['TITLE', 'DESCRIPTION', 'AUTHOR', 'COVER'] as const;
+type MetaField = (typeof META_FIELDS)[number];
 
-/**
- * Read a game's metadata from the top-level string constants in its main.ts
- * (`const TITLE = "Pong";`). TITLE, DESCRIPTION and AUTHOR are required; COVER
- * is optional and names a sprite in the asset library. Throws a readable
- * error, reported like a compile error.
- */
-export function readGameMeta(name: string): CartridgeMeta {
+/** COVER sprite ID declared in a game's main.ts, if any. */
+function coverId(name: string): string | undefined {
+  return readMetaFields(name).COVER;
+}
+
+/** The metadata constants declared in a game's main.ts. */
+function readMetaFields(name: string): Partial<Record<MetaField, string>> {
   const entry = gameEntry(name);
   const source = readFileSync(entry, 'utf8');
-  const values: Partial<Record<(typeof META_FIELDS)[number], string>> = {};
+  const values: Partial<Record<MetaField, string>> = {};
   for (const field of META_FIELDS) {
     const decl = new RegExp(`^const ${field}\\b.*$`, 'm').exec(source);
     if (!decl) continue;
@@ -152,6 +194,18 @@ export function readGameMeta(name: string): CartridgeMeta {
     if (!literal) throw new Error(`${entry}: ${field} must be a string literal, like: const ${field} = "...";`);
     values[field] = JSON.parse(literal[1]) as string;
   }
+  return values;
+}
+
+/**
+ * Read a game's metadata from the top-level string constants in its main.ts
+ * (`const TITLE = "Pong";`). TITLE, DESCRIPTION and AUTHOR are required; COVER
+ * is optional and names a sprite in the asset library. Throws a readable
+ * error, reported like a compile error.
+ */
+export function readGameMeta(name: string): Omit<CartridgeMeta, 'assets'> {
+  const entry = gameEntry(name);
+  const values = readMetaFields(name);
   for (const field of ['TITLE', 'DESCRIPTION', 'AUTHOR'] as const) {
     if (!values[field]) throw new Error(`${entry}: missing game metadata, add: const ${field} = "...";`);
   }
@@ -169,7 +223,7 @@ const IMAGE_TYPES: Record<string, string> = { '.png': 'image/png', '.jpg': 'imag
 function readCover(entry: string, id: string): { type: string; bytes: Uint8Array } {
   const dir = path.join(ASSETS_DIR, 'sprites');
   const file = existsSync(dir)
-    ? readdirSync(dir).find((f) => IMAGE_TYPES[path.extname(f).toLowerCase()] && spriteId(f) === id)
+    ? readdirSync(dir).find((f) => IMAGE_TYPES[path.extname(f).toLowerCase()] && assetId(f) === id)
     : undefined;
   if (!file) throw new Error(`${entry}: COVER sprite "${id}" not found in assets/sprites`);
   return {
@@ -178,9 +232,12 @@ function readCover(entry: string, id: string): { type: string; bytes: Uint8Array
   };
 }
 
-function spriteId(file: string): string {
-  const name = file.replace(/\.[^/.]+$/, '');
-  const tilde = name.indexOf('~');
-  const dash = name.indexOf('-');
-  return tilde >= 0 ? name.slice(0, tilde) : dash >= 0 ? name.slice(0, dash) : name;
+/** The asset IDs in the library folders (a missing folder is empty). */
+export function readLibrary(assetsDir = ASSETS_DIR): AssetLibrary {
+  const files = {} as Record<AssetKind, string[]>;
+  for (const kind of ASSET_KINDS) {
+    const dir = path.join(assetsDir, kind);
+    files[kind] = existsSync(dir) ? readdirSync(dir) : [];
+  }
+  return libraryFromFiles(files);
 }
