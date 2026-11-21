@@ -288,6 +288,12 @@ export class Editor {
     if (seq !== this.loadSeq || game !== this.project.getState().game) return;
     if (!result.ok) {
       this.logs.add('ERROR', `${game} failed to compile:\n${result.log}`);
+      // Another game still running would look like this one: stop it. The
+      // Game tab shows the errors. (A broken edit keeps the game's last build.)
+      if (this.host.session.getState().game !== game) {
+        this.audio.stopMusic();
+        this.host.kill({ reload: false });
+      }
       return;
     }
     const ms = this.compiler.builds.getState()[game]?.ms;

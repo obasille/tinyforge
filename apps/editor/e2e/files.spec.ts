@@ -164,8 +164,34 @@ test('unknown asset IDs are underlined while typing, IDs autocomplete, compile e
   await expect
     .poll(async () => (await code(page, mainPath()))?.diagnostics.map((d) => d.message))
     .toContain("Type '~lib/string/String' is not assignable to type 'i32'.");
-  // The Files list marks the game whose build failed.
-  await expect(page.getByTestId(`build-${game}`)).toHaveText('failed');
+  // The Files list shows how many errors the game's build has.
+  await expect(page.getByTestId(`build-${game}`)).toHaveText(/^[1-9]\d* errors?$/);
+});
+
+test('a game that does not compile shows its errors in the Game tab', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('run-status')).toHaveText('running');
+  await createGame(page);
+  const file = path.join(GAMES, game, 'main.ts');
+  const good = readFileSync(file, 'utf8');
+  const broken = good.replace('setI32(Y, 116);', 'setI32(Y, "x");');
+  expect(broken).not.toBe(good);
+  writeFileSync(file, broken);
+
+  // Choosing it stops the game that was running and shows the first error.
+  await page.evaluate((g) => window.__tf?.editor.selectGame(g), game);
+  const banner = page.getByTestId('compile-error');
+  await expect(banner).toContainText(`${game} does not compile`);
+  await expect(banner).toContainText(`games/${game}/main.ts:`);
+  await expect(page.getByTestId('run-status')).toHaveText('idle');
+
+  // Fixed, it runs; broken again, its last good build keeps running.
+  writeFileSync(file, good);
+  await expect(page.getByTestId('run-status')).toHaveText('running');
+  await expect(banner).toHaveCount(0);
+  writeFileSync(file, broken);
+  await expect(banner).toContainText('running its last good build');
+  await expect(page.getByTestId('run-status')).toHaveText('running');
 });
 
 test('a file changed on disk reloads a clean buffer and asks before replacing edits', async ({ page }) => {

@@ -933,3 +933,12 @@ button.tf-files-row.tf-files-selected {
 .tf-picker-button .tf-build {
   margin-left: 6px;
 }
+
+.tf-compile-error {
+  max-width: 90%;
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--tf-error);
+  font-family: var(--tf-mono);
+  font-size: 12px;
+}
