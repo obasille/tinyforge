@@ -64,7 +64,10 @@ setI32(Var.SCORE, 0);
 
 **Memory address allocation rules:**
 
-- Start at offset 0 (or use RAM_START constant if available)
+- `getI32()`, `setU8()` and the other accessors take an **offset** from `RAM_START`: pass `Var.SCORE` or `GRID + i`, never `RAM_START + ...` (that address is twice too far and lands outside the game's memory)
+- Raw addresses (`changetype<Vars>(RAM_START)`, `fromAddress(RAM_START + 8)`) do include `RAM_START`
+- Start at offset 0
+- Stay inside the game's `RAM_SIZE` (72 KB unless `main.ts` declares a smaller or larger one); static data follows right after it
 - `u8` takes 1 byte
 - `i32` takes 4 bytes (align to 4-byte boundaries)
 - Arrays: reserve contiguous blocks (e.g., 100 cells = 100 bytes)
@@ -805,6 +808,7 @@ const items = ArrayView.fromAddress<u16>(RAM_START + Var.ITEMS_START);
    const TITLE = "Game Name";
    const DESCRIPTION = "One line about the game";
    const AUTHOR = "Your Name";
+   const RAM_SIZE: i32 = 0x400; // optional: game RAM in bytes, a multiple of 16 (default 72 KB)
    ```
 
    Other source files go in the same folder. The SDK is imported from `"../../sdk"`.

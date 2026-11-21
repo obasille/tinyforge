@@ -1,16 +1,18 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { DEFAULT_RAM_SIZE, LAYOUT_VERSION } from '@tinyforge/engine/memory-map';
 import {
   decodeMeta,
   encodeMeta,
   findCustomSection,
+  importedMemory,
   insertCustomSection,
   META_SECTION,
   readMeta,
   shiftSourceMap,
   withMeta,
 } from '@tinyforge/engine/tooling/cartridge-meta';
-import { ASSETS_DIR, compileGame, readGameMeta } from '@tinyforge/engine/tooling/compile-game';
+import { ASSETS_DIR, compileGame, readGameMeta, readRamSize } from '@tinyforge/engine/tooling/compile-game';
 import { describe, expect, it } from 'vitest';
 
 // The smallest valid module: just the header.
@@ -20,6 +22,9 @@ const COVER = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
 describe('cartridge metadata section', () => {
   it('round-trips title, description, author, assets and cover', () => {
     const meta = {
+      layout: 1,
+      ram: 0x2000,
+      memory: 0x70000,
       title: 'Pong',
       description: 'Two players',
       author: 'Olivier',
@@ -32,6 +37,9 @@ describe('cartridge metadata section', () => {
 
   it('is written first, right after the header, and found again without compiling', async () => {
     const { wasm, inserted } = withMeta(EMPTY, {
+      layout: 1,
+      ram: 16,
+      memory: 0x60000,
       title: 'T',
       description: 'D',
       author: 'A',
@@ -60,6 +68,30 @@ describe('cartridge metadata section', () => {
     const shifted = JSON.parse(shiftSourceMap(map, 100)) as { mappings: string };
     expect(shifted.mappings).toBe('8GAAA,KAAC,GAAC'); // 110 = '8G'
     expect(shiftSourceMap(map, 0)).toBe(map);
+  });
+});
+
+describe('RAM_SIZE', () => {
+  it('reads a number literal, with or without a type, and defaults to 72 KB', () => {
+    expect(readRamSize('g', 'const RAM_SIZE: i32 = 0x2000;')).toBe(0x2000);
+    expect(readRamSize('g', 'const RAM_SIZE = 1_024; // bytes')).toBe(1024);
+    expect(readRamSize('g', 'const TITLE = "x";')).toBe(DEFAULT_RAM_SIZE);
+  });
+
+  it('rejects anything else', () => {
+    expect(() => readRamSize('g', 'const RAM_SIZE: i32 = 64 * 1024;')).toThrow(/number literal/);
+    expect(() => readRamSize('g', 'const RAM_SIZE: i32 = 100;')).toThrow(/multiple of 16/);
+    expect(() => readRamSize('g', 'const RAM_SIZE: i32 = 0;')).toThrow(/multiple of 16/);
+  });
+
+  it('places static data right after game RAM, and the cartridge records both', async () => {
+    const result = await compileGame('pong', 'release');
+    if (!result.ok) throw new Error(result.log);
+    const meta = readMeta(result.wasm);
+    expect(meta).toMatchObject({ layout: LAYOUT_VERSION, ram: 0x100 });
+    // pong declares 256 bytes of RAM: its module needs 6 pages, not the old 16.
+    expect(meta?.memory).toBe(6 * 65536);
+    expect(importedMemory(result.wasm)).toEqual({ min: 6, max: null });
   });
 });
 

@@ -16,14 +16,24 @@ pnpm workspace. Two hosts share one engine:
   Worker (`worker-core.ts`, `game-worker.ts`) and its main-thread bridge
   (`game-host.ts`), viewport, memory view.
 - `apps/editor`: React + Dockview UI, Vite, the `tinyforge` Vite plugin.
-- `apps/classic`: the original host, deployed to the site root. Keep it working.
+- `apps/classic`: the original host, deployed to the site root. Keep it working,
+  with minimal changes and no code shared with the editor packages. What it
+  does not do is listed in `apps/classic/README.md`.
 
 ## Engine contract (do not change without a decision)
 
-Cartridges export `init`, `update`, `draw`; import `env.memory` (1 MB fixed)
-and the `env` functions in `packages/runtime/src/machine.ts`. All game state
-lives in linear memory, so the host implements pause, step, snapshot/restore
-and hot reload by itself. Build settings come from `asconfig.json` only.
+Cartridges export `init`, `update`, `draw`; import `env.memory` and the `env`
+functions in `packages/runtime/src/machine.ts`. Memory is sized per game: each
+cartridge has a `tinyforge.meta` section (written by `compileGame`) with its
+memory layout version, `ram` (the game's `RAM_SIZE`), `memory` (the module's
+minimum, where static data ends) and the asset IDs it uses. The host adds the
+sprite table past `memory` and points `SPRITE_TABLE_PTR_ADDR` at it. Host code
+reads addresses from `LAYOUTS[version]` (`packages/runtime/src/layout.ts`),
+never from `memory-map.ts` directly; layout entries are never removed, and a
+cartridge without `tinyforge.meta` is refused. All game state lives in linear
+memory, so the host implements pause, step, snapshot/restore and hot reload by
+itself. Build settings come from `asconfig.json`, plus the `memoryBase`
+(`RAM_START + RAM_SIZE`) that `compileGame` passes for each game.
 
 ## Editor architecture rules
 

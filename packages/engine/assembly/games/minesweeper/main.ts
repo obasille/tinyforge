@@ -66,7 +66,7 @@ class Vars {
 }
 
 const vars = changetype<Vars>(RAM_START);
-const GRID_START = RAM_START + sizeof<Vars>(); // 100 bytes - grid data (10×10)
+const GRID_START = sizeof<Vars>(); // offset in RAM, 100 bytes - grid data (10×10)
 
 // === Grid Helpers ===
 function getCellData(x: i32, y: i32): u8 {

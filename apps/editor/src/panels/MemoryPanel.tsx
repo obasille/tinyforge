@@ -1,6 +1,7 @@
-import { MEMORY_REGIONS, MemoryView, regionAt } from '@tinyforge/editor-core';
-import { useEffect, useRef, useState } from 'react';
+import { MemoryView, memoryRegions, regionAt } from '@tinyforge/editor-core';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useEditor } from '../EditorContext.ts';
+import { useStore } from '../hooks.ts';
 
 /**
  * Hex view of a window of memory, refreshed every frame. The rows are rendered
@@ -10,7 +11,9 @@ export function MemoryPanel() {
   const editor = useEditor();
   const out = useRef<HTMLPreElement>(null);
   const view = useRef<MemoryView | null>(null);
-  const [address, setAddress] = useState(MEMORY_REGIONS.find((r) => r.name === 'Game RAM')?.start ?? 0);
+  const memory = useStore(editor.host.session).memory;
+  const regions = useMemo(() => memoryRegions(memory), [memory]);
+  const [address, setAddress] = useState(() => regions.find((r) => r.name === 'Game RAM')?.start ?? 0);
   const [text, setText] = useState('');
 
   useEffect(() => {
@@ -25,11 +28,15 @@ export function MemoryPanel() {
   }, [editor]);
 
   useEffect(() => {
+    if (memory) view.current?.setSize(memory.size);
+  }, [memory]);
+
+  useEffect(() => {
     view.current?.setAddress(address);
     setText(`0x${address.toString(16).toUpperCase().padStart(6, '0')}`);
   }, [address]);
 
-  const region = regionAt(address);
+  const region = regionAt(regions, address);
 
   return (
     <div className="tf-memory">
@@ -37,11 +44,11 @@ export function MemoryPanel() {
         <select
           value={region?.name ?? ''}
           onChange={(e) => {
-            const r = MEMORY_REGIONS.find((x) => x.name === e.target.value);
+            const r = regions.find((x) => x.name === e.target.value);
             if (r) setAddress(r.start);
           }}
         >
-          {MEMORY_REGIONS.map((r) => (
+          {regions.map((r) => (
             <option key={r.name} value={r.name}>
               {r.name}
             </option>

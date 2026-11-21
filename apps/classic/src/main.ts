@@ -6,6 +6,8 @@ import {
   MOUSE_ADDR,
   SCREEN_HEIGHT,
   SCREEN_WIDTH,
+  LAYOUT_VERSION,
+  RAM_START,
   SDK_RNG_SEED_ADDR,
 } from '../../../packages/engine/memory-map.js';
 import { audioManager } from './audio-manager.js';
@@ -64,10 +66,9 @@ const ctx2d = ctx;
 let hasAborted = false;
 let animationFrameId: number | null = null;
 
-const memory = new WebAssembly.Memory({
-  initial: 16, // 16 × 64 KB = 1 MB
-  maximum: 16, // fixed, no growth
-});
+// Starts with the framebuffer and system block; grows when a game needs more
+// (its static data plus the sprite table).
+const memory = new WebAssembly.Memory({ initial: Math.ceil(RAM_START / 65536) });
 
 function formatGameDisplayName(gameName: string): string {
   if (!gameName) return '';
@@ -116,14 +117,49 @@ function initializeRngSeed(): void {
 spriteManager.init(memory);
 initializeRngSeed();
 
-// Create framebuffer views (persistent across game loads)
-const fb = new Uint8ClampedArray(
-  memory.buffer,
-  0,
-  SCREEN_WIDTH * SCREEN_HEIGHT * 4,
+// Framebuffer views, made again when memory grows (growing detaches the buffer)
+let fb32 = new Uint32Array(memory.buffer, 0, SCREEN_WIDTH * SCREEN_HEIGHT);
+let image = new ImageData(
+  new Uint8ClampedArray(memory.buffer, 0, SCREEN_WIDTH * SCREEN_HEIGHT * 4),
+  SCREEN_WIDTH,
+  SCREEN_HEIGHT,
 );
-const fb32 = new Uint32Array(memory.buffer, 0, SCREEN_WIDTH * SCREEN_HEIGHT);
-const image = new ImageData(fb, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+/** Grow memory to at least `bytes` and refresh the framebuffer views. */
+function ensureMemory(bytes: number): void {
+  const missing = Math.ceil(bytes / 65536) - memory.buffer.byteLength / 65536;
+  if (missing <= 0) return;
+  memory.grow(missing);
+  fb32 = new Uint32Array(memory.buffer, 0, SCREEN_WIDTH * SCREEN_HEIGHT);
+  image = new ImageData(
+    new Uint8ClampedArray(memory.buffer, 0, SCREEN_WIDTH * SCREEN_HEIGHT * 4),
+    SCREEN_WIDTH,
+    SCREEN_HEIGHT,
+  );
+}
+
+/**
+ * The cartridge's memory needs from its tinyforge.meta section: the layout
+ * version and the minimum memory its module declares (where its static data
+ * ends). Cartridges without the section, or for another layout, are refused.
+ */
+function cartridgeMemory(module: WebAssembly.Module): number {
+  const [section] = WebAssembly.Module.customSections(module, 'tinyforge.meta');
+  if (!section) {
+    throw new Error('Cartridge has no tinyforge.meta section: rebuild it (pnpm build:games)');
+  }
+  const view = new DataView(section);
+  const json = JSON.parse(
+    new TextDecoder().decode(new Uint8Array(section, 4, view.getUint32(0, true))),
+  ) as { layout?: number; memory?: number };
+  if (json.layout !== LAYOUT_VERSION) {
+    throw new Error(
+      `Cartridge uses memory layout ${json.layout}, this host supports ${LAYOUT_VERSION}: rebuild it`,
+    );
+  }
+  if (typeof json.memory !== 'number') throw new Error('tinyforge.meta has no memory size: rebuild the cartridge');
+  return json.memory;
+}
 
 // Allow external access to memory for tools
 (window as Window & { getMemory?: () => WebAssembly.Memory }).getMemory = () =>
@@ -183,8 +219,15 @@ async function loadGame(
         .reduce((str, param) => str.replace('{}', String(param)), text);
       addConsoleEntry(type, interpolated);
     };
-    const wasm = (await loader.instantiateStreaming(
-      fetch(`./assets/cartridges/${gameName}.wasm`),
+    const response = await fetch(`./assets/cartridges/${gameName}.wasm`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const module = await WebAssembly.compile(await response.arrayBuffer());
+    // Memory for the game's static data, then the sprite table right after it.
+    const staticEnd = cartridgeMemory(module);
+    ensureMemory(staticEnd + spriteManager.getTableSize());
+    spriteManager.placeAt(staticEnd);
+    const wasm = (await loader.instantiate(
+      module,
       {
         env: {
           memory,

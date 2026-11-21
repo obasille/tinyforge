@@ -2,13 +2,12 @@
 // (apps/classic/src/asset-loader.ts and sprite-manager.ts) without DOM use.
 
 import {
-  SPRITE_DATA_SIZE,
   SPRITE_ID_ENTRY_SIZE,
   SPRITE_ID_MAX_CHARS,
   SPRITE_INFO_ENTRY_SIZE,
-  SPRITE_TABLE_ADDR,
   SPRITE_TABLE_HEADER_SIZE,
 } from '@tinyforge/engine/memory-map';
+import type { MemoryLayout } from './layout.ts';
 
 export const MAX_ASSET_ID_LENGTH = 16;
 export const MAX_SPRITES = 256;
@@ -95,13 +94,24 @@ export function splitSheet(
   return { width, height, frames };
 }
 
+/** Bytes the sprite table needs for these sprites (header, entries, pixels). */
+export function spriteTableBytes(sprites: ReadonlyArray<SpriteImage>): number {
+  const list = sprites.slice(0, MAX_SPRITES);
+  let pixels = 0;
+  for (const sprite of list) for (const frame of sprite.frames) pixels += frame.length;
+  return SPRITE_TABLE_HEADER_SIZE + list.length * (SPRITE_ID_ENTRY_SIZE + SPRITE_INFO_ENTRY_SIZE) + pixels;
+}
+
 /**
  * Write the sprite table the SDK reads (header, id lookup, info entries,
- * pixel data) at SPRITE_TABLE_ADDR. Same layout as the classic host.
+ * pixel data) at `address`, and point the layout's sprite-table pointer at
+ * it. The buffer must hold spriteTableBytes(sprites) bytes from `address`.
  * Returns warnings instead of logging, so callers decide where they go.
  */
 export function writeSpriteTable(
   buffer: ArrayBuffer,
+  layout: MemoryLayout,
+  address: number,
   sprites: ReadonlyArray<SpriteImage>,
 ): { bytes: number; warnings: string[] } {
   const warnings: string[] = [];
@@ -109,24 +119,24 @@ export function writeSpriteTable(
   if (sprites.length > MAX_SPRITES) {
     warnings.push(`Sprite limit reached (${MAX_SPRITES}); ${sprites.length - MAX_SPRITES} not loaded`);
   }
+  const size = spriteTableBytes(list);
+  if (address + size > buffer.byteLength) {
+    throw new Error(`Sprite table needs ${address + size} bytes of memory, ${buffer.byteLength} available`);
+  }
   const view = new DataView(buffer);
   const count = list.length;
   const lookupOffset = SPRITE_TABLE_HEADER_SIZE;
   const infoOffset = lookupOffset + count * SPRITE_ID_ENTRY_SIZE;
   const dataStart = infoOffset + count * SPRITE_INFO_ENTRY_SIZE;
 
-  view.setUint16(SPRITE_TABLE_ADDR + 0, count, true);
-  view.setUint16(SPRITE_TABLE_ADDR + 2, 0, true);
-  view.setUint32(SPRITE_TABLE_ADDR + 4, lookupOffset, true);
-  view.setUint32(SPRITE_TABLE_ADDR + 8, infoOffset, true);
-  view.setUint32(SPRITE_TABLE_ADDR + 12, dataStart, true);
+  new Uint8Array(buffer, address, size).fill(0);
+  view.setUint16(address + 0, count, true);
+  view.setUint32(address + 4, lookupOffset, true);
+  view.setUint32(address + 8, infoOffset, true);
+  view.setUint32(address + 12, dataStart, true);
 
-  const lookup = new Uint16Array(buffer, SPRITE_TABLE_ADDR + lookupOffset, (SPRITE_ID_ENTRY_SIZE / 2) * count);
-  lookup.fill(0);
-  new Uint8Array(buffer, SPRITE_TABLE_ADDR + infoOffset, SPRITE_INFO_ENTRY_SIZE * count).fill(0);
-
-  const capacity = SPRITE_DATA_SIZE;
-  const data = new Uint8Array(buffer, SPRITE_TABLE_ADDR + dataStart, capacity);
+  const lookup = new Uint16Array(buffer, address + lookupOffset, (SPRITE_ID_ENTRY_SIZE / 2) * count);
+  const data = new Uint8Array(buffer, address + dataStart, size - dataStart);
   let offset = 0;
 
   list.forEach((sprite, index) => {
@@ -136,24 +146,20 @@ export function writeSpriteTable(
       const base = index * (SPRITE_ID_ENTRY_SIZE / 2);
       for (let i = 0; i < sprite.id.length; i++) lookup[base + i] = sprite.id.charCodeAt(i);
     }
-    const info = SPRITE_TABLE_ADDR + infoOffset + index * SPRITE_INFO_ENTRY_SIZE;
+    const info = address + infoOffset + index * SPRITE_INFO_ENTRY_SIZE;
     const frameSize = sprite.width * sprite.height * 4;
-    view.setUint32(info + 0, SPRITE_TABLE_ADDR + dataStart + offset, true);
+    view.setUint32(info + 0, address + dataStart + offset, true);
     view.setUint32(info + 4, frameSize, true);
     view.setUint16(info + 8, sprite.width, true);
     view.setUint16(info + 10, sprite.height, true);
     view.setUint8(info + 12, sprite.cols);
     view.setUint8(info + 13, sprite.rows);
-    view.setUint16(info + 14, 0, true);
     for (const frame of sprite.frames) {
-      if (offset + frame.length > capacity) {
-        warnings.push(`Sprite data exceeds ${capacity} bytes; "${sprite.id}" is truncated`);
-        return;
-      }
       data.set(frame, offset);
       offset += frame.length;
     }
   });
 
+  view.setUint32(layout.spriteTablePtrAddr, address, true);
   return { bytes: offset, warnings };
 }
