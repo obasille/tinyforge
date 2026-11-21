@@ -22,7 +22,7 @@ Supported formats: `.wav`, `.mp3`, `.ogg`
 ## Usage in Games
 
 ```typescript
-import { playSfx } from "../sdk";
+import { playSfx } from "../../sdk";
 
 playSfx("pong_wall", 0.5); // volume 0.0 to 1.0
 ```

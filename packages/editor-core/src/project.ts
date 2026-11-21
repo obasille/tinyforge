@@ -6,7 +6,7 @@ import type { Command } from './commands.ts';
 
 export interface ProjectState {
   version: 1;
-  /** Cartridge name (a file in packages/engine/assembly/games). */
+  /** Cartridge name (a folder in packages/engine/assembly/games with a main.ts). */
   game: string | null;
   /** Fixed RNG seed for reproducible runs, or null for a random seed per run. */
   seed: number | null;

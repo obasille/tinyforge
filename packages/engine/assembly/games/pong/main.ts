@@ -18,7 +18,12 @@ import {
   RAM_START,
   SCREEN_WIDTH,
   stopMusic,
-} from "../sdk";
+} from "../../sdk";
+
+// Game metadata, read by the TinyForge tooling (string literals only).
+const TITLE = "Pong";
+const DESCRIPTION = "Two-player pong with horizontal paddles";
+const AUTHOR = "Olivier Basille";
 
 // === Constants ===
 const PADDLE_WIDTH: i32 = 40;

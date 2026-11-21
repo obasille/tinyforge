@@ -18,7 +18,12 @@ import {
   randomRange,
   setU8,
   SCREEN_WIDTH,
-} from "../sdk";
+} from "../../sdk";
+
+// Game metadata, read by the TinyForge tooling (string literals only).
+const TITLE = "Snake";
+const DESCRIPTION = "Classic snake game with grid-based movement";
+const AUTHOR = "Olivier Basille";
 
 // === Constants ===
 const GRID_SIZE: i32 = 16; // Size of each grid cell in pixels

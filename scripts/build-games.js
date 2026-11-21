@@ -1,15 +1,22 @@
 #!/usr/bin/env node
 // Build script that can build a single game or all games
 // Usage:
-//   node build-game.js                    - build all games (release)
-//   node build-game.js debug              - build all games (debug)
-//   node build-game.js <file>             - build single game (release)
-//   node build-game.js debug <file>       - build single game (debug)
-//   node build-game.js debug <f1> <f2>... - build multiple games (debug)
+// Each game is a folder in packages/engine/assembly/games with a main.ts.
+// Usage:
+//   node build-games.js                    - build all games (release)
+//   node build-games.js debug              - build all games (debug)
+//   node build-games.js <game>             - build one game (release)
+//   node build-games.js debug <game>       - build one game (debug)
+//   node build-games.js debug <g1> <g2>... - build several games (debug)
+// A game can be given by name (pong) or by any path inside its folder
+// (packages/engine/assembly/games/pong/main.ts).
 
-import { mkdirSync, readdirSync } from 'fs';
-import { basename } from 'path';
+import { existsSync, mkdirSync, readdirSync, statSync } from 'fs';
+import path from 'path';
 import { runAsc } from './lib/asc.js';
+
+const GAMES_DIR = 'packages/engine/assembly/games';
+const entryOf = (game) => `${GAMES_DIR}/${game}/main.ts`;
 
 // Parse --outdir option
 let args = process.argv.slice(2);
@@ -33,11 +40,11 @@ function buildGame(fileName, showMode = false) {
   try {
     mkdirSync(outputDir, { recursive: true });
     runAsc([
-      `packages/engine/assembly/games/${fileName}.ts`,
+      entryOf(fileName),
       '-o',
       `${outputDir}/${fileName}.wasm`,
       '--config',
-      'packages/engine/assembly/games/asconfig.json',
+      `${GAMES_DIR}/asconfig.json`,
       '--target',
       target,
     ]);
@@ -51,21 +58,19 @@ function buildGame(fileName, showMode = false) {
 
 // Mode 1: Build all games
 if (files.length === 0) {
-  const gamesDir = 'packages/engine/assembly/games';
+  const games = readdirSync(GAMES_DIR)
+    .filter((name) => statSync(`${GAMES_DIR}/${name}`).isDirectory() && existsSync(entryOf(name)))
+    .sort();
 
-  const gameFiles = readdirSync(gamesDir)
-    .filter((file) => file.endsWith('.ts'))
-    .map((file) => file.replace('.ts', ''));
-
-  if (gameFiles.length === 0) {
-    console.log('No game files found in packages/engine/assembly/games/ directory');
+  if (games.length === 0) {
+    console.log(`No games found in ${GAMES_DIR}/ (expected <game>/main.ts)`);
     process.exit(0);
   }
 
-  console.log(`Building ${gameFiles.length} game(s) in ${mode} mode...`);
+  console.log(`Building ${games.length} game(s) in ${mode} mode...`);
 
   let failed = 0;
-  for (const game of gameFiles) {
+  for (const game of games) {
     if (!buildGame(game)) failed++;
   }
 
@@ -78,38 +83,19 @@ if (files.length === 0) {
   process.exit(0);
 }
 
-// Mode 2: Build specific game(s)
+// Mode 2: Build specific game(s), given by name or by a path inside the game's folder
 let failed = 0;
-for (const filePath of files) {
-  // Remove .ts extension if present
-  let fileName = basename(filePath, '.ts');
+for (const arg of files) {
+  const rel = path.relative(GAMES_DIR, path.resolve(arg)).split(path.sep);
+  const game = arg.includes('/') || arg.includes('\\') ? (rel[0] === '..' ? null : rel[0]) : arg;
 
-  // If no .ts was removed, try removing it from the original
-  if (fileName === filePath && filePath.endsWith('.ts')) {
-    fileName = filePath.slice(0, -3);
-  }
-
-  // Check if path includes directory
-  const parts = filePath.split(/[/\\]/);
-  const dir =
-    parts.length > 1
-      ? parts.slice(0, -1).join('/')
-      : 'packages/engine/assembly/games';
-
-  // For simple filenames, extract just the basename
-  if (parts.length === 1) {
-    fileName = parts[0].replace(/\.ts$/, '');
-  }
-
-  if (dir !== 'packages/engine/assembly/games') {
-    console.error(
-      `Skipping ${filePath} - not in packages/engine/assembly/games/ directory`,
-    );
+  if (!game || !existsSync(entryOf(game))) {
+    console.error(`Skipping ${arg} - not a game in ${GAMES_DIR}/ (expected <game>/main.ts)`);
     failed++;
     continue;
   }
 
-  if (!buildGame(fileName, true)) failed++;
+  if (!buildGame(game, true)) failed++;
 }
 
 if (failed > 0) {

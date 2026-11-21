@@ -21,7 +21,7 @@ Supported formats: `.wav`, `.mp3`, `.ogg`
 ## Usage in Games
 
 ```typescript
-import { playMusic, stopMusic } from "../sdk";
+import { playMusic, stopMusic } from "../../sdk";
 
 playMusic("pong_theme", 0.7); // loops until stopped or replaced
 stopMusic();

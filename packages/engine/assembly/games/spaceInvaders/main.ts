@@ -21,7 +21,12 @@ import {
   setU16,
   setU8,
   SCREEN_WIDTH,
-} from "../sdk";
+} from "../../sdk";
+
+// Game metadata, read by the TinyForge tooling (string literals only).
+const TITLE = "Space Invaders";
+const DESCRIPTION = "Classic arcade shooter";
+const AUTHOR = "Olivier Basille";
 
 // === Constants ===
 const PLAYER_WIDTH: i32 = 24;

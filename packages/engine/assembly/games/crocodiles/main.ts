@@ -14,7 +14,7 @@ import {
   fillRect,
   s,
   warn,
-} from "../sdk";
+} from "../../sdk";
 
 // Imports des modules
 import {
@@ -45,35 +45,35 @@ import {
   pieges,
   tunnels,
   viandes,
-} from "./crocodiles/types";
+} from "./types";
 
-import { dessineCroco, déplaceCroco, initCroco } from "./crocodiles/croco";
+import { dessineCroco, déplaceCroco, initCroco } from "./croco";
 import {
   caseCouleur,
   chargeNiveau,
   dessineGrille,
   trouveCasesCouleur,
-} from "./crocodiles/level";
-import { construireCasesValides } from "./crocodiles/pathfinding";
+} from "./level";
+import { construireCasesValides } from "./pathfinding";
 import {
   dessinePiège,
   initPiège,
   majPièges,
   verifieCollisionPièges,
-} from "./crocodiles/piege";
+} from "./piege";
 import {
   deplaceJoueur,
   dessineTeteJoueur,
   initJoueur,
-} from "./crocodiles/player";
+} from "./player";
 import {
   dessineTunnel,
   essaieTeleportTunnel,
   initTunnel,
   majOuvertureTunnels,
   majTunnelAnimJoueur,
-} from "./crocodiles/tunnel";
-import { verifiePositionJoueur } from "./crocodiles/utils";
+} from "./tunnel";
+import { verifiePositionJoueur } from "./utils";
 import {
   assigneGamelle,
   deposeViande,
@@ -81,7 +81,12 @@ import {
   dessineViande,
   initViande,
   ramasseViande,
-} from "./crocodiles/viande";
+} from "./viande";
+
+// Game metadata, read by the TinyForge tooling (string literals only).
+const TITLE = "Crocodiles";
+const DESCRIPTION = "Collect the meat and fill the 3 bowls to feed the crocodiles, without getting caught";
+const AUTHOR = "Olivier Basille";
 
 // === Cycle de vie ===
 

@@ -19,7 +19,12 @@ import {
   RAM_START,
   setU8,
   SCREEN_WIDTH,
-} from "../sdk";
+} from "../../sdk";
+
+// Game metadata, read by the TinyForge tooling (string literals only).
+const TITLE = "Breakout";
+const DESCRIPTION = "Classic brick-breaking game";
+const AUTHOR = "Olivier Basille";
 
 // === Constants ===
 const PADDLE_WIDTH: i32 = 50;

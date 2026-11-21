@@ -11,7 +11,12 @@ import {
   c,
   clearFramebuffer,
   pset,
-} from "../sdk";
+} from "../../sdk";
+
+// Game metadata, read by the TinyForge tooling (string literals only).
+const TITLE = "Draw";
+const DESCRIPTION = "Drawing example";
+const AUTHOR = "Olivier Basille";
 
 // === Système de variables RAM ===
 // Allocation de la RAM pour l'état persistant du jeu

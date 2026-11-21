@@ -20,7 +20,12 @@ import {
   setU16,
   setU8,
   SCREEN_WIDTH,
-} from "../sdk";
+} from "../../sdk";
+
+// Game metadata, read by the TinyForge tooling (string literals only).
+const TITLE = "Meteor Run";
+const DESCRIPTION = "Dodge falling meteors and survive as long as possible";
+const AUTHOR = "Olivier Basille";
 
 // === Constants ===
 const PLAYER_WIDTH: i32 = 18;

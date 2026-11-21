@@ -7,7 +7,8 @@ covers the repo layout and the new editor.
 
 pnpm workspace. Two hosts share one engine:
 
-- `packages/engine`: AssemblyScript SDK, the games, `memory-map.ts`, and
+- `packages/engine`: AssemblyScript SDK, the games (one folder per game,
+  `assembly/games/<name>/main.ts`), `memory-map.ts`, and
   `tooling/compile-game.ts` (asc JS API using `assembly/games/asconfig.json`).
 - `packages/runtime`: host runtime in plain TS with no DOM (cartridge imports,
   memory-mapped input, sprite table, fixed-step clock). Runs in a Worker or Node.
