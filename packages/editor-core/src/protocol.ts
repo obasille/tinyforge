@@ -23,6 +23,22 @@ export interface AssetManifest {
   music: AssetRef[];
 }
 
+/** How the loaded game's memory is laid out (for the memory viewer). */
+export interface GameMemory {
+  /** Total size in bytes. */
+  size: number;
+  layout: number;
+  fbStart: number;
+  fbSize: number;
+  systemStart: number;
+  systemEnd: number;
+  ramStart: number;
+  ram: number;
+  /** End of the module's static data; the sprite table starts here. */
+  hostDataAddr: number;
+  spriteTableBytes: number;
+}
+
 export type RunStatus = 'idle' | 'loading' | 'running' | 'paused' | 'aborted' | 'hung';
 
 export interface FrameStats {
@@ -56,6 +72,8 @@ export type ToWorker =
 export type FromWorker =
   /** The sprite table was written for `game`. */
   | { type: 'sprites'; game: string; spriteCount: number; spriteBytes: number }
+  /** The game's memory after a load or a sprite reload. */
+  | { type: 'memory'; game: string; memory: GameMemory }
   /** A cartridge loaded; these are the assets its metadata lists. */
   | { type: 'assets'; game: string; assets: AssetList }
   | { type: 'status'; status: RunStatus; game: string | null }

@@ -5,7 +5,7 @@
 
 import type { AssetList } from '@tinyforge/engine/tooling/asset-scan';
 import type { AudioCommand, InputState, LogLevel } from '@tinyforge/runtime';
-import type { AssetRef, FrameStats, FromWorker, RunStatus, ToWorker } from './protocol.ts';
+import type { AssetRef, FrameStats, FromWorker, GameMemory, RunStatus, ToWorker } from './protocol.ts';
 import { createStore, type Store } from './store.ts';
 
 /** The subset of Worker that GameHost uses (a fake in tests). */
@@ -41,6 +41,8 @@ export interface GameSession {
   game: string | null;
   stats: FrameStats | null;
   spriteCount: number;
+  /** The loaded game's memory layout and size, or null before a game loads. */
+  memory: GameMemory | null;
   /** Bumped each time the Worker is replaced. */
   generation: number;
 }
@@ -68,7 +70,14 @@ export class GameHost {
     this.sprites = options.sprites;
     this.setTimer = options.setTimer ?? ((fn, ms) => setInterval(fn, ms));
     this.clearTimer = options.clearTimer ?? ((id) => clearInterval(id as ReturnType<typeof setInterval>));
-    this.session = createStore<GameSession>({ status: 'idle', game: null, stats: null, spriteCount: 0, generation: 0 });
+    this.session = createStore<GameSession>({
+      status: 'idle',
+      game: null,
+      stats: null,
+      spriteCount: 0,
+      memory: null,
+      generation: 0,
+    });
     this.start();
   }
 
@@ -117,7 +126,7 @@ export class GameHost {
     };
   }
 
-  /** Copy of all game memory (1 MB). */
+  /** Copy of all of the game's memory (its size depends on the game). */
   snapshot(): Promise<Uint8Array> {
     const requestId = this.nextId++;
     return new Promise((resolve, reject) => {
@@ -207,6 +216,9 @@ export class GameHost {
           'HOST',
           `Sprites loaded for ${msg.game}: ${msg.spriteCount} (${(msg.spriteBytes / 1024).toFixed(1)} KB)`,
         );
+        break;
+      case 'memory':
+        this.session.setState((s) => ({ ...s, memory: msg.memory }));
         break;
       case 'assets':
         this.options.onAssets?.(msg.game, msg.assets);

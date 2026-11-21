@@ -79,7 +79,7 @@ class Vars {
 }
 
 const vars = changetype<Vars>(RAM_START);
-const BRICK_DATA = RAM_START + 40; // 60 bytes - brick state (1 byte per brick, 0 = destroyed, 1 = active)
+const BRICK_DATA = 40; // offset in RAM (after Vars), 60 bytes - brick state (1 byte per brick, 0 = destroyed, 1 = active)
 
 // === Brick Helpers ===
 function getBrick(col: i32, row: i32): u8 {

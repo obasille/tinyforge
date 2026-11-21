@@ -54,9 +54,9 @@ every frame, since `s()` scans the table.
 
 - Pixels are stored as 4 bytes each (RGBA bytes, read as ABGR `u32` in the SDK).
 - Alpha is blended: alpha 0 is skipped, 255 is opaque, values in between blend.
-- The table lives at `SPRITE_TABLE_ADDR` (0x04B010) and holds up to 256
-  sprites and 128 KB of pixel data. Sprites past either limit are skipped or
-  truncated with a warning in the console.
+- The host writes the table right after the game's static data and stores
+  its address at `SPRITE_TABLE_PTR_ADDR` (0x04B010). It holds up to 256
+  sprites, and memory grows to fit their pixels; there is no fixed data cap.
 - The layout (header, 16-character id entries, 16-byte info entries, pixel
   data) is defined in `packages/engine/memory-map.ts` and written by
   `writeSpriteTable` in `packages/runtime/src/assets.ts`.

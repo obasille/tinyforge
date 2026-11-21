@@ -203,26 +203,24 @@ The host creates a zero-copy `ImageData` view into WASM memory and blits it to a
 
 ## Memory Map
 
-The console exposes a **fixed, shared linear memory** to the cartridge.
-
-All offsets are **absolute** and part of the hardware contract.
+Each game gets the memory it needs. The layout below is **layout version 1**
+(`LAYOUT_VERSION` in `packages/engine/memory-map.ts`). Every cartridge records
+the layout version it was built for, its RAM size and its minimum memory in a
+`tinyforge.meta` custom section, and the host sizes memory from that.
 
 ```
-Address        Size        Description
-----------------------------------------------
-0x000000       307,200 B   Framebuffer (RGBA8888, 320×240×4)
-0x04B000       4 B         Keyboard Input (current + previous buttons, u16 each)
-0x04B008       6 B         Mouse Input (x, y, current + previous buttons)
-0x04B010       16 B        Sprite Table Header
-0x04B020       N entries   Sprite Name Lookup (N × 32 bytes, room for 256)
-...            N entries   Sprite Info Table (N × 16 bytes, room for 256)
-0x04E020       128 KB      Sprite Pixel Data (RGBA)
-0x06E020       4 B         SDK RNG Seed (u32)
-0x06E024       ~72 KB      Game RAM (73,692 B, up to 0x07FFFF)
-0x080000       ...         Cartridge static data (AssemblyScript memoryBase)
+Address              Size          Description
+---------------------------------------------------------------
+0x000000             307,200 B     Framebuffer (RGBA8888, 320×240×4)
+0x04B000             4 B           Keyboard input (current + previous buttons, u16 each)
+0x04B008             6 B           Mouse input (x, y, current + previous buttons)
+0x04B010             4 B           Sprite table pointer (u32, written by the host)
+0x04B014             4 B           SDK RNG seed (u32)
+0x04B018 - 0x04FFFF  ~20 KB        Spare room in the system block, for later versions
+0x050000             RAM_SIZE      Game RAM (RAM_START), 72 KB unless the game declares RAM_SIZE
+RAM_START + RAM_SIZE ...           Cartridge static data (AssemblyScript memoryBase)
+end of static data   as needed     Sprite table and pixels (the game's sprites only)
 ```
-
-**Detailed Layout:**
 
 **Framebuffer (0x000000 - 0x04AFFF):**
 
@@ -242,8 +240,10 @@ Address        Size        Description
 - `+4`: u8 current button state (bit 0=left, 1=right, 2=middle)
 - `+5`: u8 previous button state (for edge detection)
 
-**Sprite Tables (0x04B010+):**
+**Sprite table pointer (0x04B010) and table:**
 
+- The host writes the table right after the game's static data and stores its
+  address here; the SDK reads it from this slot (0 means no sprites).
 - Table header (16 bytes):
   - `+0`: u16 entry count (N)
   - `+4`: u32 name lookup offset (from table base)
@@ -257,32 +257,37 @@ Address        Size        Description
   - `+10`: u16 height
   - `+12`: u8 cols
   - `+13`: u8 rows
+- Pixel data (RGBA8888) follows the info table. It holds only the sprites the
+  game uses, with no fixed cap (up to 256 entries).
 
-**Sprite Pixel Data (0x04E020 - 0x06E01F):**
-
-- Starts after space reserved for the maximum-size tables (256 entries), not directly after the current info table
-- 128 KB shared by all sprites in `assets/sprites/`
-- RGBA8888 (4 bytes per pixel)
-- Managed by host, loaded from `assets/sprites/`
-
-**SDK RNG Seed (0x06E020 - 0x06E023):**
+**SDK RNG Seed (0x04B014 - 0x04B017):**
 
 - 4-byte u32 seed used by SDK `random()` and `randomRange()`
 - Initialized by the host and editable in devtools
 
-**Game RAM (0x06E024 - 0x07FFFF):**
+**Game RAM (0x050000, `RAM_START`):**
 
 - Available for game state, variables, and data structures
-- Use `RAM_START` constant from SDK
+- Its size is set per game in `main.ts`, as a number literal (a multiple of 16):
+  `const RAM_SIZE: i32 = 0x2000;`. Without it, a game gets 72 KB (`DEFAULT_RAM_SIZE`).
+- Static data starts right after it, so writing past `RAM_SIZE` corrupts the
+  game's own string literals and constants.
 - Store persistent game state here (not in module variables)
 - Use `@unmanaged` structs with `changetype<T>(RAM_START)` for type-safe access
+- `getU8()`, `setI32()` and the like take an **offset** from `RAM_START`, not an address
 
 **Notes:**
 
-- Memory is allocated by the **host (JS)** at 1 MB total (16 pages)
-- Cartridges are compiled with `memoryBase: 524288`, so their static data (string literals, etc.) starts at 0x080000, right after game RAM
-- Memory size is fixed at startup
-- Memory does **not** grow at runtime
+- Memory is allocated by the **host (JS)**: the module's declared minimum (end
+  of its static data) plus the sprite table, rounded up to 64 KB pages
+- `compileGame` sets `memoryBase` to `RAM_START + RAM_SIZE` for each game
+- Memory can grow while a game runs, for example when the editor reloads a
+  larger sprite; game RAM never moves, so hot reload keeps state. Changing
+  `RAM_SIZE` restarts the game.
+- Hosts read addresses from the cartridge's layout version
+  (`packages/runtime/src/layout.ts`), so a later layout can move things
+  without breaking cartridges built for this one. A cartridge without
+  `tinyforge.meta` is refused: rebuild it.
 - The framebuffer region should be treated as write-only by the cartridge
 - Input/mouse regions are read-only for the cartridge (written by host)
 - Sprite data is managed by the host (cartridge uses sprite IDs)
@@ -633,9 +638,9 @@ drawSprite(s("shadow"), 200, 150); // Shadow sprite with alpha = 128
 
 ### Notes
 
-- Sprites are loaded at startup from `assets/sprites/`
+- The editor loads the sprites the game uses (found at compile time); the classic host loads all of `assets/sprites/`
 - Maximum sprite entries: 256
-- Sprite data is stored after the sprite tables in shared memory (128 KB shared by all sprites)
+- Sprite data is stored after the game's static data, sized to the sprites loaded
 - Transparency is handled automatically
 - Alpha blending works with any alpha value (0-255)
 

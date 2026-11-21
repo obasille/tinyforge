@@ -7,7 +7,7 @@ import {
   SPRITE_ID_ENTRY_SIZE,
   SPRITE_ID_MAX_CHARS,
   SPRITE_INFO_ENTRY_SIZE,
-  SPRITE_TABLE_ADDR,
+  SPRITE_TABLE_PTR_ADDR,
   SCREEN_WIDTH
 } from "./memory";
   
@@ -22,11 +22,28 @@ class SpriteInfo {
   _padding: u16;   // 14
 }
 
+/**
+ * Address of the sprite table, which the host writes past the game's static
+ * data (0 when the host wrote none).
+ */
 // @ts-expect-error AssemblyScript decorator
 @inline
-function getSpriteInfoPtr(infoOffset: u32, index: i32): SpriteInfo {
+function spriteTable(): usize {
+  return load<u32>(SPRITE_TABLE_PTR_ADDR) as usize;
+}
+
+/** Number of sprites in the table (0 when there is no table). */
+// @ts-expect-error AssemblyScript decorator
+@inline
+function spriteCount(table: usize): i32 {
+  return table == 0 ? 0 : (load<u16>(table) as i32);
+}
+
+// @ts-expect-error AssemblyScript decorator
+@inline
+function getSpriteInfoPtr(table: usize, infoOffset: u32, index: i32): SpriteInfo {
   return changetype<SpriteInfo>(
-    (SPRITE_TABLE_ADDR as u32) + infoOffset + (index as u32) * (SPRITE_INFO_ENTRY_SIZE as u32)
+    table + (infoOffset as usize) + (index as usize) * SPRITE_INFO_ENTRY_SIZE
   );
 }
 
@@ -44,16 +61,17 @@ export function s(name: string, x: i32 = 0, y: i32 = 0): i32 {
     return -1;
   }
 
-  const count = load<u16>(SPRITE_TABLE_ADDR) as i32;
+  const table = spriteTable();
+  const count = spriteCount(table);
   if (count <= 0) {
     return -1;
   }
 
-  const lookupOffset = load<u32>(SPRITE_TABLE_ADDR + 4);
-  const infoOffset = load<u32>(SPRITE_TABLE_ADDR + 8);
+  const lookupOffset = load<u32>(table + 4);
+  const infoOffset = load<u32>(table + 8);
 
   for (let id: i32 = 0; id < count; id++) {
-    const base = SPRITE_TABLE_ADDR + lookupOffset + (id as usize) * SPRITE_ID_ENTRY_SIZE;
+    const base = table + (lookupOffset as usize) + (id as usize) * SPRITE_ID_ENTRY_SIZE;
     let match = true;
     for (let i: i32 = 0; i < SPRITE_ID_MAX_CHARS; i++) {
       const tableChar = load<u16>(base + (i << 1));
@@ -70,7 +88,7 @@ export function s(name: string, x: i32 = 0, y: i32 = 0): i32 {
       }
     }
     if (match) {
-      const info = getSpriteInfoPtr(infoOffset, id);
+      const info = getSpriteInfoPtr(table, infoOffset, id);
       const cols = info.cols as i32;
       const rows = info.rows as i32;
       if (x < 0 || y < 0 || x >= cols || y >= rows) {
@@ -99,11 +117,12 @@ export function readSpriteInfo(id: i32): bool {
 
   const infoIndex = (id >>> 16) & 0xffff;
   const packedFrameIndex = id & 0xffff;
-  const count = load<u16>(SPRITE_TABLE_ADDR) as i32;
+  const table = spriteTable();
+  const count = spriteCount(table);
   if (count <= 0 || infoIndex >= count) return false;
 
-  const infoOffset = load<u32>(SPRITE_TABLE_ADDR + 8);
-  const info = getSpriteInfoPtr(infoOffset, infoIndex);
+  const infoOffset = load<u32>(table + 8);
+  const info = getSpriteInfoPtr(table, infoOffset, infoIndex);
   const cols = info.cols as i32;
   const rows = info.rows as i32;
   if (cols <= 0 || rows <= 0) return false;

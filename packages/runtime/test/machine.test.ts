@@ -1,8 +1,9 @@
 import { RAM_START } from '@tinyforge/engine/memory-map';
+import { withMeta } from '@tinyforge/engine/tooling/cartridge-meta';
 import { listGames } from '@tinyforge/engine/tooling/compile-game';
 import { describe, expect, it } from 'vitest';
 import { Button, type InputState, NO_INPUT } from '../src/input.ts';
-import { GameMachine } from '../src/machine.ts';
+import { cartridgeMeta, GameMachine } from '../src/machine.ts';
 import { boot, cartridge, FIXED_SEED, hash, recordingHost } from './helpers.ts';
 
 const HOLD_RIGHT: InputState = { ...NO_INPUT, buttons: Button.right | Button.start };
@@ -49,13 +50,47 @@ describe('GameMachine with real cartridges', () => {
   });
 
   it('rejects a module without the lifecycle exports', async () => {
-    // (module (import "env" "memory" (memory 16 16)))
+    // (module (import "env" "memory" (memory 1)))
     const empty = new Uint8Array([
-      0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x02, 0x10, 0x01, 0x03, 0x65, 0x6e, 0x76, 0x06, 0x6d, 0x65, 0x6d,
-      0x6f, 0x72, 0x79, 0x02, 0x01, 0x10, 0x10,
+      0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x02, 0x0f, 0x01, 0x03, 0x65, 0x6e, 0x76, 0x06, 0x6d, 0x65, 0x6d,
+      0x6f, 0x72, 0x79, 0x02, 0x00, 0x01,
     ]);
     const machine = new GameMachine(recordingHost().host);
-    await expect(machine.load(empty)).rejects.toThrow(/missing required exports: init, update, draw/);
+    // Without tinyforge.meta, the cartridge is refused before anything else.
+    await expect(machine.load(empty)).rejects.toThrow(/no tinyforge.meta section: rebuild/);
+    const wasm = withMeta(empty, {
+      layout: 1,
+      ram: 16,
+      memory: 0x60000,
+      title: 'Empty',
+      description: '',
+      author: '',
+      assets: { sprites: [], sfx: [], music: [] },
+      cover: null,
+    }).wasm as Uint8Array<ArrayBuffer>;
+    await expect(machine.load(wasm)).rejects.toThrow(/missing required exports: init, update, draw/);
+    // A layout newer than the host is refused with a clear message.
+    const future = withMeta(empty, { ...cartridgeMeta(wasm), layout: 99 }).wasm as Uint8Array<ArrayBuffer>;
+    await expect(machine.load(future)).rejects.toThrow(/layout 99, newer than this host/);
+  });
+
+  it('sizes memory to the game and keeps state across a hot reload that needs more room', async () => {
+    const bytes = await cartridge('pong');
+    const meta = cartridgeMeta(bytes);
+    const machine = new GameMachine(recordingHost().host);
+    expect(machine.prepare(meta, 1000)).toBe(false);
+    await machine.load(bytes);
+    expect(machine.info).toMatchObject({ ram: meta.ram, hostDataAddr: meta.memory, size: meta.memory + 65536 });
+    expect(meta.memory).toBeLessThan(1 << 20); // pong needs far less than the old fixed 1 MB
+    for (let i = 0; i < 30; i++) machine.tick(NO_INPUT);
+    const ram = machine.read(RAM_START, 64);
+    // Hot reload with more host data: memory grows, game RAM is kept.
+    expect(machine.prepare(meta, 200_000, { keepState: true })).toBe(true);
+    await machine.load(bytes, { keepState: true });
+    expect(machine.info?.size).toBe(meta.memory + 4 * 65536);
+    expect(machine.read(RAM_START, 64)).toEqual(ram);
+    // A different RAM size cannot keep state: fresh memory.
+    expect(machine.prepare({ ...meta, ram: meta.ram + 16 }, 0, { keepState: true })).toBe(false);
   });
 
   describe.each(listGames())('%s', (name) => {

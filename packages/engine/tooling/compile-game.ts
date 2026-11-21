@@ -1,10 +1,12 @@
 // Compile a TinyForge cartridge with the AssemblyScript compiler's JS API.
 //
-// This uses the same settings as scripts/build-games.js: the options in
-// assembly/games/asconfig.json (stub runtime, imported memory, memoryBase)
-// plus its "debug" or "release" target. Output is returned in memory instead
-// of being written to assets/cartridges, so the editor's dev server can serve
-// debug builds without touching the classic host's release builds.
+// This uses the options in assembly/games/asconfig.json (stub runtime,
+// imported memory) plus its "debug" or "release" target, and sets memoryBase
+// to RAM_START + the game's RAM_SIZE, so static data starts right after the
+// game's RAM. scripts/build-games.js uses this too. Output is returned in
+// memory instead of being written to assets/cartridges, so the editor's dev
+// server can serve debug builds without touching the classic host's release
+// builds.
 //
 // The asset scan (asset-scan.ts) runs as a compiler hook: an unknown asset ID
 // is a compile error, and the IDs the game uses go into its metadata.
@@ -18,6 +20,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Transform } from 'assemblyscript/transform';
+import { DEFAULT_RAM_SIZE, LAYOUT_VERSION, RAM_START } from '../memory-map.ts';
 import {
   ASSET_KINDS,
   ASSET_PATTERNS,
@@ -27,7 +30,7 @@ import {
   createAssetScan,
   libraryFromFiles,
 } from './asset-scan.ts';
-import { type CartridgeMeta, shiftSourceMap, withMeta } from './cartridge-meta.ts';
+import { type CartridgeMeta, importedMemory, shiftSourceMap, withMeta } from './cartridge-meta.ts';
 
 export const ENGINE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const GAMES_DIR = path.join(ENGINE_ROOT, 'assembly', 'games');
@@ -100,6 +103,13 @@ export async function compileGame(name: string, target: CompileTarget = 'debug')
   if (!/^[A-Za-z0-9_-]+$/.test(name) || !listGames().includes(name)) {
     return { ok: false, log: `Unknown game "${name}"` };
   }
+  // Metadata first: RAM_SIZE decides where static data starts.
+  let gameMeta: ReturnType<typeof readGameMeta>;
+  try {
+    gameMeta = readGameMeta(name);
+  } catch (e) {
+    return { ok: false, log: `${e instanceof Error ? e.message : String(e)}\n` };
+  }
   const asc = (await import('assemblyscript/asc')).default;
   const scan = createAssetScan(readLibrary());
   const outName = `${name}.wasm`;
@@ -121,6 +131,8 @@ export async function compileGame(name: string, target: CompileTarget = 'debug')
       target,
       '--outFile',
       outName,
+      '--memoryBase',
+      String(RAM_START + gameMeta.ram),
       ...(target === 'debug' ? ['--sourceMap'] : []),
     ],
     {
@@ -139,12 +151,14 @@ export async function compileGame(name: string, target: CompileTarget = 'debug')
   if (error || !(wasm instanceof Uint8Array)) {
     return { ok: false, log: log || String(error ?? 'No output produced') };
   }
-  let meta: CartridgeMeta;
-  try {
-    meta = { ...readGameMeta(name), assets: scan.used() };
-  } catch (e) {
-    return { ok: false, log: `${log}${e instanceof Error ? e.message : String(e)}\n` };
-  }
+  const memory = importedMemory(wasm);
+  if (!memory) return { ok: false, log: `${log}${name}: the module imports no memory\n` };
+  const meta: CartridgeMeta = {
+    ...gameMeta,
+    layout: LAYOUT_VERSION,
+    memory: memory.min * 65536,
+    assets: scan.used(),
+  };
   const withSection = withMeta(new Uint8Array(wasm), meta);
   const map = outputs.get(`${outName}.map`);
   return {
@@ -197,19 +211,44 @@ function readMetaFields(name: string): Partial<Record<MetaField, string>> {
   return values;
 }
 
+/** Largest RAM_SIZE a game can declare (256 MB). */
+export const MAX_RAM_SIZE = 0x10000000;
+
 /**
- * Read a game's metadata from the top-level string constants in its main.ts
- * (`const TITLE = "Pong";`). TITLE, DESCRIPTION and AUTHOR are required; COVER
- * is optional and names a sprite in the asset library. Throws a readable
- * error, reported like a compile error.
+ * The game's RAM_SIZE (`const RAM_SIZE: i32 = 0x2000;` in main.ts), or the
+ * default when it declares none. A whole number literal, a multiple of 16.
  */
-export function readGameMeta(name: string): Omit<CartridgeMeta, 'assets'> {
+export function readRamSize(entry: string, source: string): number {
+  const decl = /^const RAM_SIZE\b.*$/m.exec(source);
+  if (!decl) return DEFAULT_RAM_SIZE;
+  const literal =
+    /^const RAM_SIZE(?::\s*(?:i32|u32|usize))?\s*=\s*(0[xX][0-9a-fA-F_]+|[0-9][0-9_]*)\s*;\s*(?:\/\/.*)?$/.exec(
+      decl[0],
+    );
+  if (!literal) throw new Error(`${entry}: RAM_SIZE must be a number literal, like: const RAM_SIZE: i32 = 0x2000;`);
+  const value = Number(literal[1].replace(/_/g, ''));
+  if (!Number.isSafeInteger(value) || value <= 0 || value > MAX_RAM_SIZE || value % 16 !== 0) {
+    throw new Error(`${entry}: RAM_SIZE must be a multiple of 16 between 16 and ${MAX_RAM_SIZE} bytes`);
+  }
+  return value;
+}
+
+/**
+ * Read a game's metadata from the top-level constants in its main.ts
+ * (`const TITLE = "Pong";`). TITLE, DESCRIPTION and AUTHOR are required; COVER
+ * is optional and names a sprite in the asset library; RAM_SIZE is optional
+ * (default DEFAULT_RAM_SIZE). Throws a readable error, reported like a
+ * compile error.
+ */
+export function readGameMeta(name: string): Omit<CartridgeMeta, 'assets' | 'layout' | 'memory'> {
   const entry = gameEntry(name);
   const values = readMetaFields(name);
+  const ram = readRamSize(entry, readFileSync(entry, 'utf8'));
   for (const field of ['TITLE', 'DESCRIPTION', 'AUTHOR'] as const) {
     if (!values[field]) throw new Error(`${entry}: missing game metadata, add: const ${field} = "...";`);
   }
   return {
+    ram,
     title: values.TITLE ?? '',
     description: values.DESCRIPTION ?? '',
     author: values.AUTHOR ?? '',

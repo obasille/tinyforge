@@ -3,8 +3,7 @@
     "runtime": "stub",
     "exportRuntime": false,
     "importMemory": true,
-    "lowMemoryLimit": 0,
-    "memoryBase": 524288
+    "lowMemoryLimit": 0
   },
   "targets": {
     "debug": {

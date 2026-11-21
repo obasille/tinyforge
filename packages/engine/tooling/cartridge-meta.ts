@@ -6,10 +6,16 @@
 //
 // Payload layout (little-endian):
 //   u32  JSON length in bytes
-//   ...  JSON (UTF-8): { "format": 1, "title", "description", "author",
+//   ...  JSON (UTF-8): { "format": 1, "layout": 1, "ram", "memory",
+//                        "title", "description", "author",
 //                        "assets": { "sprites": [...], "sfx": [...], "music": [...] },
 //                        "cover"?: { "type", "offset", "length" } }
 //   ...  binary blobs; `offset` is relative to the end of the JSON
+//
+// `layout` is the memory layout version the game was built for (see
+// memory-map.ts), `ram` its game RAM size in bytes (its RAM_SIZE) and
+// `memory` the minimum memory its module declares, in bytes: where its static
+// data ends and where a host can put the sprite table.
 //
 // `assets` lists the IDs of the library assets the game uses (found by the
 // asset scan at compile time), so a host loads only those.
@@ -22,6 +28,12 @@ export const META_SECTION = 'tinyforge.meta';
 export const META_FORMAT = 1;
 
 export interface CartridgeMeta {
+  /** Memory layout version (memory-map.ts LAYOUT_VERSION at build time). */
+  layout: number;
+  /** Game RAM size in bytes, from RAM_START. */
+  ram: number;
+  /** Minimum memory the module declares, in bytes (a multiple of 64 KB). */
+  memory: number;
   title: string;
   description: string;
   author: string;
@@ -33,6 +45,9 @@ export interface CartridgeMeta {
 
 interface MetaJson {
   format: number;
+  layout: number;
+  ram: number;
+  memory: number;
   title: string;
   description: string;
   author: string;
@@ -75,6 +90,9 @@ function isWasm(bytes: Uint8Array): boolean {
 export function encodeMeta(meta: CartridgeMeta): Uint8Array {
   const json: MetaJson = {
     format: META_FORMAT,
+    layout: meta.layout,
+    ram: meta.ram,
+    memory: meta.memory,
     title: meta.title,
     description: meta.description,
     author: meta.author,
@@ -100,6 +118,9 @@ export function decodeMeta(payload: Uint8Array): CartridgeMeta {
     assets?: Partial<AssetList>;
   };
   if (json.format !== META_FORMAT) throw new Error(`Unsupported tinyforge.meta format ${json.format}`);
+  for (const field of ['layout', 'ram', 'memory'] as const) {
+    if (typeof json[field] !== 'number') throw new Error(`tinyforge.meta has no ${field}: rebuild the cartridge`);
+  }
   const blobs = payload.subarray(4 + jsonLength);
   let cover: CartridgeMeta['cover'] = null;
   if (json.cover) {
@@ -109,6 +130,9 @@ export function decodeMeta(payload: Uint8Array): CartridgeMeta {
   }
   const assets = json.assets ?? {};
   return {
+    layout: json.layout,
+    ram: json.ram,
+    memory: json.memory,
     title: json.title,
     description: json.description,
     author: json.author,
@@ -158,6 +182,58 @@ export function findCustomSection(wasm: Uint8Array, name: string): Uint8Array | 
       if (sectionName === name) return wasm.subarray(len.next + len.value, end);
     }
     pos = end;
+  }
+  return null;
+}
+
+/**
+ * Limits of the memory a module imports, in 64 KB pages, or null when it
+ * imports none. Reads the import section; does not compile the module.
+ */
+export function importedMemory(wasm: Uint8Array): { min: number; max: number | null } | null {
+  if (!isWasm(wasm)) throw new Error('Not a WASM module');
+  let pos = 8;
+  while (pos < wasm.length) {
+    const id = wasm[pos++];
+    const size = readLeb128(wasm, pos);
+    const end = size.next + size.value;
+    if (id !== 2) {
+      pos = end;
+      continue;
+    }
+    let p = size.next;
+    const leb = () => {
+      const r = readLeb128(wasm, p);
+      p = r.next;
+      return r.value;
+    };
+    const limits = () => {
+      const flags = wasm[p++];
+      const min = leb();
+      const max = flags & 1 ? leb() : null;
+      return { min, max };
+    };
+    const count = leb();
+    for (let i = 0; i < count; i++) {
+      const moduleName = leb();
+      p += moduleName;
+      const fieldName = leb();
+      p += fieldName;
+      const kind = wasm[p++];
+      if (kind === 0)
+        leb(); // function: type index
+      else if (kind === 1) {
+        p++; // table: element type
+        limits();
+      } else if (kind === 2) return limits();
+      else if (kind === 3)
+        p += 2; // global: value type, mutability
+      else if (kind === 4) {
+        p++; // tag: attribute
+        leb();
+      } else throw new Error(`Unknown import kind ${kind}`);
+    }
+    return null;
   }
   return null;
 }

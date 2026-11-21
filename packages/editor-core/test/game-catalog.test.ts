@@ -6,6 +6,9 @@ const EMPTY = new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
 
 function cartridge(title: string, cover = false): Uint8Array {
   return withMeta(EMPTY, {
+    layout: 1,
+    ram: 16,
+    memory: 0x60000,
     title,
     description: `${title} description`,
     author: 'Someone',

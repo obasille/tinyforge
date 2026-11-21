@@ -1,11 +1,4 @@
-import {
-  INPUT_BUTTONS_ADDR,
-  INPUT_BUTTONS_PREV_ADDR,
-  MOUSE_BUTTONS_ADDR,
-  MOUSE_BUTTONS_PREV_ADDR,
-  MOUSE_X_ADDR,
-  MOUSE_Y_ADDR,
-} from '@tinyforge/engine/memory-map';
+import type { MemoryLayout } from './layout.ts';
 
 /** Button bits, matching the SDK's `Button` enum. */
 export const Button = {
@@ -49,12 +42,12 @@ export const NO_INPUT: Readonly<InputState> = {
 };
 
 /** Write the current and previous input state where the SDK reads it. */
-export function writeInput(buffer: ArrayBuffer, current: InputState, previous: InputState): void {
+export function writeInput(buffer: ArrayBuffer, layout: MemoryLayout, current: InputState, previous: InputState): void {
   const view = new DataView(buffer);
-  view.setUint16(INPUT_BUTTONS_ADDR, current.buttons & 0xffff, true);
-  view.setUint16(INPUT_BUTTONS_PREV_ADDR, previous.buttons & 0xffff, true);
-  view.setInt16(MOUSE_X_ADDR, current.mouseX, true);
-  view.setInt16(MOUSE_Y_ADDR, current.mouseY, true);
-  view.setUint8(MOUSE_BUTTONS_ADDR, current.mouseButtons & 0xff);
-  view.setUint8(MOUSE_BUTTONS_PREV_ADDR, previous.mouseButtons & 0xff);
+  view.setUint16(layout.inputButtonsAddr, current.buttons & 0xffff, true);
+  view.setUint16(layout.inputButtonsPrevAddr, previous.buttons & 0xffff, true);
+  view.setInt16(layout.mouseXAddr, current.mouseX, true);
+  view.setInt16(layout.mouseYAddr, current.mouseY, true);
+  view.setUint8(layout.mouseButtonsAddr, current.mouseButtons & 0xff);
+  view.setUint8(layout.mouseButtonsPrevAddr, previous.mouseButtons & 0xff);
 }

@@ -64,7 +64,7 @@ class Vars {
 }
 
 const vars = changetype<Vars>(RAM_START);
-const SNAKE_DATA = RAM_START + 16; // 400 bytes - snake body (2 bytes per segment: x, y)
+const SNAKE_DATA = 16; // offset in RAM (after Vars), 400 bytes - snake body (2 bytes per segment: x, y)
 
 // === Snake Helpers ===
 function getSegmentX(index: i32): u8 {

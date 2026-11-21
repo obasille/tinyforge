@@ -3,8 +3,8 @@
 // it in Node with real cartridges and no browser.
 
 import { SCREEN_HEIGHT, SCREEN_WIDTH } from '@tinyforge/engine/memory-map';
-import { readMeta } from '@tinyforge/engine/tooling/cartridge-meta';
 import {
+  cartridgeMeta,
   FixedStepClock,
   GameMachine,
   type InputState,
@@ -12,6 +12,7 @@ import {
   type SpriteImage,
   sheetLayout,
   splitSheet,
+  spriteTableBytes,
   writeSpriteTable,
 } from '@tinyforge/runtime';
 import type { AssetRef, FrameStats, FromWorker, RunStatus, ToWorker } from './protocol.ts';
@@ -76,7 +77,7 @@ export class GameWorkerCore {
         this.setLibrary(msg.sprites);
         if (this.game && this.machine.loaded) {
           // Sprite hot reload: same IDs in the same order, new pixels.
-          await this.writeSprites(this.game, this.gameSprites);
+          this.writeSprites(this.game, await this.decodeSprites(this.gameSprites));
           if (this.status !== 'running') this.present();
         }
         break;
@@ -162,16 +163,44 @@ export class GameWorkerCore {
     }
   }
 
-  /** Decode the given sprites and write the sprite table the SDK reads. */
-  private async writeSprites(game: string, ids: string[]): Promise<void> {
+  private async decodeSprites(ids: string[]): Promise<SpriteImage[]> {
     const sprites: SpriteImage[] = [];
     for (const id of ids) {
       const image = await this.sprite(id);
       if (image) sprites.push(image);
     }
-    const { bytes, warnings } = writeSpriteTable(this.machine.memory.buffer, sprites);
+    return sprites;
+  }
+
+  /**
+   * Write the sprite table the SDK reads past the game's static data (memory
+   * grows if it needs more room), then report the game's memory.
+   */
+  private writeSprites(game: string, sprites: SpriteImage[]): void {
+    const info = this.machine.info;
+    if (!info) return;
+    const tableBytes = spriteTableBytes(sprites);
+    this.machine.ensureSize(info.hostDataAddr + tableBytes);
+    const { bytes, warnings } = writeSpriteTable(this.machine.memory.buffer, info.layout, info.hostDataAddr, sprites);
     for (const w of warnings) this.hostLog(w);
     this.env.post({ type: 'sprites', game, spriteCount: sprites.length, spriteBytes: bytes });
+    const { layout } = info;
+    this.env.post({
+      type: 'memory',
+      game,
+      memory: {
+        size: this.machine.memory.buffer.byteLength,
+        layout: layout.version,
+        fbStart: layout.fbStart,
+        fbSize: layout.fbSize,
+        systemStart: layout.systemStart,
+        systemEnd: layout.systemEnd,
+        ramStart: layout.ramStart,
+        ram: info.ram,
+        hostDataAddr: info.hostDataAddr,
+        spriteTableBytes: tableBytes,
+      },
+    });
   }
 
   private async load(url: string, name: string, keepState: boolean, seed: number | null): Promise<void> {
@@ -183,26 +212,27 @@ export class GameWorkerCore {
       if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`);
       const bytes = await res.arrayBuffer();
       if (seq !== this.loadSeq) return; // a newer load won
-      const meta = readMeta(new Uint8Array(bytes));
-      if (!meta) this.hostLog(`${name} has no tinyforge.meta section: no assets loaded`);
-      const used = meta?.assets ?? { sprites: [], sfx: [], music: [] };
+      const meta = cartridgeMeta(new Uint8Array(bytes));
+      const used = meta.assets;
       // The sprite table is host data. A hot reload keeps the order the game
       // saw (it may hold sprite IDs in memory) and appends new sprites.
-      const ids = keepState
-        ? [...this.gameSprites, ...used.sprites.filter((id) => !this.gameSprites.includes(id))]
-        : used.sprites;
-      if (!keepState) {
-        // A fresh load starts from clean memory.
-        new Uint8Array(this.machine.memory.buffer).fill(0);
-        this.machine.seed = pickSeed(seed);
-      }
-      await this.writeSprites(name, ids);
+      const keptOrder = [...this.gameSprites, ...used.sprites.filter((id) => !this.gameSprites.includes(id))];
+      const decoded = await this.decodeSprites(keepState ? keptOrder : used.sprites);
       if (seq !== this.loadSeq) return;
+      // Memory sized for this game; state survives only if the layout and
+      // RAM size did not change.
+      const kept = this.machine.prepare(meta, spriteTableBytes(decoded), { keepState });
+      if (keepState && !kept) this.hostLog(`${name}: RAM_SIZE or memory layout changed, restarting the game`);
+      const ids = kept ? keptOrder : used.sprites;
+      const byId = new Map(decoded.map((s) => [s.id, s]));
+      const sprites = ids.flatMap((id) => byId.get(id) ?? []);
+      if (!kept) this.machine.seed = pickSeed(seed);
+      this.writeSprites(name, sprites);
       this.gameSprites = ids;
       this.env.post({ type: 'assets', game: name, assets: used });
-      await this.machine.load(bytes, { keepState });
+      await this.machine.load(bytes, { keepState: kept });
       this.game = name;
-      if (!keepState) this.hostLog(`RNG seed: ${formatSeed(this.machine.seed)}`);
+      if (!kept) this.hostLog(`RNG seed: ${formatSeed(this.machine.seed)}`);
       if (this.machine.aborted) {
         this.setStatus('aborted');
         return;
