@@ -278,6 +278,69 @@ describe('GameMachine with real cartridges', () => {
     });
   });
 
+  describe('minesweeper', () => {
+    // Vars at RAM_START: cursorX i32, cursorY i32, state u8, revealedCount u8,
+    // flagCount u8, padding; the 10x10 grid follows at offset 12.
+    const CURSOR_Y = 4;
+    const STATE = 8;
+    const REVEALED = 9;
+    const FLAGS = 10;
+    const GRID = 12;
+    const PLAYING = 1;
+    const MINE = 0x80;
+    const FLAGGED = 0x40;
+    const REVEALED_BIT = 0x20;
+
+    function click(m: GameMachine, x: number, y: number, button: number): void {
+      m.tick({ ...NO_INPUT, mouseX: x, mouseY: y, mouseButtons: button });
+      m.tick({ ...NO_INPUT, mouseX: x, mouseY: y, mouseButtons: 0 });
+    }
+    const byte = (m: GameMachine, offset: number) => m.read(RAM_START + offset, 1)[0];
+    // Pixel centre of a cell: 24 px cells, the grid starts at x = 40.
+    const cellX = (col: number) => 40 + col * 24 + 12;
+    const cellY = (row: number) => row * 24 + 12;
+
+    it('keeps its state apart from the grid after init', async () => {
+      const m = await boot('minesweeper');
+      expect(new DataView(m.read(RAM_START + CURSOR_Y, 4).buffer).getInt32(0, true)).toBe(5);
+      expect(byte(m, STATE)).toBe(0);
+      const grid = m.read(RAM_START + GRID, 100);
+      expect(grid.filter((cell) => (cell & MINE) !== 0).length).toBe(15);
+    });
+
+    it('starts on a click, reveals with the left button and flags with the right', async () => {
+      const m = await boot('minesweeper');
+      click(m, 160, 120, 1);
+      expect(byte(m, STATE)).toBe(PLAYING);
+      const grid = m.read(RAM_START + GRID, 100);
+      const safe = grid.findIndex((cell) => (cell & MINE) === 0);
+      const mine = grid.findIndex((cell) => (cell & MINE) !== 0);
+
+      click(m, cellX(mine % 10), cellY(Math.floor(mine / 10)), 2);
+      expect(byte(m, GRID + mine) & FLAGGED).toBe(FLAGGED);
+      expect(byte(m, FLAGS)).toBe(1);
+
+      click(m, cellX(safe % 10), cellY(Math.floor(safe / 10)), 1);
+      expect(byte(m, GRID + safe) & REVEALED_BIT).toBe(REVEALED_BIT);
+      expect(byte(m, REVEALED)).toBeGreaterThan(0);
+      expect(byte(m, STATE)).toBe(PLAYING);
+    });
+  });
+
+  describe('meteorRun', () => {
+    it('keeps the player position apart from the meteor data after init', async () => {
+      const m = await boot('meteorRun');
+      const view = new DataView(m.read(RAM_START, 24).buffer);
+      // Vars: playerX i32 at 8, playerY i32 at 12, bulletX/Y at 16/20.
+      expect(view.getInt32(8, true)).toBeGreaterThan(100);
+      expect(view.getInt32(8, true)).toBeLessThan(200);
+      expect(view.getInt32(12, true)).toBeGreaterThan(200);
+      expect(view.getInt32(12, true)).toBeLessThan(240);
+      expect(view.getInt32(16, true)).toBe(0);
+      expect(view.getInt32(20, true)).toBe(0);
+    });
+  });
+
   describe('pong audio', () => {
     const START: InputState = { ...NO_INPUT, buttons: Button.start };
 
