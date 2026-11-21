@@ -1,15 +1,32 @@
-# Audio Files
+# Sound Effects
 
-Place your audio files here following the naming pattern:
-- `{ID}-description.extension`
-- `{ID}_description.extension`
-- `{ID} description.extension`
+Sound effect files for TinyForge. They are not compiled into the cartridge:
+the host loads every file in this folder at runtime and plays it when a game
+calls `playSfx(id, volume)`.
 
-Examples:
-- `0-jump.wav`
-- `1_shoot.wav`
-- `2 explosion.ogg`
+## File Naming
+
+`{id}-{info}.ext`
+
+The id is everything before the first `-` (or the whole name). Underscores and
+other characters are part of the id.
+
+- `explosion.wav` gives id `explosion`
+- `pong_wall.wav` gives id `pong_wall`
+- `jump-soft.wav` gives id `jump`; `-soft` is ignored
+
+Ids are at most 16 characters and must be unique across the folder.
 
 Supported formats: `.wav`, `.mp3`, `.ogg`
 
-The console extracts the numeric ID and ignores everything after the first non-digit character.
+## Usage in Games
+
+```typescript
+import { playSfx } from "../sdk";
+
+playSfx("pong_wall", 0.5); // volume 0.0 to 1.0
+```
+
+Sound effects can overlap. Audio only plays after the player has interacted
+with the page (browser autoplay policy). In the editor's dev server, changes
+to this folder reload the sounds without recompiling.

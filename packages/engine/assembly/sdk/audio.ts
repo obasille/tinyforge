@@ -16,13 +16,13 @@
  * 
  * ⚠️ Requires prior user interaction (click/keypress) due to browser autoplay policy
  * 
- * @param id Sound effect ID (corresponds to assets/sfx/{id}*.wav file)
+ * @param id Sound effect ID: the file name in assets/sfx/ up to the first '-' (or the whole name), e.g. "pong_wall" for pong_wall.wav
  * @param volume Volume level (0.0 to 1.0, default: 1.0)
  * 
  * @example
  * ```ts
  * playSfx("jump", 1.0);   // Plays sfx/jump.wav at full volume
- * playSfx("shoot", 0.5);  // Plays sfx/shoot-quiet.wav at half volume
+ * playSfx("shoot", 0.5);  // Plays sfx/shoot-quiet.wav (id "shoot") at half volume
  * ```
  */
 // @ts-expect-error AssemblyScript decorator
@@ -36,7 +36,7 @@ export declare function playSfx(id: string, volume: f32): void;
  * ⚠️ Requires prior user interaction (click/keypress) due to browser autoplay policy
  * Call this AFTER user clicks start button, not in init()
  * 
- * @param id Music track ID (corresponds to assets/music/{id}*.mp3 file)
+ * @param id Music track ID: the file name in assets/music/ up to the first '-' (or the whole name); .wav, .mp3 or .ogg
  * @param volume Volume level (0.0 to 1.0, default: 1.0)
  * 
  * @example
