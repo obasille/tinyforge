@@ -8,14 +8,15 @@
 import { ASSET_KINDS, type AssetLibrary, type AssetList, libraryFromFiles } from '@tinyforge/engine/tooling/asset-scan';
 import { assetKindOf, isWritablePath } from '@tinyforge/engine/tooling/project-layout';
 import { type ImportDraft, importCommand, sidecarText } from './asset-import.ts';
-import { type LibraryAsset, type Sidecar, sidecarPath } from './asset-library.ts';
+import { idProblem, type LibraryAsset, type Sidecar, sidecarPath } from './asset-library.ts';
 import { CodeEditor } from './code-editor.ts';
 import type { FileCommand } from './commands.ts';
 import type { CompilerHost } from './compiler-host.ts';
 import { createGame, deleteFiles, fileBatch, renameFiles, writeFile } from './file-commands.ts';
 import { filesUnder } from './file-tree.ts';
 import type { AssetUse } from './live-scan.ts';
-import type { ProjectFiles } from './project-files.ts';
+import { type ProjectFiles, parseAssetName } from './project-files.ts';
+import { newSpriteCommand } from './sprite-editor.ts';
 import { createStore, type Store } from './store.ts';
 import type { FileChange } from './workspace.ts';
 
@@ -43,7 +44,7 @@ export class Workbench {
     });
   }
 
-  /** Ask the UI to show a file (it opens a code panel). */
+  /** Ask the UI to show a file: a code panel, or the sprite editor or sound player for an asset. */
   openFile(path: string): void {
     for (const listener of [...this.openListeners]) listener(path);
   }
@@ -159,6 +160,19 @@ export class Workbench {
   /** Import files into the asset library as one undoable command. */
   async importAssets(drafts: readonly ImportDraft[], assets: readonly LibraryAsset[]): Promise<void> {
     await this.commands.runFile(await importCommand(this.files, drafts, assets));
+  }
+
+  /** Create a blank sprite (a strip of `frames` frames) and open it. Returns its path. */
+  async createSprite(id: string, frameWidth: number, frameHeight: number, frames = 1): Promise<string> {
+    const problem = idProblem(id);
+    if (problem) throw new Error(problem);
+    if (this.files.assetFiles.sprites.some((f) => parseAssetName(f).id === id)) {
+      throw new Error(`The library already has a sprite "${id}"`);
+    }
+    const { path, command } = await newSpriteCommand(this.files, id, frameWidth, frameHeight, frames);
+    await this.commands.runFile(command);
+    this.openFile(path);
+    return path;
   }
 
   /** Write an asset's sidecar; an empty one deletes it. */
