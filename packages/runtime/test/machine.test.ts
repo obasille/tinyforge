@@ -263,4 +263,103 @@ describe('GameMachine with real cartridges', () => {
       expect(rec.audio.some((c) => c.type === 'stopMusic')).toBe(true);
     });
   });
+  describe('tank duel', () => {
+    // Layout of tankDuel's RAM: Vars (32 bytes), then two 16-byte tanks.
+    const STATE = 0;
+    const TANKS = 32;
+    const PLAYING = 2;
+    const MATCH_OVER = 4;
+    const START: InputState = { ...NO_INPUT, buttons: Button.start };
+    const RT: InputState = { ...NO_INPUT, buttons: Button.rt }; // player 1 fire
+    const LT: InputState = { ...NO_INPUT, buttons: Button.lt }; // player 2 fire
+    const hold = (buttons: number): InputState => ({ ...NO_INPUT, buttons });
+
+    const view = (machine: GameMachine, offset: number, size: number) =>
+      new DataView(machine.read(RAM_START + offset, size).buffer);
+    const state = (m: GameMachine) => view(m, STATE, 1).getUint8(0);
+    const tankX = (m: GameMachine, i: number) => view(m, TANKS + i * 16, 4).getFloat32(0, true);
+    const wins = (m: GameMachine, i: number) => view(m, TANKS + i * 16 + 11, 1).getUint8(0);
+    const ticks = (m: GameMachine, n: number, input: InputState = NO_INPUT) => {
+      for (let i = 0; i < n; i++) m.tick(input);
+    };
+    /** From the title (or between rounds), wait out the 3-2-1 countdown. */
+    const untilPlaying = (m: GameMachine) => {
+      for (let i = 0; i < 400 && state(m) !== PLAYING; i++) m.tick(NO_INPUT);
+      expect(state(m)).toBe(PLAYING);
+    };
+
+    it('runs the same every time', async () => {
+      const play = async () => {
+        const m = await boot('tankDuel');
+        m.tick(START);
+        ticks(m, 200, hold(Button.up | Button.y));
+        ticks(m, 1, LT);
+        ticks(m, 300, hold(Button.left | Button.b));
+        m.draw();
+        return hash(m.framebuffer());
+      };
+      expect(await play()).toBe(await play());
+    });
+
+    it('drives player 1 with the arrows and player 2 with WASD', async () => {
+      const m = await boot('tankDuel');
+      m.tick(START);
+      untilPlaying(m);
+      const p1 = tankX(m, 0);
+      const p2 = tankX(m, 1);
+      ticks(m, 20, hold(Button.left | Button.b)); // P1 west, P2 east (D key)
+      expect(tankX(m, 0)).toBeLessThan(p1);
+      expect(tankX(m, 1)).toBeGreaterThan(p2);
+    });
+
+    it('bounces a shell off a wall and back into its own tank', async () => {
+      const rec = recordingHost();
+      const m = await boot('tankDuel', rec.host);
+      m.tick(START);
+      untilPlaying(m);
+      m.tick(RT); // player 1 faces the wall in front of them and fires
+      ticks(m, 200);
+      const ids = rec.audio.flatMap((c) => (c.type === 'sfx' ? [c.id] : []));
+      expect(ids).toContain('tank_fire_p1');
+      expect(ids).toContain('tank_bounce');
+      expect(ids).toContain('tank_explode');
+      expect(wins(m, 0)).toBe(0);
+      expect(wins(m, 1)).toBe(1);
+    });
+
+    it('plays a best-of-5 match to the end', async () => {
+      const rec = recordingHost();
+      const m = await boot('tankDuel', rec.host);
+      m.tick(START);
+      // Round 1 (open top lane): both tanks drive up to it, then player 2
+      // turns east and fires along it at player 1.
+      untilPlaying(m);
+      ticks(m, 120, hold(Button.up | Button.y));
+      m.tick(hold(Button.b));
+      m.tick(LT);
+      ticks(m, 250);
+      expect(wins(m, 1)).toBe(1);
+      // Rounds 2 and 3: player 1 fires at the wall ahead and the bounce
+      // comes back at them.
+      for (let round = 2; round <= 3; round++) {
+        untilPlaying(m);
+        m.tick(RT);
+        ticks(m, 250);
+        expect(wins(m, 1)).toBe(round);
+      }
+      expect(state(m)).toBe(MATCH_OVER);
+      expect(wins(m, 0)).toBe(0);
+
+      const ids = rec.audio.flatMap((c) => (c.type === 'sfx' ? [c.id] : []));
+      expect(rec.audio[0]).toMatchObject({ type: 'music', id: 'tank_theme' });
+      expect(ids.slice(0, 4)).toEqual(['tank_tick', 'tank_tick', 'tank_tick', 'tank_go']);
+      for (const id of ['tank_fire_p2', 'tank_explode', 'tank_win']) expect(ids).toContain(id);
+      expect(rec.audio.some((c) => c.type === 'stopMusic')).toBe(true);
+
+      // START on the result screen begins a fresh match.
+      m.tick(NO_INPUT);
+      m.tick(START);
+      expect(wins(m, 1)).toBe(0);
+    });
+  });
 });
