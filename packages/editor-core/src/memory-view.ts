@@ -1,8 +1,8 @@
 // Hex view of a window of game memory. It subscribes to exactly the visible
 // rows, so the Worker pushes a few KB per frame and the view updates every
-// frame without copying the whole 1 MB.
+// frame without copying the whole memory.
 
-import { MEMORY_BYTES } from '@tinyforge/runtime';
+import { DEFAULT_RAM_SIZE, RAM_START } from '@tinyforge/engine/memory-map';
 
 export const BYTES_PER_ROW = 16;
 
@@ -42,6 +42,8 @@ function escapeHtml(c: string): string {
 export class MemoryView {
   private address = 0;
   private rows = 16;
+  /** Size of the game's memory; the view stays inside it. */
+  private size = RAM_START + DEFAULT_RAM_SIZE;
   private unwatch: (() => void) | null = null;
   private previous: Uint8Array | undefined;
   private resizeObserver: ResizeObserver | null = null;
@@ -62,8 +64,15 @@ export class MemoryView {
     return this.address;
   }
 
+  /** The game's memory size changed (another game, or more sprites). */
+  setSize(size: number): void {
+    if (size === this.size) return;
+    this.size = size;
+    this.setAddress(this.address);
+  }
+
   setAddress(address: number): void {
-    const max = MEMORY_BYTES - BYTES_PER_ROW;
+    const max = this.size - BYTES_PER_ROW;
     this.address = Math.max(0, Math.min(max, Math.floor(address / BYTES_PER_ROW) * BYTES_PER_ROW));
     this.previous = undefined;
     this.subscribe();
@@ -89,7 +98,7 @@ export class MemoryView {
 
   private subscribe(): void {
     this.unwatch?.();
-    const length = Math.min(this.rows * BYTES_PER_ROW, MEMORY_BYTES - this.address);
+    const length = Math.min(this.rows * BYTES_PER_ROW, this.size - this.address);
     this.unwatch = this.watch(this.address, length, (bytes, offset) => {
       if (offset !== this.address) return; // a stale push from before a scroll
       this.output.innerHTML = formatRows(bytes, offset, this.previous);

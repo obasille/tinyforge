@@ -58,7 +58,7 @@ test('memory viewer updates every frame from the worker', async ({ page }) => {
     const tf = window.__tf;
     if (!tf) return 0;
     let n = 0;
-    const stop = tf.editor.host.watch(0x6e000, 256, () => n++);
+    const stop = tf.editor.host.watch(0x50000, 256, () => n++);
     await new Promise((r) => setTimeout(r, 1000));
     stop();
     return n;
@@ -130,9 +130,10 @@ test('switching games is undoable', async ({ page }) => {
 
 // update() spins forever after 30 ticks. Built from:
 //   export function update(): void { n++; if (n > 30) { while (true) { n++; } } }
-// with: asc hang.ts --runtime stub --importMemory --memoryBase 524288 -O1
+// with: asc hang.ts --runtime stub --importMemory -O1, then a tinyforge.meta
+// section added with withMeta() (layout 1, 8 pages of memory).
 const HANGING_CARTRIDGE =
-  'AGFzbQEAAAABBAFgAAACDwEDZW52Bm1lbW9yeQIACAMEAwAAAAYGAX8BQQALByEEBGluaXQAAQZ1cGRhdGUAAARkcmF3AAIGbWVtb3J5AgAKKwMeACMAQQFqJAAjAEEeSgRAA0AjAEEBaiQADAALAAsLBgBBACQACwMAAQs=';
+  'AGFzbQEAAAAAmwEOdGlueWZvcmdlLm1ldGGIAAAAeyJmb3JtYXQiOjEsImxheW91dCI6MSwicmFtIjoxNiwibWVtb3J5Ijo1MjQyODgsInRpdGxlIjoiSGFuZyIsImRlc2NyaXB0aW9uIjoiIiwiYXV0aG9yIjoiIiwiYXNzZXRzIjp7InNwcml0ZXMiOltdLCJzZngiOltdLCJtdXNpYyI6W119fQEEAWAAAAIPAQNlbnYGbWVtb3J5AgAIAwQDAAAABgYBfwFBAAsHIQQEaW5pdAABBnVwZGF0ZQAABGRyYXcAAgZtZW1vcnkCAAorAx4AIwBBAWokACMAQR5KBEADQCMAQQFqJAAMAAsACwsGAEEAJAALAwABCw==';
 
 test('a game stuck in an infinite loop can be stopped without freezing the editor', async ({ page }) => {
   await page.goto('/');
@@ -307,11 +308,18 @@ test('each game loads only its own sprites and sounds, and a changed sprite relo
   await chooseGame(page, 'dinoWorld');
   await expect(page.getByTestId('run-status')).toHaveText('running');
   await expect.poll(loaded).toEqual({ sprites: 2, audio: { sfx: 1, music: 0 } });
+  // Memory is sized to the game: well under the old fixed 1 MB, sprites at the end.
+  const memory = (await session(page))?.memory;
+  expect(memory?.size).toBeLessThan(1 << 20);
+  expect((memory?.hostDataAddr ?? 0) + (memory?.spriteTableBytes ?? 0)).toBeLessThanOrEqual(memory?.size ?? 0);
 
   // Touch the dino sprite sheet: the sprite table is rewritten, the game keeps running.
   const reloads = () => page.getByTestId('console').getByText('Sprites loaded for dinoWorld').count();
   const before = await reloads();
+  // Stats are pushed every 250 ms; wait for dinoWorld's own (not pong's last ones).
+  await page.waitForTimeout(600);
   const ticks = (await session(page))?.stats?.ticks ?? 0;
+  expect(ticks).toBeGreaterThan(0);
   const file = path.join(ASSETS, 'sprites', 'dino~9x1.png');
   const now = new Date();
   utimesSync(file, now, now);

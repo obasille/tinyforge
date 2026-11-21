@@ -1,4 +1,5 @@
 import { RAM_START, SDK_RNG_SEED_ADDR } from '@tinyforge/engine/memory-map';
+import { readMeta } from '@tinyforge/engine/tooling/cartridge-meta';
 import { compileGame } from '@tinyforge/engine/tooling/compile-game';
 import { Button, NO_INPUT } from '@tinyforge/runtime';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -192,6 +193,16 @@ describe('GameWorkerCore sprites', () => {
       assets: { sprites: ['coin', 'dino'], sfx: ['tap'], music: [] },
     });
     expect(h.of('status').at(-1)?.status).toBe('running');
+    // Memory is sized to the game: its static data, then the sprite table.
+    const memory = h.of('memory').at(-1)?.memory;
+    const meta = readMeta(new Uint8Array(dino));
+    expect(memory).toMatchObject({ layout: 1, ramStart: RAM_START, ram: meta?.ram, hostDataAddr: meta?.memory });
+    expect(memory?.spriteTableBytes).toBe(16 + 2 * 48 + 64 * 8 * 4 * 2);
+    expect(memory?.size).toBe(
+      Math.ceil(((memory?.hostDataAddr ?? 0) + (memory?.spriteTableBytes ?? 0)) / 65536) * 65536,
+    );
+    await h.core.handle({ type: 'snapshot', requestId: 1 });
+    expect(h.of('snapshot').at(-1)?.bytes.byteLength).toBe(memory?.size);
   });
 
   it('reloads a changed sprite in place, fetching only that file', async () => {

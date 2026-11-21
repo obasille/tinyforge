@@ -1,12 +1,11 @@
 // Sprite Manager - Handles sprite loading and memory management
 
 import {
-  SPRITE_DATA_SIZE,
   SPRITE_ID_ENTRY_SIZE,
   SPRITE_ID_MAX_CHARS,
   SPRITE_INFO_ENTRY_SIZE,
-  SPRITE_TABLE_ADDR,
   SPRITE_TABLE_HEADER_SIZE,
+  SPRITE_TABLE_PTR_ADDR,
 } from '../../../packages/engine/memory-map.js';
 import { AssetDescriptor, AssetLoader } from './asset-loader.js';
 import { addConsoleEntry } from './console-panel.js';
@@ -26,6 +25,8 @@ class SpriteManager {
   private idByIndex = new Map<number, string>(); // info index -> id
   private nextIndex = 0;
   private nextDataOffset = 0;
+  /** Where the table goes: past the current game's static data (0 = no game yet). */
+  private tableAddr = 0;
 
   /**
    * Initialize with WebAssembly memory reference
@@ -50,6 +51,25 @@ class SpriteManager {
     return this.nextDataOffset;
   }
 
+  /** Bytes the sprite table needs in memory (header, entries, pixels). */
+  public getTableSize(): number {
+    let pixels = 0;
+    for (const entry of this.entries.values()) {
+      for (const frame of entry.frames) pixels += frame.length;
+    }
+    const count = this.idByIndex.size;
+    return SPRITE_TABLE_HEADER_SIZE + count * (SPRITE_ID_ENTRY_SIZE + SPRITE_INFO_ENTRY_SIZE) + pixels;
+  }
+
+  /**
+   * Write the sprite table at `address` (past the game's static data; memory
+   * must already hold getTableSize() bytes there) and point the SDK at it.
+   */
+  public placeAt(address: number): void {
+    this.tableAddr = address;
+    this.writeSpritesToMemory();
+  }
+
   /**
    * Load all sprite files from assets/sprites/ folder
    */
@@ -69,8 +89,8 @@ class SpriteManager {
         await this.loadSprite(asset);
       }
 
-      // Write all loaded sprites to WASM memory
-      this.writeSpritesToMemory();
+      // Each game load writes them to WASM memory (placeAt), past its static data.
+      this.nextDataOffset = this.getTableSize();
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       addConsoleEntry('WARN', `Sprite loading failed: ${message}`);
@@ -219,6 +239,7 @@ class SpriteManager {
     if (!this.memory) {
       throw new Error('SpriteManager not initialized with memory');
     }
+    const SPRITE_TABLE_ADDR = this.tableAddr;
     let dataOffset = 0;
     const view = new DataView(this.memory.buffer);
     const count = this.idByIndex.size;
@@ -268,7 +289,7 @@ class SpriteManager {
     const spriteDataView = new Uint8Array(
       this.memory.buffer,
       SPRITE_TABLE_ADDR + dataStartOffset,
-      SPRITE_DATA_SIZE,
+      this.getTableSize() - dataStartOffset,
     );
     let writeOffset = 0;
 
@@ -302,14 +323,7 @@ class SpriteManager {
     }
 
     this.nextDataOffset = dataOffset;
-
-    // Check if we exceeded available memory
-    if (this.nextDataOffset > SPRITE_DATA_SIZE) {
-      addConsoleEntry(
-        'WARN',
-        `Sprite data exceeds allocated memory: ${this.nextDataOffset} bytes (max: ${SPRITE_DATA_SIZE})`,
-      );
-    }
+    view.setUint32(SPRITE_TABLE_PTR_ADDR, SPRITE_TABLE_ADDR, true);
   }
 
   private setEntry(id: string, entry: SpriteEntry, url: string): void {

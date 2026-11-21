@@ -72,7 +72,7 @@ class Vars {
 }
 
 const vars = changetype<Vars>(RAM_START);
-const METEOR_DATA = RAM_START + sizeof<Vars>();
+const METEOR_DATA = sizeof<Vars>(); // offset in RAM, after Vars
 
 // === Meteor Helpers ===
 function meteorBase(i: i32): usize {

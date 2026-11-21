@@ -25,6 +25,7 @@ const TITLE = "Pong";
 const DESCRIPTION = "Two-player pong with horizontal paddles";
 const AUTHOR = "Olivier Basille";
 const COVER = "pong_cover"; // sprite in assets/sprites
+const RAM_SIZE: i32 = 0x100; // game RAM in bytes: Vars needs 44
 
 // === Constants ===
 const PADDLE_WIDTH: i32 = 40;

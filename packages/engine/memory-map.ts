@@ -1,5 +1,23 @@
-// TinyForge Memory Map
-// Shared memory layout constants between host and SDK
+// TinyForge Memory Map, layout version 1
+// Shared memory layout constants between host and SDK.
+//
+// From low to high addresses:
+//   0x000000  framebuffer (320 × 240 RGBA)
+//   0x04B000  system block: input, mouse, sprite-table pointer, RNG seed,
+//             then spare room up to 0x50000 for later additions
+//   0x050000  game RAM (RAM_START), RAM_SIZE bytes as the game declares
+//   RAM_START + RAM_SIZE
+//             AssemblyScript static data (the compiler's memoryBase)
+//   end of the module's declared memory
+//             sprite table and pixels, written by the host at load time
+//
+// Each cartridge records the layout version it was built for in its
+// tinyforge.meta section. Hosts keep a table of addresses per version
+// (packages/runtime/src/layout.ts) and read addresses from it, so a later
+// version can move things without breaking cartridges built for this one.
+
+/** Memory layout version these constants describe. */
+export const LAYOUT_VERSION = 1;
 
 /** Display width in pixels */
 export const SCREEN_WIDTH = 320;
@@ -55,19 +73,47 @@ export const MOUSE_BUTTONS_ADDR = MOUSE_ADDR + 4;
 /** Mouse previous button state address */
 export const MOUSE_BUTTONS_PREV_ADDR = MOUSE_ADDR + 5;
 
-// === Sprite Memory Map ===
+// === System block (input above, then these) ===
 
-// Sprite tables are stored after input memory.
-// Layout:
-//   SPRITE_TABLE header (fixed size)
-//   Sprite ID lookup table (N entries)
-//   Sprite info table (N entries)
-//   Sprite pixel data (starts immediately after info table)
-//
-// Pixel data contains RGBA values (4 bytes per pixel).
-// Table sizes are dynamic based on loaded sprite count (N).
-//
-// Maximum: 256 sprite entries, sprite data region: ~128 KB available.
+/**
+ * Address of the sprite table (u32), written by the host. The table sits past
+ * the cartridge's static data, so its address depends on the game.
+ */
+export const SPRITE_TABLE_PTR_ADDR = MOUSE_ADDR + 8; // 0x04B010
+
+/** SDK RNG seed address (i32) */
+export const SDK_RNG_SEED_ADDR = SPRITE_TABLE_PTR_ADDR + 4; // 0x04B014
+
+/** SDK RNG seed size in bytes */
+export const SDK_RNG_SEED_SIZE = 4;
+
+/** Start of the system block (input, mouse, pointers, SDK data, spare room). */
+export const SYSTEM_START = INPUT_ADDR;
+
+/** End of the system block; the room up to here is kept for later versions. */
+export const SYSTEM_END = 0x050000;
+
+// === Game RAM ===
+
+/** Game RAM start address */
+export const RAM_START = SYSTEM_END;
+
+/**
+ * RAM size used when a game does not declare `const RAM_SIZE: i32 = ...;` in
+ * its main.ts (72 KB). Static data starts right after the game's RAM.
+ */
+export const DEFAULT_RAM_SIZE = 0x12000;
+
+// === Sprite table ===
+
+// Layout, at the address in SPRITE_TABLE_PTR_ADDR:
+//   header (SPRITE_TABLE_HEADER_SIZE bytes):
+//     +0 u16 count, +2 u16 reserved, +4 u32 lookup offset,
+//     +8 u32 info offset, +12 u32 pixel data offset (offsets from the table)
+//   sprite ID lookup table (count entries, UTF-16, zero padded)
+//   sprite info table (count entries)
+//   sprite pixel data (RGBA, 4 bytes per pixel)
+// The host sizes it to the sprites the game uses; there is no fixed cap.
 
 /** Maximum sprite ID length (characters) */
 export const SPRITE_ID_MAX_CHARS = 16;
@@ -75,43 +121,8 @@ export const SPRITE_ID_MAX_CHARS = 16;
 /** Sprite table header size (bytes) */
 export const SPRITE_TABLE_HEADER_SIZE = 16;
 
-/** Sprite table base address */
-export const SPRITE_TABLE_ADDR = MOUSE_ADDR + 8; // 0x04B010
-
 /** Sprite ID lookup entry size (UTF-16, 2 bytes each) */
 export const SPRITE_ID_ENTRY_SIZE = SPRITE_ID_MAX_CHARS * 2;
 
 /** Sprite info entry size (16 bytes) */
 export const SPRITE_INFO_ENTRY_SIZE = 16;
-
-/** Maximum sprite ID lookup table size (256 entries) */
-export const SPRITE_ID_TABLE_MAX_SIZE = 256 * SPRITE_ID_ENTRY_SIZE;
-
-/** Maximum sprite info table size (256 entries) */
-export const SPRITE_INFO_TABLE_MAX_SIZE = 256 * SPRITE_INFO_ENTRY_SIZE;
-
-/** Sprite pixel data start address (after max tables) */
-export const SPRITE_DATA_ADDR =
-  SPRITE_TABLE_ADDR +
-  SPRITE_TABLE_HEADER_SIZE +
-  SPRITE_ID_TABLE_MAX_SIZE +
-  SPRITE_INFO_TABLE_MAX_SIZE;
-
-/** Maximum sprite data size (~128 KB) */
-export const SPRITE_DATA_SIZE = 0x20000;
-
-// === SDK Reserved Memory ===
-
-/** SDK RNG seed address (i32) */
-export const SDK_RNG_SEED_ADDR = SPRITE_DATA_ADDR + SPRITE_DATA_SIZE;
-
-/** SDK RNG seed size in bytes */
-export const SDK_RNG_SEED_SIZE = 4;
-
-// Available RAM starts after SDK reserved data
-
-/** Game RAM start address */
-export const RAM_START = SDK_RNG_SEED_ADDR + SDK_RNG_SEED_SIZE;
-
-/** Game RAM size in bytes (~72 KB: from RAM_START up to the cartridge memoryBase at 0x80000) */
-export const RAM_SIZE = 0x80000 - RAM_START;

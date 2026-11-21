@@ -1,7 +1,6 @@
-import { SPRITE_TABLE_ADDR } from '@tinyforge/engine/memory-map';
 import { describe, expect, it } from 'vitest';
-import { parseAssetFilename, sheetLayout, splitSheet, writeSpriteTable } from '../src/assets.ts';
-import { MEMORY_BYTES } from '../src/machine.ts';
+import { parseAssetFilename, sheetLayout, splitSheet, spriteTableBytes, writeSpriteTable } from '../src/assets.ts';
+import { CURRENT_LAYOUT } from '../src/layout.ts';
 
 describe('parseAssetFilename', () => {
   it.each([
@@ -31,15 +30,18 @@ describe('sprite sheets', () => {
 });
 
 describe('writeSpriteTable', () => {
-  it('writes the header, lookup and info entry the SDK expects', () => {
-    const buffer = new ArrayBuffer(MEMORY_BYTES);
+  it('writes the header, lookup and info entry the SDK expects, and points to the table', () => {
+    const TABLE = 0x70000;
     const frame = new Uint8ClampedArray(2 * 2 * 4).fill(7);
-    const { bytes, warnings } = writeSpriteTable(buffer, [
-      { id: 'hero', width: 2, height: 2, cols: 1, rows: 1, frames: [frame] },
-    ]);
+    const sprites = [{ id: 'hero', width: 2, height: 2, cols: 1, rows: 1, frames: [frame] }];
+    expect(spriteTableBytes(sprites)).toBe(16 + 32 + 16 + 16);
+    const buffer = new ArrayBuffer(TABLE + spriteTableBytes(sprites));
+    const { bytes, warnings } = writeSpriteTable(buffer, CURRENT_LAYOUT, TABLE, sprites);
     expect(warnings).toEqual([]);
     expect(bytes).toBe(16);
     const view = new DataView(buffer);
+    expect(view.getUint32(CURRENT_LAYOUT.spriteTablePtrAddr, true)).toBe(TABLE);
+    const SPRITE_TABLE_ADDR = TABLE;
     expect(view.getUint16(SPRITE_TABLE_ADDR, true)).toBe(1);
     const lookup = SPRITE_TABLE_ADDR + view.getUint32(SPRITE_TABLE_ADDR + 4, true);
     expect(String.fromCharCode(view.getUint16(lookup, true), view.getUint16(lookup + 2, true))).toBe('he');
@@ -47,5 +49,10 @@ describe('writeSpriteTable', () => {
     expect(view.getUint16(info + 8, true)).toBe(2);
     const dataAddr = view.getUint32(info, true);
     expect(new Uint8Array(buffer, dataAddr, 16).every((b) => b === 7)).toBe(true);
+  });
+
+  it('refuses to write past the end of memory', () => {
+    const sprites = [{ id: 'a', width: 1, height: 1, cols: 1, rows: 1, frames: [new Uint8ClampedArray(4)] }];
+    expect(() => writeSpriteTable(new ArrayBuffer(0x70010), CURRENT_LAYOUT, 0x70000, sprites)).toThrow(/needs/);
   });
 });

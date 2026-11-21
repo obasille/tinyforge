@@ -18,6 +18,9 @@ export declare const memory: WebAssembly.Memory;
 // These are cast to AssemblyScript types for use in WASM
 import * as memoryMap from '../../memory-map';
 
+/** Memory layout version the SDK is built for */
+export const LAYOUT_VERSION = memoryMap.LAYOUT_VERSION as i32;
+
 /** Display width in pixels */
 export const SCREEN_WIDTH = memoryMap.SCREEN_WIDTH as i32;
 
@@ -67,17 +70,12 @@ export const SPRITE_ID_ENTRY_SIZE = memoryMap.SPRITE_ID_ENTRY_SIZE as usize;
 /** Sprite table header size (bytes) */
 export const SPRITE_TABLE_HEADER_SIZE = memoryMap.SPRITE_TABLE_HEADER_SIZE as usize;
 
-/** Sprite table base address */
-export const SPRITE_TABLE_ADDR = memoryMap.SPRITE_TABLE_ADDR as usize;
+/** Address of the u32 that holds the sprite table's address (set by the host) */
+export const SPRITE_TABLE_PTR_ADDR = memoryMap.SPRITE_TABLE_PTR_ADDR as usize;
 
 /** Sprite info entry size (16 bytes) */
 export const SPRITE_INFO_ENTRY_SIZE = memoryMap.SPRITE_INFO_ENTRY_SIZE as usize;
 
-/** Sprite pixel data base address (after max tables) */
-export const SPRITE_DATA_ADDR = memoryMap.SPRITE_DATA_ADDR as usize;
-
-/** Maximum sprite data size (~128 KB) */
-export const SPRITE_DATA_SIZE = memoryMap.SPRITE_DATA_SIZE as usize;
 
 // === SDK Reserved Memory ===
 
@@ -93,8 +91,6 @@ export const RNG_SEED = memoryMap.SDK_RNG_SEED_ADDR as usize;
 /** Game RAM start address */
 export const RAM_START = memoryMap.RAM_START as usize;
 
-/** Game RAM size in bytes (~72 KB) */
-export const RAM_SIZE = memoryMap.RAM_SIZE as usize;
 
 /**
  * Read a 32-bit signed integer from game RAM
