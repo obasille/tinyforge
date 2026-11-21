@@ -9,7 +9,21 @@ import {
   RAM_START,
   SCREEN_WIDTH,
   buttonDown,
+  buttonPressed,
   c,
+  fillRect,
+  INPUT_BUTTONS_ADDR,
+  MouseButton,
+  mouseDown,
+  mousePressed,
+  mouseX,
+  mouseY,
+  p1AxisX,
+  p1AxisY,
+  p2AxisX,
+  p2AxisY,
+  print,
+  printNumber,
   clearFramebuffer,
   drawCircle,
   drawLine,
@@ -52,10 +66,39 @@ const tags = ArrayView.fromAddress<u8, u8>(RAM_START + 196, 10); // max 10 u8 va
 
 const arrOfVec = UncheckedArrayObjView.fromAddress<Vec2i>(RAM_START + 208, 8); // Array of Vec2 objects (x,y as f32)
 
+// === Input test panel ===
+// Shows the live state of every input the SDK supports. A box lights up while
+// its button is held, and the number under it counts buttonPressed() edges.
+
+// Every keyboard button, in the order of the press counters below.
+const BUTTONS: StaticArray<Button> = [
+  Button.UP,
+  Button.DOWN,
+  Button.LEFT,
+  Button.RIGHT,
+  Button.A,
+  Button.B,
+  Button.X,
+  Button.Y,
+  Button.START,
+  Button.LT,
+  Button.RT,
+];
+const MOUSE_BUTTONS: StaticArray<MouseButton> = [MouseButton.LEFT, MouseButton.MIDDLE, MouseButton.RIGHT];
+
+// Press counters: one u16 per keyboard button, then one per mouse button.
+const presses = UncheckedArrayView.fromAddress<u16>(RAM_START + 280); // 14 u16 values
+
+// @ts-expect-error AssemblyScript decorator
+@inline
+const MOUSE_COUNTER: i32 = 11;
+
 // === lifecycle ===
 
 export function init(): void {
   clearFramebuffer(c(0xff000000)); // black
+
+  for (let i = 0; i < 14; i++) presses.set(i, 0);
 
   // Initialize player position in RAM
   vars.playerX = 160;
@@ -87,14 +130,17 @@ export function init(): void {
 }
 
 export function update(): void {
-  // Movement logic - use buttonDown() for continuous movement
-  if (buttonDown(Button.LEFT)) vars.playerX--;
-  if (buttonDown(Button.RIGHT)) vars.playerX++;
-  if (buttonDown(Button.UP)) vars.playerY--;
-  if (buttonDown(Button.DOWN)) vars.playerY++;
+  // Movement logic - the axis helpers return -1, 0 or 1 from held buttons
+  vars.playerX += p1AxisX();
+  vars.playerY += p1AxisY();
 
-  // Example: detect button press (not hold) - use buttonPressed() for one-time actions
-  // if (buttonPressed(Button.A)) { /* do something once */ }
+  // buttonPressed() is true only on the frame a button goes down
+  for (let i = 0; i < BUTTONS.length; i++) {
+    if (buttonPressed(BUTTONS[i])) presses.set(i, presses.get(i) + 1);
+  }
+  for (let i = 0; i < MOUSE_BUTTONS.length; i++) {
+    if (mousePressed(MOUSE_BUTTONS[i])) presses.set(MOUSE_COUNTER + i, presses.get(MOUSE_COUNTER + i) + 1);
+  }
 
   vars.animFrame++;
 
@@ -167,4 +213,88 @@ export function draw(): void {
   drawNumber(300, 30, v0.y, c(0x00ff00));
   drawNumber(300, 50, v1.x, c(0x0000ff));
   drawNumber(300, 70, v1.y, c(0xffff00));
+
+  drawInputPanel();
+}
+
+/** One button box: lit while held, label inside, press count underneath. */
+function drawButton(x: i32, y: i32, w: i32, label: string, held: bool, count: i32, lit: u32): void {
+  fillRect(x, y, w, 14, held ? lit : c(0x1f2937));
+  drawRect(x, y, w, 14, held ? c(0xffffff) : c(0x64748b));
+  print(x + ((w - label.length * 6) >> 1), y + 3, label, held ? c(0x000000) : c(0xe2e8f0));
+  printNumber(x + 2, y + 16, count, c(0x94a3b8));
+}
+
+function key(index: i32, x: i32, y: i32, w: i32, label: string, lit: u32): void {
+  drawButton(x, y, w, label, buttonDown(BUTTONS[index]), presses.get(index) as i32, lit);
+}
+
+function drawInputPanel(): void {
+  const grey = c(0x94a3b8);
+  const white = c(0xffffff);
+  fillRect(16, 24, 288, 196, c(0x0b1120));
+  drawRect(16, 24, 288, 196, c(0x64748b));
+  print(22, 28, "INPUT TEST  (held = lit, number = presses)", grey);
+
+  // Triggers
+  key(9, 24, 42, 60, "LT", c(0xf97316));
+  print(24, 68, "L CTRL", grey);
+  key(10, 236, 42, 60, "RT", c(0xf97316));
+  print(242, 68, "R CTRL", grey);
+
+  // D-pad (arrow keys)
+  const dpad = c(0x38bdf8);
+  key(0, 54, 82, 26, "^", dpad);
+  key(2, 24, 110, 26, "<", dpad);
+  key(3, 84, 110, 26, ">", dpad);
+  key(1, 54, 138, 26, "v", dpad);
+  print(36, 168, "ARROWS", grey);
+
+  // Action buttons (diamond on WASD)
+  key(7, 236, 82, 26, "Y", c(0xeab308));
+  key(6, 206, 110, 26, "X", c(0x3b82f6));
+  key(5, 266, 110, 26, "B", c(0x22c55e));
+  key(4, 236, 138, 26, "A", c(0xef4444));
+  print(220, 168, "W A S D", grey);
+
+  // Start
+  key(8, 130, 82, 60, "START", c(0xa78bfa));
+  print(124, 108, "ENTER/SPACE", grey);
+
+  // Axis helpers
+  print(118, 124, "P1 AXIS", grey);
+  printNumber(166, 124, p1AxisX(), white);
+  printNumber(184, 124, p1AxisY(), white);
+  print(118, 136, "P2 AXIS", grey);
+  printNumber(166, 136, p2AxisX(), white);
+  printNumber(184, 136, p2AxisY(), white);
+  print(118, 148, "MASK", grey);
+  printNumber(166, 148, load<u16>(INPUT_BUTTONS_ADDR) as i32, white);
+
+  // Mouse
+  const mx = mouseX() as i32;
+  const my = mouseY() as i32;
+  print(24, 184, "MOUSE X", grey);
+  printNumber(72, 184, mx, white);
+  print(102, 184, "Y", grey);
+  printNumber(112, 184, my, white);
+  const mouse = c(0xf472b6);
+  for (let i = 0; i < 3; i++) {
+    const label = i == 0 ? "L" : i == 1 ? "M" : "R";
+    drawButton(
+      164 + i * 30,
+      180,
+      26,
+      label,
+      mouseDown(MOUSE_BUTTONS[i]),
+      presses.get(MOUSE_COUNTER + i) as i32,
+      mouse,
+    );
+  }
+
+  // Crosshair at the mouse position
+  if (mx >= 0 && my >= 0) {
+    drawLine(mx - 4, my, mx + 4, my, white);
+    drawLine(mx, my - 4, mx, my + 4, white);
+  }
 }
