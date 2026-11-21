@@ -120,6 +120,25 @@ describe('CompilerHost', () => {
     expect(compiler.invalidate([{ path: 'assets/sprites/heart.png', kind: 'change' }])).toEqual([]);
     expect(compiler.invalidate([{ path: 'assets/sprites/new.png', kind: 'add' }])).toEqual(['pong']);
   });
+
+  it('shows a compile waiting for the Worker as queued, then building', async () => {
+    const { files, compiler } = await setup();
+    await files.write('games/fresh/main.ts', newGameSource('fresh'));
+    await settle();
+    await settle();
+    const status = () => [compiler.builds.getState().pong?.status, compiler.builds.getState().fresh?.status];
+    const seen: string[] = [];
+    compiler.builds.subscribe(() => seen.push(status().join(',')));
+    const pong = compiler.build('pong');
+    const fresh = compiler.build('fresh');
+    expect(status()).toEqual(['queued', 'queued']);
+    await pong;
+    await fresh;
+    expect(status()).toEqual(['ok', 'ok']);
+    // pong was sent first: fresh waits until pong is done.
+    expect(seen).toContain('building,queued');
+    expect(seen.indexOf('ok,building')).toBeGreaterThan(seen.indexOf('building,queued'));
+  });
 });
 
 describe('new game template', () => {

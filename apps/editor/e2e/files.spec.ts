@@ -164,6 +164,8 @@ test('unknown asset IDs are underlined while typing, IDs autocomplete, compile e
   await expect
     .poll(async () => (await code(page, mainPath()))?.diagnostics.map((d) => d.message))
     .toContain("Type '~lib/string/String' is not assignable to type 'i32'.");
+  // The Files list marks the game whose build failed.
+  await expect(page.getByTestId(`build-${game}`)).toHaveText('failed');
 });
 
 test('a file changed on disk reloads a clean buffer and asks before replacing edits', async ({ page }) => {

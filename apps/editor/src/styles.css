@@ -912,3 +912,24 @@ button.tf-files-row.tf-files-selected {
   font-size: 12px;
   color: var(--tf-warn);
 }
+
+/* Compile status of a game, in the Files list and the game picker. */
+.tf-build {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: normal;
+  color: var(--tf-muted);
+}
+
+.tf-build-building {
+  color: var(--tf-warn);
+}
+
+.tf-build-failed {
+  color: var(--tf-error);
+}
+
+.tf-picker-title .tf-build,
+.tf-picker-button .tf-build {
+  margin-left: 6px;
+}

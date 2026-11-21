@@ -5,6 +5,7 @@
 import { buildTree, isTextFile, type TreeNode } from '@tinyforge/editor-core';
 import { assetKindOf, GAME_NAME, isWritablePath } from '@tinyforge/engine/tooling/project-layout';
 import { useMemo, useState } from 'react';
+import { BuildStatus } from '../BuildStatus.tsx';
 import { useEditor } from '../EditorContext.ts';
 import { useStore } from '../hooks.ts';
 
@@ -135,6 +136,7 @@ export function FilesPanel() {
             <span className="tf-files-icon">{node.kind === 'folder' ? (isOpen ? '▾' : '▸') : '·'}</span>
             <span className="tf-files-name">{node.name}</span>
             {node.readonly && node.kind === 'file' ? <span className="tf-files-lock">read-only</span> : null}
+            {/^games\/[^/]+$/.test(node.path) ? <BuildStatus game={node.name} /> : null}
           </button>
         )}
         {node.kind === 'folder' && isOpen ? (

@@ -1,5 +1,6 @@
 import type { GameInfo } from '@tinyforge/editor-core';
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react';
+import { BuildStatus } from './BuildStatus.tsx';
 import { useEditor } from './EditorContext.ts';
 import { useStore } from './hooks.ts';
 
@@ -104,6 +105,7 @@ export function GamePicker() {
           <>
             <Cover game={current} size="small" />
             <span>{current.title}</span>
+            <BuildStatus game={current.name} />
           </>
         ) : (
           <span>Choose a game…</span>
@@ -133,7 +135,9 @@ export function GamePicker() {
             >
               <Cover game={g} size="large" />
               <span className="tf-picker-text">
-                <span className="tf-picker-title">{g.title}</span>
+                <span className="tf-picker-title">
+                  {g.title} <BuildStatus game={g.name} />
+                </span>
                 <span className="tf-picker-desc">
                   {g.loading ? 'Loading…' : g.error && !g.description ? g.error : g.description}
                 </span>

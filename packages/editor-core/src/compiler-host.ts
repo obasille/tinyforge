@@ -3,8 +3,8 @@
 // A build reads files through ProjectFiles (so through the Workspace) when
 // the Worker asks for them. Results are cached per game until a file the game
 // depends on changes (affectedGames in project-layout.ts). `builds` holds the
-// latest state of each game's build, with its diagnostics, for the console
-// and the code editor.
+// latest state of each game's build, with its diagnostics, for the console,
+// the code editor, the Files list and the game picker.
 
 import type { AssetKind, AssetList } from '@tinyforge/engine/tooling/asset-scan';
 import { withSourceMapUrl } from '@tinyforge/engine/tooling/cartridge-meta';
@@ -38,7 +38,8 @@ export interface CompilerWorkerLike {
 }
 
 export interface BuildState {
-  status: 'building' | 'ok' | 'failed';
+  /** 'queued': waiting for the Worker, which compiles one game at a time. */
+  status: 'queued' | 'building' | 'ok' | 'failed';
   diagnostics: Diagnostic[];
   log: string;
   /** Compile time of the last finished build. */
@@ -52,7 +53,8 @@ export class CompilerHost {
   readonly builds: Store<Record<string, BuildState>> = createStore<Record<string, BuildState>>({});
   private worker: CompilerWorkerLike | null = null;
   private nextId = 1;
-  private readonly pending = new Map<number, (result: CompileResult, ms: number) => void>();
+  /** Compiles sent to the Worker, oldest first: the first one is running. */
+  private readonly pending = new Map<number, { game: string; resolve: (result: CompileResult, ms: number) => void }>();
   private readonly cache = new Map<string, Promise<CompileResult>>();
   /** COVER id per game, to know which sprite edits need a rebuild. */
   private readonly covers = new Map<string, string | null>();
@@ -104,7 +106,7 @@ export class CompilerHost {
     worker.onerror = (event) => {
       // A crashed Worker fails what it was doing; the next build starts a new one.
       const message = `Compile worker error: ${event.message}`;
-      for (const resolve of this.pending.values()) resolve({ ok: false, log: `${message}\n`, diagnostics: [] }, 0);
+      for (const { resolve } of this.pending.values()) resolve({ ok: false, log: `${message}\n`, diagnostics: [] }, 0);
       this.pending.clear();
       worker.terminate();
       if (this.worker === worker) this.worker = null;
@@ -115,7 +117,7 @@ export class CompilerHost {
 
   private async compile(game: string, target: CompileTarget): Promise<CompileResult> {
     this.setBuild(game, (b) => ({
-      status: 'building',
+      status: 'queued',
       diagnostics: b?.diagnostics ?? [],
       log: b?.log ?? '',
       ms: b?.ms ?? null,
@@ -125,8 +127,9 @@ export class CompilerHost {
     this.covers.set(game, source === null ? null : coverIdOf(source));
     const id = this.nextId++;
     const done = await new Promise<{ result: CompileResult; ms: number }>((resolve) => {
-      this.pending.set(id, (r, t) => resolve({ result: r, ms: t }));
+      this.pending.set(id, { game, resolve: (r, t) => resolve({ result: r, ms: t }) });
       this.ensureWorker().postMessage({ type: 'compile', id, game, target, assetFiles: this.files.assetFiles });
+      this.markRunning();
     });
     const { ms } = done;
     const result = this.withSourceMap(done.result);
@@ -159,14 +162,24 @@ export class CompilerHost {
     return { ...result, wasm: withSourceMapUrl(result.wasm, url) };
   }
 
+  /** The Worker compiles in order: the oldest pending compile is the one running. */
+  private markRunning(): void {
+    const first = this.pending.values().next().value;
+    if (first && this.builds.getState()[first.game]?.status === 'queued') {
+      this.setBuild(first.game, (b) => ({ ...(b as BuildState), status: 'building' }));
+    }
+  }
+
   private setBuild(game: string, update: (previous: BuildState | undefined) => BuildState): void {
     this.builds.setState((all) => ({ ...all, [game]: update(all[game]) }));
   }
 
   private receive(msg: FromCompiler): void {
     if (msg.type === 'result') {
-      this.pending.get(msg.id)?.(msg.result, msg.ms);
+      const done = this.pending.get(msg.id);
       this.pending.delete(msg.id);
+      done?.resolve(msg.result, msg.ms);
+      this.markRunning();
       return;
     }
     const { requestId, path, binary } = msg;
