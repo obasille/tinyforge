@@ -185,6 +185,15 @@ test('a game that does not compile shows its errors in the Game tab', async ({ p
   await expect(banner).toContainText(`games/${game}/main.ts:`);
   await expect(page.getByTestId('run-status')).toHaveText('idle');
 
+  // The error's place in the console opens the code editor at that line.
+  await page
+    .getByTestId('console')
+    .getByRole('button', { name: new RegExp(`games/${game}/main\\.ts\\(\\d+,\\d+\\)`) })
+    .first()
+    .click();
+  const editor = page.getByTestId(`code-${mainPath()}`);
+  await expect(editor.locator('.cm-activeLine')).toContainText('setI32(Y, "x");');
+
   // Fixed, it runs; broken again, its last good build keeps running.
   writeFileSync(file, good);
   await expect(page.getByTestId('run-status')).toHaveText('running');

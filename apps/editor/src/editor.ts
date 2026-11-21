@@ -108,7 +108,9 @@ export class Editor {
     this.library = files.library;
     this.project = createStore(loadProject(files.games));
     this.catalog = new GameCatalog(files.games, (game) => this.readGameInfo(game));
-    this.compiler = new CompilerHost(files, () => new CompileWorker({ name: 'tinyforge-compiler' }));
+    // Parallel compiles, one Worker each: half the cores, at most 4 (each holds a compiler in memory).
+    const compileWorkers = Math.max(1, Math.min(4, Math.floor((navigator.hardwareConcurrency || 2) / 2)));
+    this.compiler = new CompilerHost(files, () => new CompileWorker({ name: 'tinyforge-compiler' }), compileWorkers);
     this.commands = new CommandStack(this.project, (message) => this.logs.add('ERROR', message));
     this.workbench = new Workbench(files, this.commands, this.compiler, () => this.project.getState().game);
     this.assets = new AssetLibrary(files);

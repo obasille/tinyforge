@@ -1,4 +1,6 @@
-// Main-thread side of the compile Worker, and the editor's build cache.
+// Main-thread side of the compile Workers, and the editor's build cache.
+// Up to `maxWorkers` games compile at the same time, one per Worker; the
+// others wait in a queue.
 //
 // A build reads files through ProjectFiles (so through the Workspace) when
 // the Worker asks for them. Results are cached per game until a file the game
@@ -38,7 +40,7 @@ export interface CompilerWorkerLike {
 }
 
 export interface BuildState {
-  /** 'queued': waiting for the Worker, which compiles one game at a time. */
+  /** 'queued': waiting for a free compile Worker. */
   status: 'queued' | 'building' | 'ok' | 'failed';
   diagnostics: Diagnostic[];
   log: string;
@@ -48,13 +50,28 @@ export interface BuildState {
   assets: AssetList | null;
 }
 
+/** A compile waiting for, or running in, a Worker. */
+interface Job {
+  id: number;
+  game: string;
+  target: CompileTarget;
+  resolve: (result: CompileResult, ms: number) => void;
+}
+
+/** A compile Worker; it compiles one game at a time. */
+interface Slot {
+  worker: CompilerWorkerLike;
+  job: Job | null;
+}
+
 export class CompilerHost {
   /** Latest build state per game. */
   readonly builds: Store<Record<string, BuildState>> = createStore<Record<string, BuildState>>({});
-  private worker: CompilerWorkerLike | null = null;
+  /** Up to `maxWorkers` Workers, started when needed and kept for the next builds. */
+  private readonly slots: Slot[] = [];
+  /** Compiles waiting for a free Worker, oldest first. */
+  private readonly queue: Job[] = [];
   private nextId = 1;
-  /** Compiles sent to the Worker, oldest first: the first one is running. */
-  private readonly pending = new Map<number, { game: string; resolve: (result: CompileResult, ms: number) => void }>();
   private readonly cache = new Map<string, Promise<CompileResult>>();
   /** COVER id per game, to know which sprite edits need a rebuild. */
   private readonly covers = new Map<string, string | null>();
@@ -62,6 +79,8 @@ export class CompilerHost {
   constructor(
     private readonly files: ProjectFiles,
     private readonly createWorker: () => CompilerWorkerLike,
+    /** Games compiled at the same time. Each Worker holds its own compiler. */
+    private readonly maxWorkers = 1,
   ) {}
 
   /** Debug build of a game, compiled once until its files change. */
@@ -95,24 +114,36 @@ export class CompilerHost {
   }
 
   dispose(): void {
-    this.worker?.terminate();
-    this.worker = null;
+    for (const slot of this.slots.splice(0)) slot.worker.terminate();
   }
 
-  private ensureWorker(): CompilerWorkerLike {
-    if (this.worker) return this.worker;
-    const worker = this.createWorker();
-    worker.onmessage = (event) => this.receive(event.data);
-    worker.onerror = (event) => {
+  /** Start queued compiles on free Workers (starting Workers up to maxWorkers). */
+  private dispatch(): void {
+    while (this.queue.length > 0) {
+      let slot = this.slots.find((s) => !s.job);
+      if (!slot && this.slots.length < this.maxWorkers) slot = this.startWorker();
+      if (!slot) return;
+      const job = this.queue.shift() as Job;
+      slot.job = job;
+      this.setBuild(job.game, (b) => ({ ...(b as BuildState), status: 'building' }));
+      const { id, game, target } = job;
+      slot.worker.postMessage({ type: 'compile', id, game, target, assetFiles: this.files.assetFiles });
+    }
+  }
+
+  private startWorker(): Slot {
+    const slot: Slot = { worker: this.createWorker(), job: null };
+    slot.worker.onmessage = (event) => this.receive(slot, event.data);
+    slot.worker.onerror = (event) => {
       // A crashed Worker fails what it was doing; the next build starts a new one.
-      const message = `Compile worker error: ${event.message}`;
-      for (const { resolve } of this.pending.values()) resolve({ ok: false, log: `${message}\n`, diagnostics: [] }, 0);
-      this.pending.clear();
-      worker.terminate();
-      if (this.worker === worker) this.worker = null;
+      slot.worker.terminate();
+      this.slots.splice(this.slots.indexOf(slot), 1);
+      const message = `Compile worker error: ${event.message}\n`;
+      slot.job?.resolve({ ok: false, log: message, diagnostics: [] }, 0);
+      this.dispatch();
     };
-    this.worker = worker;
-    return worker;
+    this.slots.push(slot);
+    return slot;
   }
 
   private async compile(game: string, target: CompileTarget): Promise<CompileResult> {
@@ -125,11 +156,9 @@ export class CompilerHost {
     }));
     const source = await this.files.readText(gameEntryPath(game));
     this.covers.set(game, source === null ? null : coverIdOf(source));
-    const id = this.nextId++;
     const done = await new Promise<{ result: CompileResult; ms: number }>((resolve) => {
-      this.pending.set(id, { game, resolve: (r, t) => resolve({ result: r, ms: t }) });
-      this.ensureWorker().postMessage({ type: 'compile', id, game, target, assetFiles: this.files.assetFiles });
-      this.markRunning();
+      this.queue.push({ id: this.nextId++, game, target, resolve: (r, t) => resolve({ result: r, ms: t }) });
+      this.dispatch();
     });
     const { ms } = done;
     const result = this.withSourceMap(done.result);
@@ -162,24 +191,16 @@ export class CompilerHost {
     return { ...result, wasm: withSourceMapUrl(result.wasm, url) };
   }
 
-  /** The Worker compiles in order: the oldest pending compile is the one running. */
-  private markRunning(): void {
-    const first = this.pending.values().next().value;
-    if (first && this.builds.getState()[first.game]?.status === 'queued') {
-      this.setBuild(first.game, (b) => ({ ...(b as BuildState), status: 'building' }));
-    }
-  }
-
   private setBuild(game: string, update: (previous: BuildState | undefined) => BuildState): void {
     this.builds.setState((all) => ({ ...all, [game]: update(all[game]) }));
   }
 
-  private receive(msg: FromCompiler): void {
+  private receive(slot: Slot, msg: FromCompiler): void {
     if (msg.type === 'result') {
-      const done = this.pending.get(msg.id);
-      this.pending.delete(msg.id);
-      done?.resolve(msg.result, msg.ms);
-      this.markRunning();
+      const job = slot.job;
+      slot.job = null;
+      if (job?.id === msg.id) job.resolve(msg.result, msg.ms);
+      this.dispatch();
       return;
     }
     const { requestId, path, binary } = msg;
@@ -192,7 +213,7 @@ export class CompilerHost {
         data = await this.files.readText(path);
       }
       const transfer = data instanceof ArrayBuffer ? [data] : [];
-      this.worker?.postMessage({ type: 'file', requestId, data }, transfer);
+      slot.worker.postMessage({ type: 'file', requestId, data }, transfer);
     })();
   }
 }

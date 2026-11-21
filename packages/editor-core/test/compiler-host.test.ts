@@ -65,13 +65,25 @@ beforeAll(async () => {
   }
 });
 
-async function setup() {
+async function setup(maxWorkers = 1) {
   const ws = new MemoryWorkspace(disk);
   const files = new ProjectFiles(ws);
   await files.start();
-  const worker = inProcessWorker();
-  const compiler = new CompilerHost(files, () => worker);
-  return { ws, files, worker, compiler };
+  const workers: ReturnType<typeof inProcessWorker>[] = [];
+  const compiler = new CompilerHost(
+    files,
+    () => {
+      workers.push(inProcessWorker());
+      return workers[workers.length - 1];
+    },
+    maxWorkers,
+  );
+  const worker = {
+    get compiles() {
+      return workers.reduce((n, w) => n + w.compiles, 0);
+    },
+  };
+  return { ws, files, worker, workers, compiler };
 }
 
 const settle = () => new Promise((r) => setTimeout(r, 0));
@@ -121,7 +133,31 @@ describe('CompilerHost', () => {
     expect(compiler.invalidate([{ path: 'assets/sprites/new.png', kind: 'add' }])).toEqual(['pong']);
   });
 
-  it('shows a compile waiting for the Worker as queued, then building', async () => {
+  it('compiles games in parallel, one Worker each', async () => {
+    const { files, workers, compiler } = await setup(2);
+    await files.write('games/fresh/main.ts', newGameSource('fresh'));
+    await settle();
+    await settle();
+    const seen: string[] = [];
+    compiler.builds.subscribe(() => {
+      const b = compiler.builds.getState();
+      seen.push(`${b.pong?.status},${b.fresh?.status}`);
+    });
+    const pong = compiler.build('pong');
+    const fresh = compiler.build('fresh');
+    expect((await pong).ok && (await fresh).ok).toBe(true);
+    expect(workers.map((w) => w.compiles)).toEqual([1, 1]);
+    expect(seen).toContain('building,building');
+    // A later build reuses a Worker.
+    await files.write('games/fresh/main.ts', `${newGameSource('fresh')}\n`);
+    await settle();
+    await settle();
+    compiler.invalidate([{ path: 'games/fresh/main.ts', kind: 'change' }]);
+    expect((await compiler.build('fresh')).ok).toBe(true);
+    expect(workers.length).toBe(2);
+  });
+
+  it('shows a compile waiting for a free Worker as queued, then building', async () => {
     const { files, compiler } = await setup();
     await files.write('games/fresh/main.ts', newGameSource('fresh'));
     await settle();

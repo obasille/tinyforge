@@ -28,6 +28,8 @@ export class Workbench {
   private readonly liveUses = new Map<string, AssetUse[]>();
   private readonly openListeners = new Set<(path: string) => void>();
   private library: AssetLibrary;
+  /** Where to put the cursor in the next code editor opened for a path. */
+  private goToOnOpen: { path: string; line: number; column: number } | null = null;
 
   constructor(
     private readonly files: ProjectFiles,
@@ -43,9 +45,16 @@ export class Workbench {
     });
   }
 
-  /** Ask the UI to show a file (it opens a code panel). */
-  openFile(path: string): void {
+  /** Ask the UI to show a file (it opens a code panel), optionally at a 1-based line and column. */
+  openFile(path: string, at?: { line: number; column?: number }): void {
+    this.goToOnOpen = at ? { path, line: at.line, column: at.column ?? 1 } : null;
     for (const listener of [...this.openListeners]) listener(path);
+    // Already open: the panel was only brought to front.
+    const open = this.editorsFor(path)[0];
+    if (at && open) {
+      open.goTo(at.line, at.column);
+      this.goToOnOpen = null;
+    }
   }
 
   onOpenFile(listener: (path: string) => void): () => void {
@@ -74,6 +83,14 @@ export class Workbench {
         this.updateUsed();
       },
     });
+    const at = this.goToOnOpen;
+    if (at?.path === path) {
+      editor.goTo(at.line, at.column);
+      // Kept until the panel has mounted: React may mount it twice in a row (StrictMode).
+      queueMicrotask(() => {
+        if (this.goToOnOpen === at) this.goToOnOpen = null;
+      });
+    }
     // Compile errors for a game that is not running: build it once for its diagnostics.
     const game = /^games\/([^/]+)\//.exec(path)?.[1];
     if (game && this.files.games.includes(game) && !this.compiler.builds.getState()[game]) {

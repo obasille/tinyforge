@@ -43,7 +43,19 @@ export function GamePanel() {
           </p>
           {!stale && errors[0] && (
             <pre className="tf-compile-error">
-              {errors[0].path ? `${errors[0].path}:${errors[0].line}: ` : ''}
+              {errors[0].path ? (
+                <button
+                  type="button"
+                  className="tf-log-link"
+                  onClick={() => {
+                    const { path, line, column } = errors[0];
+                    if (path) editor.workbench.openFile(path, { line, column });
+                  }}
+                >
+                  {errors[0].path}:{errors[0].line}
+                </button>
+              ) : null}
+              {errors[0].path ? ': ' : ''}
               {errors[0].message}
             </pre>
           )}
