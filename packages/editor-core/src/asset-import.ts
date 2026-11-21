@@ -7,7 +7,7 @@
 
 import { ASSET_PATTERNS, type AssetKind } from '@tinyforge/engine/tooling/asset-scan';
 import { idProblem, type LibraryAsset, MAX_ID_LENGTH, type Sidecar, sidecarPath } from './asset-library.ts';
-import type { FileCommand } from './commands.ts';
+import { commandLabel, type FileCommand } from './commands.ts';
 import { type FileOp, fileBatch } from './file-commands.ts';
 import { type ProjectFiles, parseAssetName } from './project-files.ts';
 
@@ -220,6 +220,6 @@ export async function importCommand(
     ops.push({ write: path, data: draft.bytes });
     if (sidecar) ops.push({ write: sidecarPath(path), data: sidecar });
   }
-  const label = drafts.length === 1 ? `Import ${drafts[0].id}` : `Import ${drafts.length} assets`;
+  const label = drafts.length === 1 ? commandLabel('Import', drafts[0].id) : `Import ${drafts.length} assets`;
   return fileBatch(files, ops, label, 'assets.import');
 }

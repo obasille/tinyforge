@@ -3,7 +3,7 @@
 // previous bytes back.
 
 import { GAME_NAME, gameEntryPath } from '@tinyforge/engine/tooling/project-layout';
-import type { FileCommand } from './commands.ts';
+import { commandLabel, type FileCommand } from './commands.ts';
 import type { ProjectFiles } from './project-files.ts';
 
 const baseName = (p: string) => p.slice(p.lastIndexOf('/') + 1);
@@ -18,7 +18,7 @@ export async function writeFile(
   files: ProjectFiles,
   path: string,
   data: Uint8Array | string,
-  label = `Save ${baseName(path)}`,
+  label = commandLabel('Save', baseName(path)),
 ): Promise<FileCommand> {
   const before = await current(files, path);
   return {
@@ -40,7 +40,7 @@ export async function deleteFiles(files: ProjectFiles, paths: string[], label?: 
   }
   return {
     type: 'files.delete',
-    label: label ?? (paths.length === 1 ? `Delete ${baseName(paths[0])}` : `Delete ${paths.length} files`),
+    label: label ?? (paths.length === 1 ? commandLabel('Delete', baseName(paths[0])) : `Delete ${paths.length} files`),
     args: { paths },
     async apply() {
       for (const { path } of saved) await files.delete(path);
@@ -56,7 +56,7 @@ export function renameFiles(files: ProjectFiles, moves: Array<[string, string]>,
   for (const [, to] of moves) if (files.entry(to)) throw new Error(`${to} already exists`);
   return {
     type: 'files.rename',
-    label: label ?? (moves.length === 1 ? `Rename ${baseName(moves[0][0])}` : `Move ${moves.length} files`),
+    label: label ?? (moves.length === 1 ? commandLabel('Rename', baseName(moves[0][0])) : `Move ${moves.length} files`),
     args: { moves },
     async apply() {
       for (const [from, to] of moves) await files.rename(from, to);
@@ -111,7 +111,7 @@ export async function createGame(files: ProjectFiles, name: string): Promise<Fil
   if (files.games.includes(name) || files.files.some((f) => f.path.startsWith(`games/${name}/`))) {
     throw new Error(`games/${name} already exists`);
   }
-  return writeFile(files, gameEntryPath(name), newGameSource(name), `New game ${name}`);
+  return writeFile(files, gameEntryPath(name), newGameSource(name), commandLabel('New game', name));
 }
 
 /** One step of a file batch. */

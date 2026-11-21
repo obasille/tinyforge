@@ -10,7 +10,7 @@ import { assetKindOf, isWritablePath } from '@tinyforge/engine/tooling/project-l
 import { type ImportDraft, importCommand, sidecarText } from './asset-import.ts';
 import { type LibraryAsset, type Sidecar, sidecarPath } from './asset-library.ts';
 import { CodeEditor } from './code-editor.ts';
-import type { FileCommand } from './commands.ts';
+import { commandLabel, type FileCommand } from './commands.ts';
 import type { CompilerHost } from './compiler-host.ts';
 import { createGame, deleteFiles, fileBatch, renameFiles, writeFile } from './file-commands.ts';
 import { filesUnder } from './file-tree.ts';
@@ -170,11 +170,16 @@ export class Workbench {
     const name = assetPath.split('/').pop();
     if (empty) {
       if (await this.files.readBytes(path))
-        await this.commands.runFile(await deleteFiles(this.files, [path], `Clear ${name} info`));
+        await this.commands.runFile(await deleteFiles(this.files, [path], commandLabel('Clear info', name ?? path)));
       return;
     }
     await this.commands.runFile(
-      await fileBatch(this.files, [{ write: path, data: sidecarText(sidecar) }], `Edit ${name} info`, 'assets.sidecar'),
+      await fileBatch(
+        this.files,
+        [{ write: path, data: sidecarText(sidecar) }],
+        commandLabel('Edit info', name ?? path),
+        'assets.sidecar',
+      ),
     );
   }
 

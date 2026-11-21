@@ -272,7 +272,8 @@ export class Editor {
   }
 
   selectGame(game: string): void {
-    this.commands.run(projectCommands.setGame(this.project.getState(), game));
+    const title = this.catalog.games.getState().find((g) => g.name === game)?.title;
+    this.commands.run(projectCommands.setGame(this.project.getState(), game, title));
   }
 
   setSeed(seed: number | null): void {

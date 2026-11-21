@@ -11,7 +11,7 @@ import type { Store } from './store.ts';
 export interface Command<T> {
   /** Stable name, used in the replay log ("project.setGame"). */
   readonly type: string;
-  /** Shown in menus ("Undo Select game"). */
+  /** Shown in menus ("Undo Select game 'Snake'"): see `commandLabel`. */
   readonly label: string;
   /** JSON-serializable arguments, recorded for replay. */
   readonly args: unknown;
@@ -27,6 +27,9 @@ export interface FileCommand {
   apply(): Promise<void>;
   revert(): Promise<void>;
 }
+
+/** A command's label: the action, then its argument in quotes ("Select game 'Snake'"). */
+export const commandLabel = (action: string, arg: string): string => `${action} '${arg}'`;
 
 type Entry<T> = { kind: 'state'; command: Command<T> } | { kind: 'file'; command: FileCommand };
 

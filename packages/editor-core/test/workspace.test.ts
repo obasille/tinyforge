@@ -151,7 +151,7 @@ describe('file commands', () => {
     await stack.runFile(await writeFile(files, 'games/pong/main.ts', 'new'));
     await stack.runFile(await deleteFiles(files, ['assets/sfx/hit.wav']));
     await stack.runFile(renameFiles(files, [['games/pong/main.ts', 'games/pong2/main.ts']]));
-    expect(stack.state.undoLabel).toBe('Rename main.ts');
+    expect(stack.state.undoLabel).toBe("Rename 'main.ts'");
     expect(ws.text('games/pong2/main.ts')).toBe('new');
 
     stack.undo();

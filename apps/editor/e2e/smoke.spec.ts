@@ -137,7 +137,7 @@ test('the history dropdown undoes back to a picked change', async ({ page }) => 
   await chooseGame(page, 'tetris');
   await page.getByTestId('undo-history').click();
   const items = page.getByRole('menuitem');
-  await expect(items).toHaveText(['Select game', 'Select game']);
+  await expect(items).toHaveText(["Select game 'Tetris'", "Select game 'Snake'"]);
   await items.nth(1).hover();
   await expect(page.getByRole('menu')).toContainText('Undo 2 changes');
   await items.nth(1).click();
