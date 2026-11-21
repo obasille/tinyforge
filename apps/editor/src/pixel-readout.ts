@@ -21,7 +21,7 @@ export function mountPixelReadout(
       return;
     }
     swatch.style.background = `rgba(${p.r}, ${p.g}, ${p.b}, ${p.a / 255})`;
-    text.textContent = `${p.x}, ${p.y}   ${pixelHex(p)}   ${pixelAbgr(p)}   (F4 or C copies)`;
+    text.textContent = `${p.x}, ${p.y}   ${pixelHex(p)}   ${pixelAbgr(p)}   (F4 copies)`;
   };
   const renderCopied = () => {
     const hex = copied.getState();

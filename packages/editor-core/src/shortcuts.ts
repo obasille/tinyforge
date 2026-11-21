@@ -1,5 +1,5 @@
 // Editor keyboard shortcuts. They use function keys so they never collide
-// with game keys (arrows, WASD, Z/X, Enter/Space) or the C color copy (F4 does the same from anywhere), and
+// with game keys (arrows, WASD, Z/X, Enter/Space), and
 // they work whether the game view or the editor has focus. A bare Ctrl press
 // is a game trigger (LT/RT); only Ctrl+key combinations are shortcuts.
 

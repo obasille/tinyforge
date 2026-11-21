@@ -697,22 +697,8 @@ const screenshotBtn = document.getElementById(
 ) as HTMLButtonElement | null;
 screenshotBtn?.addEventListener('click', takeScreenshot);
 
-// Brief "Copied" note in the Color Peek panel title after a color copy.
-const colorPeekTitle = document.querySelector('#color-peek h3');
-let colorCopiedTimer: ReturnType<typeof setTimeout> | undefined;
-function flashColorCopied(color: string) {
-  if (!colorPeekTitle) return;
-  colorPeekTitle.textContent = `Copied ${color}`;
-  colorPeekTitle.classList.add('copied');
-  clearTimeout(colorCopiedTimer);
-  colorCopiedTimer = setTimeout(() => {
-    colorPeekTitle.textContent = 'Color Peek (C / F4)';
-    colorPeekTitle.classList.remove('copied');
-  }, 1200);
-}
-
 // Keyboard shortcuts: R to restart, P to pause, F for fullscreen, G for a
-// screenshot, C or F4 to copy color. W/A/S/D are game buttons, so none of these
+// screenshot, C to copy color. W/A/S/D are game buttons, so none of these
 // may use them. They skip Ctrl/Cmd combos (Ctrl is a game trigger), so
 // browser shortcuts such as Ctrl+R and Ctrl+C keep working.
 window.addEventListener('keydown', (e: KeyboardEvent) => {
@@ -729,14 +715,13 @@ window.addEventListener('keydown', (e: KeyboardEvent) => {
   } else if ((e.key === 'g' || e.key === 'G') && !e.repeat) {
     takeScreenshot();
     e.preventDefault();
-  } else if ((e.key === 'c' || e.key === 'C' || e.key === 'F4') && !e.repeat) {
+  } else if ((e.key === 'c' || e.key === 'C') && !e.repeat) {
     const colorValue = colorRgbEl?.textContent;
     if (colorValue && colorValue !== '--') {
       navigator.clipboard
         .writeText(colorValue)
         .then(() => {
           addConsoleEntry('LOG', `Copied color: ${colorValue}`);
-          flashColorCopied(colorValue);
         })
         .catch((err) => {
           const message = err instanceof Error ? err.message : String(err);

@@ -80,7 +80,7 @@ export class Editor {
   readonly hasSavedState = createStore(false);
   /** Color of the game pixel under the mouse, or null when not over the game. */
   readonly pixel = createStore<PixelInfo | null>(null);
-  /** The color just copied with F4 or C, shown briefly under the game; null otherwise. */
+  /** The color just copied with F4, shown briefly under the game; null otherwise. */
   readonly copiedColor = createStore<string | null>(null);
   private copiedTimer: ReturnType<typeof setTimeout> | undefined;
   readonly pixelProbe: PixelProbe;

@@ -25,17 +25,9 @@ export function GamePanel() {
     return mountPixelReadout(el, editor.pixel, editor.copiedColor);
   }, [editor]);
 
-  // C copies the hovered pixel's color, like the classic host. F4 does the
-  // same from anywhere (see SHORTCUTS).
-  const onKeyDown = (e: React.KeyboardEvent) => {
-    if (e.code !== 'KeyC' || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
-    editor.copyPixelColor();
-  };
-
   return (
     <div className="tf-game-panel">
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: the viewport is focusable and takes game keys */}
-      <div ref={ref} className="tf-viewport-host" data-testid="viewport" onKeyDown={onKeyDown} />
+      <div ref={ref} className="tf-viewport-host" data-testid="viewport" />
       <div ref={readout} className="tf-pixel-readout" />
       {session.status === 'hung' && (
         <div className="tf-overlay" role="alert">
