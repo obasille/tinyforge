@@ -13,12 +13,13 @@ import { CodePanel } from './panels/CodePanel.tsx';
 import { ConsolePanel } from './panels/ConsolePanel.tsx';
 import { FilesPanel } from './panels/FilesPanel.tsx';
 import { GamePanel } from './panels/GamePanel.tsx';
+import { LibraryPanel } from './panels/LibraryPanel.tsx';
 import { MemoryPanel } from './panels/MemoryPanel.tsx';
 import { withBoundary } from './panels/PanelBoundary.tsx';
 import { RunPanel } from './panels/RunPanel.tsx';
 import { Toolbar } from './Toolbar.tsx';
 
-const LAYOUT_KEY = 'tinyforge.editor.layout.v2';
+const LAYOUT_KEY = 'tinyforge.editor.layout.v3';
 
 const components: Record<string, FunctionComponent<IDockviewPanelProps>> = {
   game: withBoundary('Game', GamePanel),
@@ -26,6 +27,7 @@ const components: Record<string, FunctionComponent<IDockviewPanelProps>> = {
   memory: withBoundary('Memory', MemoryPanel),
   run: withBoundary('Run', RunPanel),
   files: withBoundary('Files', FilesPanel),
+  library: withBoundary('Library', LibraryPanel),
   code: withBoundary('Code', CodePanel as FunctionComponent<IDockviewPanelProps>),
 };
 
@@ -81,6 +83,29 @@ function defaultLayout(api: DockviewApi): void {
     position: { referencePanel: 'game', direction: 'below' },
     initialHeight: 200,
   });
+  api.addPanel({
+    id: 'library',
+    component: 'library',
+    title: 'Library',
+    position: { referencePanel: 'console', direction: 'within' },
+  });
+  api.getPanel('console')?.api.setActive();
+}
+
+/** Focus the library panel, or open it next to the console. */
+function showLibraryPanel(api: DockviewApi): void {
+  const existing = api.getPanel('library');
+  if (existing) {
+    existing.api.setActive();
+    return;
+  }
+  const anchor = api.getPanel('console');
+  api.addPanel({
+    id: 'library',
+    component: 'library',
+    title: 'Library',
+    position: anchor ? { referencePanel: anchor.id, direction: 'within' } : undefined,
+  });
 }
 
 export function App({ editor }: { editor: Editor }) {
@@ -112,6 +137,14 @@ export function App({ editor }: { editor: Editor }) {
     () =>
       editor.workbench.onOpenFile((path) => {
         if (apiRef.current) openCodePanel(apiRef.current, path);
+      }),
+    [editor],
+  );
+
+  useEffect(
+    () =>
+      editor.onShowLibrary(() => {
+        if (apiRef.current) showLibraryPanel(apiRef.current);
       }),
     [editor],
   );

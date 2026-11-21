@@ -30,3 +30,16 @@ playSfx("pong_wall", 0.5); // volume 0.0 to 1.0
 Sound effects can overlap. Audio only plays after the player has interacted
 with the page (browser autoplay policy). In the editor's dev server, changes
 to this folder reload the sounds without recompiling.
+
+## Metadata (optional)
+
+A `<file>.json` next to a file holds its tags, license and source, for the
+editor's asset library:
+
+```json
+{ "tags": ["ui", "coin"], "license": "CC0", "source": "https://example.com/pack" }
+```
+
+Hosts ignore these files. The editor keeps keys it does not know (for
+example `prompt` for a generated asset) and moves or deletes the sidecar with
+its asset.

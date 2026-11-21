@@ -19,7 +19,8 @@ pnpm workspace. Two hosts share one engine:
   Workspace (`workspace.ts`, `http-workspace.ts`, `project-files.ts`), the
   compile Worker and its bridge (`compile-worker.ts`, `compiler-host.ts`), the
   game Worker (`worker-core.ts`, `game-worker.ts`) and its bridge
-  (`game-host.ts`), the code editor and live asset scan, viewport, memory view.
+  (`game-host.ts`), the code editor and live asset scan, the asset library and import
+  (`asset-library.ts`, `asset-import.ts`), viewport, memory view.
 - `apps/editor`: React + Dockview UI, Vite, the `tinyforge` Vite plugin (serves
   and watches project files; it does not compile).
 - `apps/classic`: the original host, deployed to the site root. Keep it working,

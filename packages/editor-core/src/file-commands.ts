@@ -8,8 +8,9 @@ import type { ProjectFiles } from './project-files.ts';
 
 const baseName = (p: string) => p.slice(p.lastIndexOf('/') + 1);
 
-async function current(files: ProjectFiles, path: string): Promise<Uint8Array | null> {
-  return files.entry(path) ? files.readBytes(path) : null;
+/** A file's bytes, or null. Also finds a file written so recently that the file list does not show it yet. */
+function current(files: ProjectFiles, path: string): Promise<Uint8Array | null> {
+  return files.readBytes(path);
 }
 
 /** Create or replace a file. */
@@ -111,4 +112,45 @@ export async function createGame(files: ProjectFiles, name: string): Promise<Fil
     throw new Error(`games/${name} already exists`);
   }
   return writeFile(files, gameEntryPath(name), newGameSource(name), `New game ${name}`);
+}
+
+/** One step of a file batch. */
+export type FileOp = { write: string; data: Uint8Array | string } | { delete: string };
+
+/**
+ * Several writes and deletes as one command (one undo step). Revert puts back
+ * every path the batch touched, in reverse order.
+ */
+export async function fileBatch(
+  files: ProjectFiles,
+  ops: FileOp[],
+  label: string,
+  type = 'files.batch',
+): Promise<FileCommand> {
+  const before = new Map<string, Uint8Array | null>();
+  for (const op of ops) {
+    const path = 'write' in op ? op.write : op.delete;
+    if (before.has(path)) continue;
+    const bytes = await current(files, path);
+    if (!bytes && 'delete' in op) throw new Error(`${path} not found`);
+    before.set(path, bytes);
+  }
+  return {
+    type,
+    label,
+    args: { ops: ops.map((op) => ('write' in op ? { write: op.write } : op)) },
+    async apply() {
+      for (const op of ops) {
+        if ('write' in op) await files.write(op.write, op.data);
+        else await files.delete(op.delete);
+      }
+    },
+    async revert() {
+      for (const [path, bytes] of [...before].reverse()) {
+        // A path that did not exist was created by the batch.
+        if (bytes) await files.write(path, bytes);
+        else await files.delete(path);
+      }
+    },
+  };
 }
