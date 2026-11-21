@@ -64,7 +64,9 @@ class Vars {
 }
 
 const vars = changetype<Vars>(RAM_START);
-const SNAKE_DATA = 16; // offset in RAM (after Vars), 400 bytes - snake body (2 bytes per segment: x, y)
+// Offset in RAM, right after Vars. offsetof<Vars>() is the struct size;
+// sizeof<Vars>() would be the size of a pointer (4).
+const SNAKE_DATA = offsetof<Vars>(); // 400 bytes - snake body (2 bytes per segment: x, y)
 
 // === Snake Helpers ===
 function getSegmentX(index: i32): u8 {

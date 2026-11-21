@@ -90,17 +90,19 @@ class Vars {
 const vars = changetype<Vars>(RAM_START);
 
 // Alien data: 1 byte per alien (0 = dead, 1 = alive)
-// These are offsets in RAM (after Vars), for getU8() and the like.
-const ALIEN_DATA = 60; // 55 bytes for aliens
+// These are offsets in RAM, for getU8() and the like, each block right after
+// the previous one. offsetof<Vars>() is the struct size; sizeof<Vars>() would
+// be the size of a pointer (4).
+const ALIEN_DATA = offsetof<Vars>(); // 55 bytes for aliens
 
 // Player bullets: 3 bullets × 4 bytes each (x, y, active)
-const PLAYER_BULLET_DATA = 120;
+const PLAYER_BULLET_DATA = ALIEN_DATA + <usize>(ALIEN_ROWS * ALIEN_COLS);
 
 // Alien bullets: 5 bullets × 4 bytes each
-const ALIEN_BULLET_DATA = 132;
+const ALIEN_BULLET_DATA = PLAYER_BULLET_DATA + <usize>(MAX_PLAYER_BULLETS * 4);
 
 // Shield health: 4 shields × 8 blocks each = 32 bytes (0-2 health per block)
-const SHIELD_DATA = 152;
+const SHIELD_DATA = ALIEN_BULLET_DATA + <usize>(MAX_ALIEN_BULLETS * 4);
 
 // === Alien Helpers ===
 function getAlien(col: i32, row: i32): u8 {

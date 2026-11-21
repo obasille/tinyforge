@@ -189,7 +189,9 @@ class Vars {
   frame: i32; // 12 frames since boot, drives small animations
   explosionTimer: i32; // 16
 }
-const VARS_SIZE: i32 = 32;
+// offsetof<Vars>() is the struct size; sizeof<Vars>() would be the size of a
+// pointer (4).
+const VARS_SIZE: i32 = <i32>offsetof<Vars>();
 
 const TANKS_ADDR: usize = RAM_START + VARS_SIZE;
 const SHELLS_ADDR: usize = TANKS_ADDR + 2 * TANK_SIZE;
