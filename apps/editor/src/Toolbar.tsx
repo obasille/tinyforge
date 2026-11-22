@@ -1,8 +1,9 @@
 import { useEditor } from './EditorContext.ts';
 import { GamePicker } from './GamePicker.tsx';
 import { useStore } from './hooks.ts';
+import { UndoHistory } from './UndoHistory.tsx';
 
-export function Toolbar({ onResetLayout }: { onResetLayout: () => void }) {
+export function Toolbar({ onResetLayout, onShowAi }: { onResetLayout: () => void; onShowAi: () => void }) {
   const editor = useEditor();
   const stack = useStore(editor.commands);
   const session = useStore(editor.host.session);
@@ -13,9 +14,12 @@ export function Toolbar({ onResetLayout }: { onResetLayout: () => void }) {
     <header className="tf-toolbar">
       <strong className="tf-brand">TinyForge</strong>
       <GamePicker />
-      <button type="button" disabled={!stack.canUndo} onClick={() => editor.commands.undo()} title="Undo (Ctrl+Z)">
-        Undo{stack.undoLabel ? ` ${stack.undoLabel}` : ''}
-      </button>
+      <span className="tf-undo-group">
+        <button type="button" disabled={!stack.canUndo} onClick={() => editor.commands.undo()} title="Undo (Ctrl+Z)">
+          Undo{stack.undoLabel ? ` ${stack.undoLabel}` : ''}
+        </button>
+        <UndoHistory />
+      </span>
       <button
         type="button"
         disabled={!stack.canRedo}
@@ -55,6 +59,9 @@ export function Toolbar({ onResetLayout }: { onResetLayout: () => void }) {
       <span className={`tf-status tf-status-${session.status}`} data-testid="run-status">
         {session.status}
       </span>
+      <button type="button" data-testid="show-ai" onClick={onShowAi} title="Ask the code agent for a change">
+        AI
+      </button>
       <button type="button" onClick={onResetLayout}>
         Reset layout
       </button>

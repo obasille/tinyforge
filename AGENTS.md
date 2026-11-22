@@ -808,6 +808,7 @@ const items = ArrayView.fromAddress<u16>(RAM_START + Var.ITEMS_START);
    const TITLE = "Game Name";
    const DESCRIPTION = "One line about the game";
    const AUTHOR = "Your Name";
+   const COVER = "gameName_cover"; // optional: a sprite ID, shown in the game picker (64x64, like pong_cover)
    const RAM_SIZE: i32 = 0x400; // optional: game RAM in bytes, a multiple of 16 (default 72 KB)
    ```
 

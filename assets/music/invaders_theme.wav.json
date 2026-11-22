@@ -1,0 +1,35 @@
+{
+  "source": "TinyForge AI",
+  "prompt": "Add a music to space invaders",
+  "generator": "tinyforge-ai",
+  "spec": {
+    "bpm": 140,
+    "loop": true,
+    "tracks": [
+      {
+        "line": "A3 . E4 . A3 . E4 . G3 . D4 . G3 . D4 . F3 . C4 . F3 . C4 . E3 . B3 . E3 . B3 .",
+        "step": 0.5,
+        "wave": "triangle",
+        "vol": 0.5
+      },
+      {
+        "line": "A4 - C5 - E5 . C5 - G4 - B4 - D5 . B4 - F4 - A4 - C5 . A4 - E4 . G#4 . B4 . -",
+        "step": 0.5,
+        "wave": "square",
+        "duty": 0.25,
+        "vol": 0.25
+      },
+      {
+        "line": "A2 - A2 - G2 - G2 - F2 - F2 - E2 - E2 -",
+        "step": 1,
+        "wave": "square",
+        "duty": 0.5,
+        "vol": 0.1
+      }
+    ]
+  },
+  "tags": [
+    "music",
+    "space"
+  ]
+}

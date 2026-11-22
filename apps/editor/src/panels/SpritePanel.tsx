@@ -22,7 +22,7 @@ import {
 import type { IDockviewPanelProps } from 'dockview-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useEditor } from '../EditorContext.ts';
-import { useStore } from '../hooks.ts';
+import { useSaveShortcut, useStore } from '../hooks.ts';
 
 export interface SpritePanelParams {
   path: string;
@@ -73,6 +73,12 @@ export function SpritePanel({ api, params }: IDockviewPanelProps<SpritePanelPara
     };
   }, [editor, initial]);
 
+  useSaveShortcut(api, () => {
+    if (!sprite || !editor.files.state.getState().writable) return;
+    const { dirty, saving } = sprite.state.getState();
+    if (dirty && !saving) void sprite.save();
+  });
+
   return sprite ? <SpriteEditorView sprite={sprite} setTitle={setTitle} /> : null;
 }
 
@@ -113,11 +119,6 @@ function SpriteEditorView({
     if ((e.target as HTMLElement).closest('input, select, textarea')) return;
     const ctrl = e.ctrlKey || e.metaKey;
     const key = e.key.toLowerCase();
-    if (ctrl && key === 's') {
-      e.preventDefault();
-      if (writable) void sprite.save();
-      return;
-    }
     if (ctrl && (key === 'z' || key === 'y')) {
       e.preventDefault();
       const redo = key === 'y' || e.shiftKey;

@@ -12,7 +12,10 @@ pnpm workspace. Two hosts share one engine:
   `compiler.ts` (asc JS API using `assembly/games/asconfig.json`, no Node or
   DOM APIs: the editor runs it in a Worker), `compile-game.ts` (the same from
   disk, for Node: CLI builds and tests), `project-layout.ts` (project paths),
-  `game-meta.ts`, `asset-scan.ts`, `cartridge-meta.ts`.
+  `game-meta.ts`, `asset-scan.ts`, `cartridge-meta.ts`, `cartridge-assets.ts`
+  (assets embedded in an exported cartridge), and `zip.ts` with
+  `game-zip.ts` (a game as a zip, for the editor and `scripts/tf.js`, the
+  `pnpm tf` command line).
 - `packages/runtime`: host runtime in plain TS with no DOM (cartridge imports,
   memory-mapped input, sprite table, fixed-step clock). Runs in a Worker or Node.
 - `packages/editor-core`: editor logic in plain TS: store, commands, the
@@ -22,9 +25,16 @@ pnpm workspace. Two hosts share one engine:
   (`game-host.ts`), the code editor and live asset scan, the asset library and import
   (`asset-library.ts`, `asset-import.ts`), the sprite editor and sound player
   (`sprite-editor.ts`, `sprite-canvas.ts`, `sound-editor.ts`, `sound-view.ts`,
-  with plain-TS `png.ts` and `wav.ts`), viewport, memory view.
+  with plain-TS `png.ts` and `wav.ts`), viewport, memory view. The AI tools
+  are apart in `src/ai/` (`@tinyforge/editor-core/ai`, loaded only by the AI
+  panel): provider interface, the Claude adapter and an OpenAI-compatible one
+  (`openai.ts`, no SDK), the code agent and its tools,
+  and the asset generators (`synth.ts` for sounds, the synth behind the
+  games' sounds, whose recipes are in their sidecars; `pixels.ts` for sprites).
 - `apps/editor`: React + Dockview UI, Vite, the `tinyforge` Vite plugin (serves
-  and watches project files; it does not compile).
+  and watches project files; it does not compile), and `vite/ai-proxy.ts` (dev
+  server only: adds the API key from `.env` to the AI panel's requests, and
+  forwards them to Claude or to the OpenAI-compatible server set in `.env`).
 - `apps/classic`: the original host, deployed to the site root. Keep it working,
   with minimal changes and no code shared with the editor packages. What it
   does not do is listed in `apps/classic/README.md`.
@@ -70,6 +80,10 @@ pnpm test          # Vitest: runtime + editor-core (boots every game)
 pnpm test:e2e      # Playwright smoke tests (starts its own Vite server)
 pnpm build:classic # classic host still builds
 ```
+
+Command line: `pnpm tf help` (export or import a game as a zip, export a
+cartridge with its assets); `pnpm editor:static` builds and serves the
+read-only static editor.
 
 To check the UI by hand: `pnpm dev`, open the page, and use `window.__tf`
 (editor, project, session, snapshot) instead of clicking where you can. Take a

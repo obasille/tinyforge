@@ -1,13 +1,27 @@
-// The file tree: games, the asset library and the (read-only) engine files.
-// Click a text file to open it. Create, rename and delete are undoable
+// The file tree, in three sections: Code (the games' sources), Assets (the
+// asset library) and Engine (the read-only engine files). The file of the
+// active code tab is highlighted and revealed. Click a text file to open it.
+// Create, rename, delete and import are undoable
 // (Ctrl+Z outside a text field). Names are typed in place, never in a dialog.
+// Export saves the selected (or current) game as a zip; import adds one.
+// Cartridge saves it as a release .wasm with the assets it uses embedded.
 
-import { buildTree, isTextFile, type TreeNode } from '@tinyforge/editor-core';
-import { assetKindOf, GAME_NAME, isWritablePath } from '@tinyforge/engine/tooling/project-layout';
-import { useMemo, useState } from 'react';
+import {
+  buildTree,
+  exportCartridge,
+  exportGameZip,
+  gameImportCommand,
+  isTextFile,
+  planGameImport,
+  type TreeNode,
+} from '@tinyforge/editor-core';
+import type { ImportPlan } from '@tinyforge/engine/tooling/game-zip';
+import { assetKindOf, GAME_NAME, gameOf, isWritablePath } from '@tinyforge/engine/tooling/project-layout';
+import { useMemo, useRef, useState } from 'react';
 import { BuildStatus } from '../BuildStatus.tsx';
 import { useEditor } from '../EditorContext.ts';
 import { useStore } from '../hooks.ts';
+import { useRevealFile } from './reveal-file.ts';
 
 type Edit =
   | { kind: 'newGame' }
@@ -16,6 +30,13 @@ type Edit =
   | { kind: 'delete'; node: TreeNode };
 
 const parentOf = (path: string) => path.slice(0, Math.max(path.lastIndexOf('/'), 0));
+
+/** The tree's sections, in order: one per top-level folder. */
+const SECTIONS: { path: string; label: string }[] = [
+  { path: 'games', label: 'Code' },
+  { path: 'assets', label: 'Assets' },
+  { path: 'engine', label: 'Engine' },
+];
 
 /** Folders that hold the project's structure: they cannot be renamed or deleted. */
 const isFixedFolder = (node: TreeNode) =>
@@ -29,6 +50,16 @@ export function FilesPanel() {
   const [selected, setSelected] = useState<string | null>(null);
   const [edit, setEdit] = useState<Edit | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [plan, setPlan] = useState<ImportPlan | null>(null);
+  const zipInput = useRef<HTMLInputElement>(null);
+  const currentGame = useStore(editor.project).game;
+  // Export follows the selection, like Delete: a game's folder or any file in it. Nothing
+  // selected yet: the current game.
+  const selectedGame = selected === null ? currentGame : gameOf(`${selected}/-`);
+  const exportTarget = selectedGame && editor.files.games.includes(selectedGame) ? selectedGame : null;
+  const activeCode = useStore(editor.activeCode);
+  // The active code tab's file: selected, its folders opened, scrolled into view.
+  const treeRef = useRevealFile(activeCode, state.files, setSelected, setOpen);
 
   const selectedNode = useMemo(() => {
     const find = (nodes: TreeNode[]): TreeNode | null => {
@@ -47,6 +78,61 @@ export function FilesPanel() {
     action.then(
       () => setEdit(null),
       (e: unknown) => setError(e instanceof Error ? e.message : String(e)),
+    );
+  };
+
+  const download = (file: Promise<Uint8Array>, name: string, type: string) => {
+    setError(null);
+    file.then(
+      (bytes) => {
+        const url = URL.createObjectURL(new Blob([bytes as Uint8Array<ArrayBuffer>], { type }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      },
+      (e: unknown) => setError(e instanceof Error ? e.message : String(e)),
+    );
+  };
+  const exportGame = (game: string) =>
+    download(
+      exportGameZip(editor.files, game, editor.assets.state.getState().assets),
+      `${game}.zip`,
+      'application/zip',
+    );
+  const exportGameCartridge = (game: string) =>
+    download(
+      exportCartridge(editor.files, game, () => editor.compiler.build(game, 'release')),
+      `${game}.wasm`,
+      'application/wasm',
+    );
+
+  const readZip = (file: File) => {
+    setError(null);
+    setPlan(null);
+    file
+      .arrayBuffer()
+      .then((buf) => planGameImport(editor.files, new Uint8Array(buf)))
+      .then(
+        (p) => {
+          if (p.gameExists) setError(`The project already has a game named ${p.game}. Rename or delete it first.`);
+          else if (p.changed.length > 0) setPlan(p);
+          else finishImport(p, false);
+        },
+        (e: unknown) => setError(`${file.name}: ${e instanceof Error ? e.message : String(e)}`),
+      );
+  };
+
+  const finishImport = (p: ImportPlan, replace: boolean) => {
+    setPlan(null);
+    run(
+      gameImportCommand(editor.files, p, replace)
+        .then((command) => editor.commands.runFile(command))
+        .then(() => {
+          setOpen((s) => new Set([...s, 'games', `games/${p.game}`]));
+          editor.workbench.openFile(`games/${p.game}/main.ts`);
+        }),
     );
   };
 
@@ -117,11 +203,12 @@ export function FilesPanel() {
         ) : (
           <button
             type="button"
-            className={`tf-files-row${selected === node.path ? ' tf-files-selected' : ''}${node.readonly ? ' tf-files-readonly' : ''}`}
+            className={`tf-files-row${selected === node.path ? ' tf-files-selected' : ''}${activeCode === node.path ? ' tf-files-active' : ''}${node.readonly ? ' tf-files-readonly' : ''}`}
             style={{ paddingLeft: 6 + depth * 12 }}
             data-testid={`file-${node.path}`}
             title={node.readonly ? `${node.path} (read-only)` : node.path}
             aria-expanded={node.kind === 'folder' ? isOpen : undefined}
+            aria-current={activeCode === node.path ? 'true' : undefined}
             onClick={() => {
               setSelected(node.path);
               setError(null);
@@ -164,6 +251,44 @@ export function FilesPanel() {
     );
   };
 
+  /** A section: a top-level folder shown as a heading, its contents unindented. */
+  const renderSection = (node: TreeNode, label: string) => {
+    const isOpen = open.has(node.path);
+    return (
+      <li key={node.path} className="tf-files-section">
+        <button
+          type="button"
+          className={`tf-files-row tf-files-section-head${selected === node.path ? ' tf-files-selected' : ''}`}
+          data-testid={`file-${node.path}`}
+          title={node.readonly ? `${node.path} (read-only)` : node.path}
+          aria-expanded={isOpen}
+          onClick={() => {
+            setSelected(node.path);
+            setError(null);
+            toggle(node.path);
+          }}
+        >
+          <span className="tf-files-icon">{isOpen ? '▾' : '▸'}</span>
+          <span className="tf-files-name">{label}</span>
+          {node.readonly ? <span className="tf-files-lock">read-only</span> : null}
+        </button>
+        {isOpen ? (
+          <ul>
+            {node.path === 'games' && edit?.kind === 'newGame' ? (
+              <li>
+                <div className="tf-files-row" style={{ paddingLeft: 6 }}>
+                  <span className="tf-files-icon">+</span>
+                  {nameInput('', 'game name, like spaceRace')}
+                </div>
+              </li>
+            ) : null}
+            {node.children.map((c) => renderNode(c, 0))}
+          </ul>
+        ) : null}
+      </li>
+    );
+  };
+
   return (
     <div className="tf-files" data-testid="files">
       <div className="tf-files-actions">
@@ -199,7 +324,70 @@ export function FilesPanel() {
         >
           Delete
         </button>
+        <button
+          type="button"
+          data-testid="files-export"
+          disabled={!exportTarget}
+          title={
+            exportTarget
+              ? `Save ${exportTarget} as a zip: its folder and the assets it uses`
+              : 'Select a game or one of its files'
+          }
+          onClick={() => exportTarget && exportGame(exportTarget)}
+        >
+          Export
+        </button>
+        <button
+          type="button"
+          data-testid="files-export-cartridge"
+          disabled={!exportTarget}
+          title={
+            exportTarget
+              ? `Save ${exportTarget} as a playable cartridge (.wasm) with the assets it uses inside`
+              : 'Select a game or one of its files'
+          }
+          onClick={() => exportTarget && exportGameCartridge(exportTarget)}
+        >
+          Cartridge
+        </button>
+        <button
+          type="button"
+          data-testid="files-import"
+          disabled={!state.writable}
+          title="Add a game from a zip made by Export"
+          onClick={() => zipInput.current?.click()}
+        >
+          Import
+        </button>
+        <input
+          ref={zipInput}
+          type="file"
+          accept=".zip,application/zip"
+          hidden
+          data-testid="files-import-input"
+          onChange={(e) => {
+            const file = e.currentTarget.files?.[0];
+            e.currentTarget.value = '';
+            if (file) readZip(file);
+          }}
+        />
       </div>
+      {plan ? (
+        <div className="tf-files-confirm" data-testid="files-import-confirm">
+          {`${plan.changed.length} asset${plan.changed.length > 1 ? 's differ' : ' differs'} from the project's: ${plan.changed
+            .map((f) => f.path.split('/').pop())
+            .join(', ')}.`}
+          <button type="button" onClick={() => finishImport(plan, true)}>
+            Replace them
+          </button>
+          <button type="button" onClick={() => finishImport(plan, false)}>
+            Keep mine
+          </button>
+          <button type="button" onClick={() => setPlan(null)}>
+            Cancel
+          </button>
+        </div>
+      ) : null}
       {edit?.kind === 'delete' ? (
         <div className="tf-files-confirm" data-testid="files-confirm">
           Delete {edit.node.kind === 'folder' ? `the folder ${edit.node.path}` : edit.node.path}? Ctrl+Z undoes it.
@@ -217,7 +405,12 @@ export function FilesPanel() {
         </div>
       ) : null}
       {!state.writable && state.ready ? <div className="tf-files-note">Read-only copy of the project</div> : null}
-      <ul className="tf-files-tree">{tree.map((n) => renderNode(n, 0))}</ul>
+      <ul className="tf-files-tree" ref={treeRef}>
+        {SECTIONS.map(({ path, label }) => {
+          const node = tree.find((n) => n.path === path);
+          return node ? renderSection(node, label) : null;
+        })}
+      </ul>
     </div>
   );
 }

@@ -82,6 +82,38 @@ test('the file tree opens files in the code editor; engine files are read-only',
   expect(errors).toEqual([]);
 });
 
+test('the tree has Code, Assets and Engine sections; the active code tab is highlighted', async ({ page }) => {
+  const errors = trackErrors(page);
+  await page.goto('/');
+  await expect(page.getByTestId('run-status')).toHaveText('running');
+  await expect(page.getByTestId('files').locator('.tf-files-section-head .tf-files-name')).toHaveText([
+    'Code',
+    'Assets',
+    'Engine',
+  ]);
+
+  // Opening a file reveals it: its folders open and its row is marked.
+  const pong = page.getByTestId('file-games/pong/main.ts');
+  const drawing = page.getByTestId('file-engine/sdk/drawing.ts');
+  await page.evaluate(() => window.__tf?.editor.workbench.openFile('games/pong/main.ts'));
+  await expect(pong).toHaveClass(/tf-files-active/);
+  await page.evaluate(() => window.__tf?.editor.workbench.openFile('engine/sdk/drawing.ts'));
+  await expect(drawing).toHaveClass(/tf-files-active/);
+  await expect(drawing).toBeInViewport();
+  await expect(pong).not.toHaveClass(/tf-files-active/);
+
+  // Switching tabs moves the mark; focusing another panel keeps it.
+  await page.locator('.dv-default-tab', { hasText: 'main.ts' }).click();
+  await expect(pong).toHaveClass(/tf-files-active/);
+  await page.locator('.dv-default-tab', { hasText: 'Game' }).click();
+  await expect(pong).toHaveClass(/tf-files-active/);
+
+  // Closing the active tab moves the mark to the code tab still shown.
+  await page.locator('.dv-default-tab', { hasText: 'main.ts' }).locator('.dv-default-tab-action').click();
+  await expect(drawing).toHaveClass(/tf-files-active/);
+  expect(errors).toEqual([]);
+});
+
 test('a new game compiles in the browser; saving hot reloads it and keeps its state', async ({ page }) => {
   const errors = trackErrors(page);
   await page.goto('/');
@@ -230,6 +262,14 @@ test('files can be created, renamed and deleted from the tree, with undo', async
 
   await page.getByTestId(`file-games/${game}`).click(); // select the folder (it stays open)
   await expect(page.getByTestId(`file-games/${game}/main.ts`)).toHaveCount(0);
+  // Export follows the selection: this game's folder, not the code root.
+  await expect(page.getByTestId('files-export')).toHaveAttribute('title', new RegExp(`^Save ${game} as a zip`));
+  await page.getByTestId('file-games').click();
+  await expect(page.getByTestId('files-export')).toBeDisabled();
+  await expect(page.getByTestId('files-export-cartridge')).toBeDisabled();
+  await page.getByTestId('file-games').click();
+  await page.getByTestId('file-games/pong').click();
+  await expect(page.getByTestId('files-export')).toHaveAttribute('title', /^Save pong as a zip/);
   await page.getByTestId(`file-games/${game}`).click();
   await page.getByRole('button', { name: 'New file' }).click();
   await page.getByTestId('files-name').fill('level.ts');
@@ -254,11 +294,87 @@ test('files can be created, renamed and deleted from the tree, with undo', async
   await page.keyboard.press('Control+KeyZ');
   await expect.poll(() => existsSync(path.join(dir, 'levels.ts'))).toBe(true);
 
-  // Deleting the game folder removes the game from the picker.
+  // Deleting the game folder, while it runs, removes the game from the picker.
+  await page.evaluate((g) => window.__tf?.editor.selectGame(g), game);
+  await expect.poll(() => page.evaluate(() => window.__tf?.session.getState().game)).toBe(game);
   await page.getByTestId(`file-games/${game}`).click();
   await page.getByRole('button', { name: 'Delete', exact: true }).first().click();
   await page.getByTestId('files-confirm').getByRole('button', { name: 'Delete' }).click();
   await expect.poll(() => existsSync(dir)).toBe(false);
   await expect.poll(() => page.evaluate((g) => window.__tf?.files.games.includes(g), game)).toBe(false);
+  // It was running: another game runs instead, and Ctrl+Z brings back both the game and the choice.
+  await expect.poll(() => page.evaluate(() => window.__tf?.project.getState().game)).toBe('pong');
+  await expect(page.getByTestId('run-status')).toHaveText('running');
+  await page.getByTestId('viewport').focus();
+  await page.keyboard.press('Control+KeyZ');
+  await expect.poll(() => existsSync(path.join(dir, 'main.ts'))).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.__tf?.project.getState().game)).toBe(game);
+  await expect.poll(() => page.evaluate(() => window.__tf?.session.getState().game)).toBe(game);
+  // Redo deletes it again and runs pong again.
+  await page.keyboard.press('Control+Shift+KeyZ');
+  await expect.poll(() => existsSync(dir)).toBe(false);
+  await expect.poll(() => page.evaluate(() => window.__tf?.project.getState().game)).toBe('pong');
+  expect(errors).toEqual([]);
+});
+
+test('a game exports as a zip and imports back as one undo step', async ({ page }) => {
+  const errors = trackErrors(page);
+  await page.goto('/');
+  await createGame(page);
+  await page.getByTestId(`file-${mainPath()}`).click();
+  const download = page.waitForEvent('download');
+  await page.getByTestId('files-export').click();
+  const zip = await download;
+  expect(zip.suggestedFilename()).toBe(`${game}.zip`);
+  const zipFile = path.join(test.info().outputDir, `${game}.zip`);
+  await zip.saveAs(zipFile);
+
+  // Remove the game, then bring it back from the zip.
+  rmSync(path.join(GAMES, game), { recursive: true, force: true });
+  await expect.poll(() => page.evaluate((g) => window.__tf?.editor.games.includes(g), game)).toBe(false);
+  await page.getByTestId('files-import-input').setInputFiles(zipFile);
+  await expect.poll(() => existsSync(path.join(GAMES, game, 'main.ts'))).toBe(true);
+  await expect(page.getByRole('button', { name: `Undo Import game '${game}'` })).toBeVisible();
+
+  // Importing it again is refused: the game exists.
+  await page.getByTestId('files-import-input').setInputFiles(zipFile);
+  await expect(page.getByTestId('files').getByRole('alert')).toContainText(`already has a game named ${game}`);
+
+  await page.getByRole('button', { name: `Undo Import game '${game}'` }).click();
+  await expect.poll(() => existsSync(path.join(GAMES, game, 'main.ts'))).toBe(false);
+  expect(errors).toEqual([]);
+});
+
+test('a game exports as a cartridge whose assets the library imports', async ({ page }) => {
+  const errors = trackErrors(page);
+  await page.goto('/');
+  await expect(page.getByTestId('run-status')).toHaveText('running');
+  await page.getByTestId('file-games/pong').click();
+  await page.getByTestId('file-games/pong/main.ts').click();
+  const download = page.waitForEvent('download');
+  await page.getByTestId('files-export-cartridge').click();
+  const cartridge = await download;
+  expect(cartridge.suggestedFilename()).toBe('pong.wasm');
+  const wasmFile = path.join(test.info().outputDir, 'pong.wasm');
+  await cartridge.saveAs(wasmFile);
+  // Still a cartridge the engine accepts, with its sounds inside.
+  const module = await WebAssembly.compile(readFileSync(wasmFile));
+  expect(WebAssembly.Module.customSections(module, 'tinyforge.assets')).toHaveLength(1);
+
+  await page.locator('.dv-tab', { hasText: 'Library' }).click();
+  await page.getByTestId('library-file-input').setInputFiles(wasmFile);
+  await expect(page.getByTestId('draft-pong_hit_p1.wav')).toBeVisible();
+  await expect(page.getByTestId('draft-pong_theme.wav')).toBeVisible();
+
+  // A game that uses no assets has none to import.
+  await createGame(page);
+  await page.getByTestId(`file-${mainPath()}`).click();
+  const plain = page.waitForEvent('download');
+  await page.getByTestId('files-export-cartridge').click();
+  const plainFile = path.join(test.info().outputDir, `${game}.wasm`);
+  await (await plain).saveAs(plainFile);
+  await page.locator('.dv-tab', { hasText: 'Library' }).click();
+  await page.getByTestId('library-file-input').setInputFiles(plainFile);
+  await expect(page.getByTestId('library')).toContainText('has no embedded assets');
   expect(errors).toEqual([]);
 });

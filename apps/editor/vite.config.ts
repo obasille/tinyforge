@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import checker from 'vite-plugin-checker';
+import { aiProxy } from './vite/ai-proxy.ts';
 import { tinyforge } from './vite/tinyforge-plugin.ts';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -12,6 +13,8 @@ export default defineConfig(({ command }) => ({
   plugins: [
     react(),
     tinyforge({ assetsDir: path.join(repoRoot, 'assets') }),
+    // AI panel routes (dev server only). The key is read from the repository's .env.
+    aiProxy({ envDir: repoRoot }),
     // Type errors in the browser overlay while developing (not during tests).
     command === 'serve' && !process.env.TF_NO_CHECKER ? checker({ typescript: true }) : null,
   ],

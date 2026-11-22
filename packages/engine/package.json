@@ -11,7 +11,10 @@
     "./tooling/asset-scan": "./tooling/asset-scan.ts",
     "./tooling/compiler": "./tooling/compiler.ts",
     "./tooling/game-meta": "./tooling/game-meta.ts",
-    "./tooling/project-layout": "./tooling/project-layout.ts"
+    "./tooling/project-layout": "./tooling/project-layout.ts",
+    "./tooling/zip": "./tooling/zip.ts",
+    "./tooling/game-zip": "./tooling/game-zip.ts",
+    "./tooling/cartridge-assets": "./tooling/cartridge-assets.ts"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",

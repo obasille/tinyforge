@@ -4,10 +4,11 @@ import {
   type DockviewApi,
   DockviewReact,
   type DockviewReadyEvent,
+  type IDockviewPanel,
   type IDockviewPanelProps,
   themeDark,
 } from 'dockview-react';
-import { type FunctionComponent, useCallback, useEffect, useRef } from 'react';
+import { type FunctionComponent, lazy, Suspense, useCallback, useEffect, useRef } from 'react';
 import { EditorContext } from './EditorContext.ts';
 import type { Editor } from './editor.ts';
 import { CodePanel } from './panels/CodePanel.tsx';
@@ -24,6 +25,14 @@ import { Toolbar } from './Toolbar.tsx';
 
 const LAYOUT_KEY = 'tinyforge.editor.layout.v3';
 
+// The AI panel and its code load only when the panel is first shown.
+const AiPanel = lazy(() => import('./panels/AiPanel.tsx'));
+const LazyAiPanel = () => (
+  <Suspense fallback={null}>
+    <AiPanel />
+  </Suspense>
+);
+
 const components: Record<string, FunctionComponent<IDockviewPanelProps>> = {
   game: withBoundary('Game', GamePanel),
   console: withBoundary('Console', ConsolePanel),
@@ -34,6 +43,7 @@ const components: Record<string, FunctionComponent<IDockviewPanelProps>> = {
   code: withBoundary('Code', CodePanel as FunctionComponent<IDockviewPanelProps>),
   sprite: withBoundary('Sprite', SpritePanel as FunctionComponent<IDockviewPanelProps>),
   sound: withBoundary('Sound', SoundPanel as FunctionComponent<IDockviewPanelProps>),
+  ai: withBoundary('AI', LazyAiPanel),
 };
 
 const EDITOR_PANELS = /^(code|sprite|sound):/;
@@ -67,6 +77,34 @@ function openFilePanel(api: DockviewApi, path: string): void {
       : anchor
         ? { referencePanel: anchor.id, direction: 'left' }
         : undefined,
+  });
+}
+
+const codePath = (panel: IDockviewPanel | undefined): string | null =>
+  panel?.id.startsWith('code:') ? ((panel.params as { path?: string } | undefined)?.path ?? null) : null;
+
+/**
+ * Keep `editor.activeCode` on the active code tab. Focusing another panel (the
+ * game, the console) keeps the last code tab; closing it falls back to the code
+ * tab shown in another group, or null.
+ */
+function trackActiveCode(api: DockviewApi, editor: Editor): void {
+  const shownCode = () => {
+    const active = codePath(api.activePanel);
+    if (active) return active;
+    for (const group of api.groups) {
+      const path = codePath(group.activePanel);
+      if (path) return path;
+    }
+    return null;
+  };
+  editor.activeCode.setState(shownCode());
+  api.onDidActivePanelChange(({ panel }) => {
+    const path = codePath(panel);
+    if (path) editor.activeCode.setState(path);
+  });
+  api.onDidRemovePanel((panel) => {
+    if (codePath(panel) === editor.activeCode.getState()) editor.activeCode.setState(shownCode());
   });
 }
 
@@ -124,9 +162,26 @@ function showLibraryPanel(api: DockviewApi): void {
   });
 }
 
+/** Focus the AI panel, or open it next to the run panel (right of the game). */
+function showAiPanel(api: DockviewApi): void {
+  const existing = api.getPanel('ai');
+  if (existing) {
+    existing.api.setActive();
+    return;
+  }
+  const anchor = api.getPanel('run') ?? api.getPanel('game');
+  api.addPanel({
+    id: 'ai',
+    component: 'ai',
+    title: 'AI',
+    position: anchor ? { referencePanel: anchor.id, direction: anchor.id === 'run' ? 'within' : 'right' } : undefined,
+  });
+}
+
 export function App({ editor }: { editor: Editor }) {
   const apiRef = useRef<DockviewApi | null>(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Dockview calls onReady once; the editor is fixed for the app's life.
   const onReady = useCallback((event: DockviewReadyEvent) => {
     apiRef.current = event.api;
     let restored = false;
@@ -140,6 +195,7 @@ export function App({ editor }: { editor: Editor }) {
       event.api.clear();
     }
     if (!restored || event.api.panels.length === 0) defaultLayout(event.api);
+    trackActiveCode(event.api, editor);
     event.api.onDidLayoutChange(() => {
       try {
         localStorage.setItem(LAYOUT_KEY, JSON.stringify(event.api.toJSON()));
@@ -164,6 +220,10 @@ export function App({ editor }: { editor: Editor }) {
       }),
     [editor],
   );
+
+  const showAi = useCallback(() => {
+    if (apiRef.current) showAiPanel(apiRef.current);
+  }, []);
 
   const resetLayout = useCallback(() => {
     const api = apiRef.current;
@@ -194,7 +254,7 @@ export function App({ editor }: { editor: Editor }) {
   return (
     <EditorContext.Provider value={editor}>
       <div className="tf-app">
-        <Toolbar onResetLayout={resetLayout} />
+        <Toolbar onResetLayout={resetLayout} onShowAi={showAi} />
         <div className="tf-dock">
           <DockviewReact components={components} onReady={onReady} theme={themeDark} />
         </div>

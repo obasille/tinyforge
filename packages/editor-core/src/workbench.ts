@@ -10,7 +10,7 @@ import { assetKindOf, isWritablePath } from '@tinyforge/engine/tooling/project-l
 import { type ImportDraft, importCommand, sidecarText } from './asset-import.ts';
 import { idProblem, type LibraryAsset, type Sidecar, sidecarPath } from './asset-library.ts';
 import { CodeEditor } from './code-editor.ts';
-import type { FileCommand } from './commands.ts';
+import { commandLabel, type FileCommand } from './commands.ts';
 import type { CompilerHost } from './compiler-host.ts';
 import { createGame, deleteFiles, fileBatch, renameFiles, writeFile } from './file-commands.ts';
 import { filesUnder } from './file-tree.ts';
@@ -38,6 +38,12 @@ export class Workbench {
     private readonly commands: { runFile(command: FileCommand): Promise<void> },
     private readonly compiler: CompilerHost,
     private readonly currentGame: () => string | null,
+    /**
+     * Run this game (null: none) without an undo step of its own: a file
+     * command that deletes or renames the running game switches games as part
+     * of its own apply and revert, so one Ctrl+Z restores both.
+     */
+    private readonly switchGame: (game: string | null) => void = () => {},
   ) {
     this.library = libraryFromFiles(files.assetFiles);
     compiler.builds.subscribe(() => {
@@ -156,8 +162,31 @@ export class Workbench {
     for (const [from, target] of moves) {
       if (!isWritablePath(from) || !isWritablePath(target)) throw new Error(`Cannot move ${from} to ${target}`);
     }
-    const label = `Rename ${path.split('/').pop()}`;
-    await this.commands.runFile(renameFiles(this.files, moves, label));
+    const label = `${commandLabel('Rename', path)} to '${to}'`;
+    const game = this.currentGame();
+    const moved = moves.find(([from]) => game !== null && from === `games/${game}/main.ts`)?.[1];
+    const follow = moved ? (/^games\/([^/]+)\/main\.ts$/.exec(moved)?.[1] ?? null) : undefined;
+    await this.commands.runFile(this.withGame(renameFiles(this.files, moves, label), follow));
+  }
+
+  /**
+   * The command, switching the running game to `next` when it applies and
+   * back when it reverts (undefined: the running game is untouched).
+   */
+  private withGame(command: FileCommand, next: string | null | undefined): FileCommand {
+    const before = this.currentGame();
+    if (next === undefined || next === before) return command;
+    return {
+      ...command,
+      apply: async () => {
+        await command.apply();
+        this.switchGame(next);
+      },
+      revert: async () => {
+        await command.revert();
+        this.switchGame(before);
+      },
+    };
   }
 
   /** Delete a file, or a folder with everything in it. */
@@ -165,7 +194,18 @@ export class Workbench {
     const paths = await this.withSidecars(filesUnder(this.files.files, path));
     if (paths.length === 0) throw new Error(`${path} not found`);
     for (const p of paths) if (!isWritablePath(p)) throw new Error(`${p} is read-only`);
-    await this.commands.runFile(await deleteFiles(this.files, paths, `Delete ${path.split('/').pop()}`));
+    // Deleting the running game runs another one (pong, or the first left), in the same undo step.
+    const game = this.currentGame();
+    const others = this.files.games.filter((g) => g !== game);
+    const next =
+      game !== null && paths.includes(`games/${game}/main.ts`)
+        ? others.includes('pong')
+          ? 'pong'
+          : (others[0] ?? null)
+        : undefined;
+    await this.commands.runFile(
+      this.withGame(await deleteFiles(this.files, paths, commandLabel('Delete', path)), next),
+    );
   }
 
   /** Asset files with their sidecars (`<file>.json`) added. */
@@ -201,14 +241,18 @@ export class Workbench {
     const empty = Object.values(sidecar).every(
       (v) => v === undefined || v === '' || (Array.isArray(v) && v.length === 0),
     );
-    const name = assetPath.split('/').pop();
     if (empty) {
       if (this.files.exists(path))
-        await this.commands.runFile(await deleteFiles(this.files, [path], `Clear ${name} info`));
+        await this.commands.runFile(await deleteFiles(this.files, [path], commandLabel('Clear info', assetPath)));
       return;
     }
     await this.commands.runFile(
-      await fileBatch(this.files, [{ write: path, data: sidecarText(sidecar) }], `Edit ${name} info`, 'assets.sidecar'),
+      await fileBatch(
+        this.files,
+        [{ write: path, data: sidecarText(sidecar) }],
+        commandLabel('Edit info', assetPath),
+        'assets.sidecar',
+      ),
     );
   }
 

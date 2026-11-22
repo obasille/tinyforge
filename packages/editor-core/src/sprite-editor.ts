@@ -9,7 +9,7 @@
 
 import { assetKindOf } from '@tinyforge/engine/tooling/project-layout';
 import { sidecarPath } from './asset-library.ts';
-import type { FileCommand } from './commands.ts';
+import { commandLabel, type FileCommand } from './commands.ts';
 import { type FileOp, fileBatch } from './file-commands.ts';
 import { decodePng, encodePng, type RgbaImage } from './png.ts';
 import { type ProjectFiles, parseAssetName } from './project-files.ts';
@@ -651,9 +651,10 @@ export class SpriteEditor {
         ops.push({ delete: this.path });
         if (side) ops.push({ delete: sidecarPath(this.path) }, { write: sidecarPath(target), data: side });
       }
-      const name = target.slice(dir.length);
       this.disk = bytes;
-      await this.host.commands.runFile(await fileBatch(this.host.files, ops, `Edit ${name}`, 'sprites.save'));
+      await this.host.commands.runFile(
+        await fileBatch(this.host.files, ops, commandLabel('Edit', target), 'sprites.save'),
+      );
       this.update({ path: target, dirty: false, conflict: null, saving: false });
     } catch (e) {
       this.update({ saving: false, error: `Save failed: ${e instanceof Error ? e.message : String(e)}` });

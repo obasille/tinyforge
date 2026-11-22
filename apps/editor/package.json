@@ -9,7 +9,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "playwright test --trace off"
+    "test:e2e": "playwright test --trace off",
+    "test": "vitest run"
   },
   "dependencies": {
     "@tinyforge/editor-core": "workspace:*",
@@ -30,6 +31,7 @@
     "assemblyscript": "^0.28.20",
     "typescript": "^5.9.3",
     "vite": "8.3.8",
-    "vite-plugin-checker": "1.0.0"
+    "vite-plugin-checker": "1.0.0",
+    "vitest": "5.1.1"
   }
 }

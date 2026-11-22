@@ -98,6 +98,8 @@ export class Editor {
   readonly assets: AssetLibrary;
   /** The asset the library panel shows (a project path), set from elsewhere (the file tree). */
   readonly assetFocus = createStore<string | null>(null);
+  /** The file of the active code tab (the last code tab shown), or null when none is open. Set by the dock. */
+  readonly activeCode = createStore<string | null>(null);
   /** Open sprite editors and sound players (for tests and agents, through window.__tf). */
   readonly openSprites = new Set<SpriteEditor>();
   readonly openSounds = new Set<SoundEditor>();
@@ -117,7 +119,13 @@ export class Editor {
     const compileWorkers = Math.max(1, Math.min(4, Math.floor((navigator.hardwareConcurrency || 2) / 2)));
     this.compiler = new CompilerHost(files, () => new CompileWorker({ name: 'tinyforge-compiler' }), compileWorkers);
     this.commands = new CommandStack(this.project, (message) => this.logs.add('ERROR', message));
-    this.workbench = new Workbench(files, this.commands, this.compiler, () => this.project.getState().game);
+    this.workbench = new Workbench(
+      files,
+      this.commands,
+      this.compiler,
+      () => this.project.getState().game,
+      (game) => this.runGame(game),
+    );
     this.assets = new AssetLibrary(files);
     this.workbench.usedAssets.subscribe(() =>
       this.assets.setLiveUses(this.project.getState().game, this.workbench.usedAssets.getState()),
@@ -210,7 +218,25 @@ export class Editor {
     if (metaChanged.length > 0) void this.catalog.load(metaChanged);
     if (changes.some((c) => assetKindOf(c.path))) void this.reloadAssets();
     const { game } = this.project.getState();
-    if (game && affected.includes(game) && games.includes(game)) this.hotReload(game);
+    if (game && !games.includes(game)) this.gameRemoved(games, changes);
+    else if (game && affected.includes(game)) this.hotReload(game);
+  }
+
+  /**
+   * The current game is gone. The editor's own Delete and Rename already
+   * switched games, inside their undo step (Workbench); this covers a change
+   * made by another program, which has no undo: run the renamed game, or
+   * another one, or none.
+   */
+  private gameRemoved(games: string[], changes: FileChange[]): void {
+    const renamed = games.find((g) => changes.some((c) => c.kind === 'add' && c.path === gameEntryPath(g)));
+    this.runGame(renamed ?? (games.includes('pong') ? 'pong' : (games[0] ?? null)));
+  }
+
+  /** Run a game (null: none) without an undo step; selectGame() is the undoable choice. */
+  private runGame(game: string | null): void {
+    if (!game) this.host.kill({ reload: false });
+    this.project.setState((p) => ({ ...p, game }));
   }
 
   setVolume(volume: number): void {
@@ -284,7 +310,8 @@ export class Editor {
   }
 
   selectGame(game: string): void {
-    this.commands.run(projectCommands.setGame(this.project.getState(), game));
+    const title = this.catalog.games.getState().find((g) => g.name === game)?.title;
+    this.commands.run(projectCommands.setGame(this.project.getState(), game, title));
   }
 
   setSeed(seed: number | null): void {
