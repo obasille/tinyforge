@@ -6,8 +6,6 @@ import { GAME_NAME, gameEntryPath } from '@tinyforge/engine/tooling/project-layo
 import { commandLabel, type FileCommand } from './commands.ts';
 import type { ProjectFiles } from './project-files.ts';
 
-const baseName = (p: string) => p.slice(p.lastIndexOf('/') + 1);
-
 /** A file's bytes, or null. Also finds a file written so recently that the file list does not show it yet. */
 function current(files: ProjectFiles, path: string): Promise<Uint8Array | null> {
   return files.readBytes(path);
@@ -18,7 +16,7 @@ export async function writeFile(
   files: ProjectFiles,
   path: string,
   data: Uint8Array | string,
-  label = commandLabel('Save', baseName(path)),
+  label = commandLabel('Save', path),
 ): Promise<FileCommand> {
   const before = await current(files, path);
   return {
@@ -40,7 +38,7 @@ export async function deleteFiles(files: ProjectFiles, paths: string[], label?: 
   }
   return {
     type: 'files.delete',
-    label: label ?? (paths.length === 1 ? commandLabel('Delete', baseName(paths[0])) : `Delete ${paths.length} files`),
+    label: label ?? (paths.length === 1 ? commandLabel('Delete', paths[0]) : `Delete ${paths.length} files`),
     args: { paths },
     async apply() {
       for (const { path } of saved) await files.delete(path);
@@ -56,7 +54,11 @@ export function renameFiles(files: ProjectFiles, moves: Array<[string, string]>,
   for (const [, to] of moves) if (files.entry(to)) throw new Error(`${to} already exists`);
   return {
     type: 'files.rename',
-    label: label ?? (moves.length === 1 ? commandLabel('Rename', baseName(moves[0][0])) : `Move ${moves.length} files`),
+    label:
+      label ??
+      (moves.length === 1
+        ? `${commandLabel('Rename', moves[0][0])} to '${moves[0][1]}'`
+        : `Move ${moves.length} files`),
     args: { moves },
     async apply() {
       for (const [from, to] of moves) await files.rename(from, to);

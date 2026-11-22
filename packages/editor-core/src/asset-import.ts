@@ -220,6 +220,9 @@ export async function importCommand(
     ops.push({ write: path, data: draft.bytes });
     if (sidecar) ops.push({ write: sidecarPath(path), data: sidecar });
   }
-  const label = drafts.length === 1 ? commandLabel('Import', drafts[0].id) : `Import ${drafts.length} assets`;
+  const label =
+    drafts.length === 1
+      ? commandLabel('Import', targetPath(drafts[0] as ImportDraft & { kind: AssetKind }))
+      : `Import ${drafts.length} assets`;
   return fileBatch(files, ops, label, 'assets.import');
 }

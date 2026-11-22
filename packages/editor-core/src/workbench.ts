@@ -167,17 +167,16 @@ export class Workbench {
     const empty = Object.values(sidecar).every(
       (v) => v === undefined || v === '' || (Array.isArray(v) && v.length === 0),
     );
-    const name = assetPath.split('/').pop();
     if (empty) {
       if (await this.files.readBytes(path))
-        await this.commands.runFile(await deleteFiles(this.files, [path], commandLabel('Clear info', name ?? path)));
+        await this.commands.runFile(await deleteFiles(this.files, [path], commandLabel('Clear info', assetPath)));
       return;
     }
     await this.commands.runFile(
       await fileBatch(
         this.files,
         [{ write: path, data: sidecarText(sidecar) }],
-        commandLabel('Edit info', name ?? path),
+        commandLabel('Edit info', assetPath),
         'assets.sidecar',
       ),
     );
