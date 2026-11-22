@@ -1,7 +1,7 @@
 import { createServer, request, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createAiHandler } from './ai-proxy.ts';
+import { createAiHandler, openAiConfig } from './ai-proxy.ts';
 
 const KEY = 'sk-ant-test-key';
 let server: Server | null = null;
@@ -126,5 +126,48 @@ describe('AI proxy', () => {
     });
     expect(res.status).toBe(400);
     expect(res.text).toContain('not allowed');
+  });
+
+  it('forwards to the OpenAI-compatible server from .env, with its key, for its models only', async () => {
+    const seen: Array<{ url: string; headers: Record<string, string> }> = [];
+    const upstream = (async (url: string, init: RequestInit) => {
+      seen.push({ url, headers: init.headers as Record<string, string> });
+      return new Response('data: [DONE]\n\n', { headers: { 'content-type': 'text/event-stream' } });
+    }) as unknown as typeof fetch;
+    const env = {
+      TF_AI_OPENAI_URL: 'http://localhost:11434/v1/',
+      TF_AI_OPENAI_KEY: 'local-key',
+      TF_AI_OPENAI_MODELS: 'qwen3:8b, llama3.1:8b',
+    };
+    const port = await start({ env }, upstream);
+    const status = JSON.parse((await call(port, '/__tf/ai/status')).text);
+    expect(status.providers).toEqual([{ id: 'openai', models: ['qwen3:8b', 'llama3.1:8b'], defaultModel: 'qwen3:8b' }]);
+    expect(JSON.stringify(status)).not.toContain('local-key');
+    const path = '/__tf/ai/openai/v1/chat/completions';
+    const ok = await call(port, path, { method: 'POST', body: JSON.stringify({ model: 'llama3.1:8b' }) });
+    expect(ok.text).toContain('[DONE]');
+    expect(seen).toEqual([
+      {
+        url: 'http://localhost:11434/v1/chat/completions',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer local-key' },
+      },
+    ]);
+    const bad = await call(port, path, { method: 'POST', body: JSON.stringify({ model: 'gpt-x' }) });
+    expect(bad.status).toBe(400);
+    // Without the OpenAI settings, the route is off.
+    server?.close();
+    const off = await start({});
+    expect((await call(off, path, { method: 'POST', body: '{"model":"qwen3:8b"}' })).status).toBe(503);
+  });
+
+  it('reads the OpenAI settings strictly', () => {
+    expect(openAiConfig({ TF_AI_OPENAI_URL: 'http://x/v1' })).toBeNull();
+    expect(openAiConfig({ TF_AI_OPENAI_URL: 'file:///etc', TF_AI_OPENAI_MODELS: 'a' })).toBeNull();
+    expect(openAiConfig({ TF_AI_OPENAI_URL: 'not a url', TF_AI_OPENAI_MODELS: 'a' })).toBeNull();
+    expect(openAiConfig({ TF_AI_OPENAI_URL: 'https://api.example/v1', TF_AI_OPENAI_MODELS: 'a,,b' })).toEqual({
+      url: 'https://api.example/v1',
+      key: null,
+      models: ['a', 'b'],
+    });
   });
 });

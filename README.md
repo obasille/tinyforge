@@ -1059,6 +1059,12 @@ Then open the URL Vite prints (http://localhost:5173/).
   an envelope and pitch slides). Their sidecar keeps the request and the
   description (`spec`), and marks them `"generator": "tinyforge-ai"`: the
   agent replaces only assets with that mark, never imported ones.
+  Instead of Claude (or as well), the agent can use any OpenAI-compatible
+  server, such as a local Ollama: set `TF_AI_OPENAI_URL`,
+  `TF_AI_OPENAI_MODELS` and, if it needs one, `TF_AI_OPENAI_KEY` in `.env`
+  (see `.env.example`). Its models appear in the panel's model list; it has
+  no effort setting and no cost estimate. Small local models follow the
+  rules less well than Claude, and need a context of 32k tokens or more.
 - **Debugging:** debug builds carry their source map, so Chrome DevTools can
   set breakpoints in the AssemblyScript source.
 - **Panels:** Game, Run (pause, single step, restart, save/load state, seed),
