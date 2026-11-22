@@ -13,7 +13,8 @@
 // engine/ (read-only) and assets/. Only games/<name>/ and the library folders
 // are writable. Requests that change files need an `X-TinyForge: 1` header,
 // so another web page cannot make them (a custom header needs a CORS
-// preflight, which this server does not grant).
+// preflight, which this server does not grant), and a request whose Origin is
+// another site is refused, reads included.
 //
 // The server only serves and watches files: the editor compiles in a Worker.
 // A change on disk, from the editor or from any other program, reaches the
@@ -169,7 +170,8 @@ export function tinyforge({ assetsDir }: { assetsDir: string }): Plugin {
       dev.middlewares.use(async (req, res, next) => {
         const url = new URL(req.url ?? '/', 'http://localhost');
         const pathname = url.pathname;
-        if (!pathname.startsWith('/__tf/')) return next();
+        // /__tf/ai/ belongs to the AI routes (ai-proxy.ts).
+        if (!pathname.startsWith('/__tf/') || pathname.startsWith('/__tf/ai/')) return next();
         const method = req.method ?? 'GET';
         try {
           if (pathname === '/__tf/files.json' && method === 'GET') {
@@ -186,6 +188,15 @@ export function tinyforge({ assetsDir }: { assetsDir: string }): Plugin {
             clients.add(res);
             req.on('close', () => clients.delete(res));
             return;
+          }
+          // Only the editor's own page: a request from another origin is refused, reads included.
+          const origin = req.headers.origin;
+          if (
+            origin !== undefined &&
+            origin !== `http://${req.headers.host}` &&
+            origin !== `https://${req.headers.host}`
+          ) {
+            throw new HttpError(403, 'Cross-origin request refused');
           }
           const mutating = method !== 'GET' && method !== 'HEAD';
           if (mutating && req.headers[MUTATION_HEADER] !== '1') {

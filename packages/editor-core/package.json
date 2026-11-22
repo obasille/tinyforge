@@ -7,13 +7,15 @@
   "exports": {
     ".": "./src/index.ts",
     "./game-worker": "./src/game-worker.ts",
-    "./compile-worker": "./src/compile-worker.ts"
+    "./compile-worker": "./src/compile-worker.ts",
+    "./ai": "./src/ai/index.ts"
   },
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "1.12.0",
     "@codemirror/autocomplete": "6.20.4",
     "@codemirror/commands": "6.11.1",
     "@codemirror/lang-javascript": "6.2.5",
