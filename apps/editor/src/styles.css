@@ -912,3 +912,294 @@ button.tf-files-row.tf-files-selected {
   font-size: 12px;
   color: var(--tf-warn);
 }
+
+/* Library: new sprite and budget */
+.tf-lib-new {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+  padding: 6px 8px;
+  border-bottom: 1px solid #2c2c38;
+}
+.tf-lib-new label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--tf-muted);
+}
+.tf-lib-new input {
+  color: var(--tf-text);
+  width: 72px;
+}
+.tf-lib-new label:first-child input {
+  width: 140px;
+}
+.tf-lib-budget-line {
+  padding: 3px 8px;
+  font-size: 12px;
+  color: var(--tf-muted);
+  border-bottom: 1px solid #2c2c38;
+}
+.tf-lib-budget-note {
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+.tf-lib-budget {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+}
+.tf-lib-budget th {
+  text-align: left;
+  color: var(--tf-muted);
+  font-weight: normal;
+  padding: 2px 8px;
+}
+.tf-lib-budget td {
+  padding: 3px 8px;
+  border-top: 1px solid #26262f;
+  white-space: nowrap;
+}
+.tf-lib-budget-here td {
+  background: #1f2633;
+}
+.tf-lib-budget-bar {
+  width: 40%;
+}
+.tf-lib-budget-bar span {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--tf-accent);
+  min-width: 2px;
+}
+
+/* Sprite editor and sound player */
+.tf-sprite,
+.tf-sound {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  outline: none;
+}
+.tf-sprite-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 8px;
+  border-bottom: 1px solid #2c2c38;
+}
+.tf-sprite-group {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+}
+.tf-sprite-right {
+  margin-left: auto;
+}
+.tf-sprite-tool {
+  width: 30px;
+  padding: 2px 0;
+}
+.tf-sprite-on {
+  border-color: var(--tf-accent);
+  color: var(--tf-accent);
+}
+.tf-sprite-save:not(:disabled) {
+  border-color: var(--tf-accent);
+}
+.tf-sprite-zoom {
+  min-width: 34px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--tf-muted);
+}
+.tf-sprite-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+.tf-sprite-palette {
+  width: 132px;
+  flex-shrink: 0;
+  overflow: auto;
+  padding: 8px;
+  border-right: 1px solid #2c2c38;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tf-sprite-color {
+  width: 100%;
+  height: 32px;
+  padding: 0;
+}
+.tf-sprite-alpha {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--tf-muted);
+}
+.tf-sprite-alpha-range {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+}
+.tf-sprite-palette-title {
+  font-size: 11px;
+  color: var(--tf-muted);
+}
+.tf-sprite-swatches {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 3px;
+}
+.tf-sprite-swatch-btn {
+  padding: 0;
+  height: 20px;
+  border-radius: 3px;
+  background-color: #2b2b36;
+  background-image:
+    linear-gradient(45deg, #353542 25%, transparent 25%, transparent 75%, #353542 75%),
+    linear-gradient(45deg, #353542 25%, transparent 25%, transparent 75%, #353542 75%);
+  background-size: 6px 6px;
+  background-position:
+    0 0,
+    3px 3px;
+  overflow: hidden;
+}
+.tf-sprite-swatch-btn span {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.tf-sprite-swatch-btn.tf-sprite-on {
+  outline: 2px solid var(--tf-accent);
+}
+.tf-sprite-stage {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+  background: #18181f;
+}
+.tf-sprite-canvas {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+  touch-action: none;
+}
+.tf-sprite-frames {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+  padding: 6px 8px;
+  border-top: 1px solid #2c2c38;
+}
+.tf-sprite-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.tf-sprite-preview canvas {
+  image-rendering: pixelated;
+  max-width: 64px;
+  max-height: 64px;
+  background: #2b2b36;
+}
+.tf-sprite-fps {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  font-size: 11px;
+  color: var(--tf-muted);
+}
+.tf-sprite-fps-input {
+  width: 44px;
+  color: var(--tf-text);
+}
+.tf-sprite-strip {
+  order: 3;
+  flex: 1 0 100%;
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  min-width: 0;
+  padding: 2px;
+}
+.tf-sprite-thumb {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  padding: 2px;
+  background: #22222c;
+}
+.tf-sprite-thumb canvas {
+  max-width: 100%;
+  max-height: 100%;
+  image-rendering: pixelated;
+}
+.tf-sprite-thumb span {
+  position: absolute;
+  right: 2px;
+  bottom: 0;
+  font-size: 9px;
+  color: var(--tf-muted);
+}
+.tf-sprite-thumb-on {
+  border-color: var(--tf-accent);
+}
+.tf-sprite-frame-tools {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: center;
+}
+.tf-sprite-size {
+  width: 48px;
+  text-align: right;
+}
+.tf-sprite-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 3px 8px;
+  font-size: 12px;
+  color: var(--tf-muted);
+  border-top: 1px solid #2c2c38;
+  font-family: var(--tf-mono);
+}
+.tf-sprite-swatch-text {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-left: auto;
+}
+.tf-sprite-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 1px solid #4a4a5a;
+}
+.tf-sound-wave {
+  flex: 1;
+  min-height: 80px;
+  position: relative;
+}
+.tf-wave-canvas {
+  position: absolute;
+  inset: 0;
+  cursor: text;
+  touch-action: none;
+}

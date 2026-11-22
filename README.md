@@ -1014,6 +1014,28 @@ Then open the URL Vite prints (http://localhost:5173/).
   frames played in order, with the split refused until it divides the image
   evenly. An existing ID can be replaced on purpose. The whole import is one
   undo step.
+- **Sprite editor:** double-click a sprite in the Library (or use Edit pixels)
+  to edit it: pencil, eraser, fill, line, rectangle and colour picker (B, E,
+  G, L, R, I; right click erases, Alt+click picks), a palette of the sprite's
+  own colours plus a default one, an opacity slider, zoom (wheel, + and -),
+  pixel grid, onion skin and mirroring. Sheets show their frames in a strip:
+  add, duplicate, delete and reorder frames ([ and ] step through them),
+  resize the frame, and preview the animation at any fps. Edits have their
+  own undo inside the panel; Ctrl+S saves a PNG as one undoable file change
+  (a running game shows it at once). Changing the number of frames renames
+  the file (`walk~4x1.png`) and its sidecar. PNGs are read and written
+  pixel-exact, half-transparent pixels included; a JPEG is saved as PNG.
+  New sprite… in the Library creates a blank sprite or sheet.
+- **Sound player:** double-click a sound to see its waveform. Drag to select
+  (Shift extends), Space plays the selection or from the cursor, Loop
+  repeats it. Trim keeps the selection, Cut (Delete) removes it, and Fade
+  in, Fade out and Normalize apply to the selection or the whole sound.
+  Ctrl+S saves a 16-bit WAV as one undoable file change; an MP3 or OGG is
+  saved as a WAV under the same ID.
+- **Sprite budget:** each game gets a sprite table for the sprites its code
+  uses (4 bytes per pixel, at most 256 sprites), placed after its static
+  data. The Library shows what the current game uses, the Budget tab lists
+  every game, and each sprite shows what it adds.
 - **Asset metadata:** tags, license and source live in a sidecar next to the
   file, `<file>.json` (`coin~8x1.png.json`). It is optional, and other keys
   (such as `prompt` for a generated asset) are kept. Renaming or deleting an

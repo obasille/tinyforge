@@ -11,9 +11,11 @@ import {
   idProblem,
   importProblems,
   type LibraryAsset,
+  MAX_GAME_SPRITES,
   matchesSearch,
   replacedBy,
   type Sidecar,
+  type SpriteBudget,
   suggestedSheet,
   tagCounts,
   targetFile,
@@ -166,6 +168,9 @@ export function LibraryPanel() {
   const focus = useStore(editor.assetFocus);
   const game = useStore(editor.project).game;
   const [kind, setKind] = useState<AssetKind>('sprites');
+  const [budgetView, setBudgetView] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const budgets = useStore(editor.assets.state).budgets;
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<ImportDraft[]>([]);
@@ -244,14 +249,28 @@ export function LibraryPanel() {
               key={k}
               type="button"
               role="tab"
-              aria-selected={kind === k}
-              className={kind === k ? 'tf-lib-tab tf-lib-tab-on' : 'tf-lib-tab'}
+              aria-selected={!budgetView && kind === k}
+              className={!budgetView && kind === k ? 'tf-lib-tab tf-lib-tab-on' : 'tf-lib-tab'}
               data-testid={`library-tab-${k}`}
-              onClick={() => setKind(k)}
+              onClick={() => {
+                setKind(k);
+                setBudgetView(false);
+              }}
             >
               {label} <span className="tf-lib-muted">{counts[k]}</span>
             </button>
           ))}
+          <button
+            type="button"
+            role="tab"
+            aria-selected={budgetView}
+            className={budgetView ? 'tf-lib-tab tf-lib-tab-on' : 'tf-lib-tab'}
+            data-testid="library-tab-budget"
+            title="Sprite memory per game"
+            onClick={() => setBudgetView(true)}
+          >
+            Budget
+          </button>
         </div>
         <input
           className="tf-lib-search"
@@ -262,6 +281,11 @@ export function LibraryPanel() {
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.stopPropagation()}
         />
+        {canImport && kind === 'sprites' && !budgetView ? (
+          <button type="button" data-testid="library-new-sprite" onClick={() => setCreating((c) => !c)}>
+            New sprite…
+          </button>
+        ) : null}
         {canImport ? (
           <>
             <button type="button" data-testid="library-import" onClick={() => fileInput.current?.click()}>
@@ -282,7 +306,22 @@ export function LibraryPanel() {
           </>
         ) : null}
       </div>
-      {tags.length > 0 ? (
+      {creating && !budgetView ? (
+        <NewSpriteForm
+          onCancel={() => setCreating(false)}
+          onCreated={(path) => {
+            setCreating(false);
+            setSelected(path);
+          }}
+        />
+      ) : null}
+      {game && budgets[game] && kind === 'sprites' && !budgetView ? (
+        <div className="tf-lib-budget-line" data-testid="library-budget-line">
+          {game}: {budgets[game].sprites} sprite{budgets[game].sprites === 1 ? '' : 's'} ·{' '}
+          {formatBytes(budgets[game].bytes)} of sprite memory
+        </div>
+      ) : null}
+      {budgetView ? null : tags.length > 0 ? (
         <div className="tf-lib-tags">
           {tags.map(({ tag, count }) => (
             <button
@@ -297,7 +336,9 @@ export function LibraryPanel() {
         </div>
       ) : null}
       {error ? <div className="tf-lib-error">{error}</div> : null}
-      {drafts.length > 0 ? (
+      {budgetView ? (
+        <BudgetView budgets={budgets} game={game} />
+      ) : drafts.length > 0 ? (
         <ImportView
           drafts={drafts}
           assets={assets}
@@ -327,6 +368,7 @@ export function LibraryPanel() {
                     data-testid={`asset-${a.path}`}
                     title={a.file}
                     onClick={() => setSelected(a.path)}
+                    onDoubleClick={() => editor.workbench.openFile(a.path)}
                   >
                     <span className="tf-lib-thumb">
                       <SpriteView url={a.url} box={64} />
@@ -358,6 +400,7 @@ export function LibraryPanel() {
                       data-testid={`asset-${a.path}`}
                       title={a.file}
                       onClick={() => setSelected(a.path)}
+                      onDoubleClick={() => editor.workbench.openFile(a.path)}
                     >
                       <span className="tf-lib-card-id">{a.id}</span>
                       <span className="tf-lib-muted">{formatBytes(a.size)}</span>
@@ -612,6 +655,21 @@ function Details({
           </button>
         ) : null}
       </fieldset>
+      <div className="tf-lib-actions">
+        <button
+          type="button"
+          data-testid="library-open"
+          title="Or double-click the asset"
+          onClick={() => editor.workbench.openFile(asset.path)}
+        >
+          {asset.kind === 'sprites' ? 'Edit pixels' : 'Open in player'}
+        </button>
+        {asset.kind === 'sprites' ? (
+          <span className="tf-lib-muted" title="Bytes this sprite adds to a game's sprite table">
+            {formatBytes(asset.tableBytes)} of sprite memory
+          </span>
+        ) : null}
+      </div>
       {writable ? (
         <div className="tf-lib-actions">
           {confirmDelete ? (
@@ -905,5 +963,115 @@ function DraftCard({
         ) : null}
       </div>
     </div>
+  );
+}
+
+/** Sprite memory per game: what the host adds to each game for the sprites it uses. */
+function BudgetView({ budgets, game }: { budgets: Record<string, SpriteBudget>; game: string | null }) {
+  const editor = useEditor();
+  const rows = Object.entries(budgets).sort((a, b) => b[1].bytes - a[1].bytes || a[0].localeCompare(b[0]));
+  const largest = Math.max(1, ...rows.map(([, b]) => b.bytes));
+  return (
+    <div className="tf-lib-list" data-testid="library-budget">
+      <p className="tf-lib-muted tf-lib-budget-note">
+        Each game gets a sprite table for the sprites its code uses (at most {MAX_GAME_SPRITES}), placed after its
+        static data. Pixels take 4 bytes each.
+      </p>
+      <table className="tf-lib-budget">
+        <thead>
+          <tr>
+            <th>Game</th>
+            <th>Sprites</th>
+            <th>Sprite memory</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(([g, b]) => (
+            <tr key={g} className={g === game ? 'tf-lib-budget-here' : undefined} data-testid={`budget-${g}`}>
+              <td>
+                <button type="button" className="tf-lib-link" onClick={() => editor.selectGame(g)}>
+                  {g}
+                </button>
+              </td>
+              <td>
+                {b.sprites}/{MAX_GAME_SPRITES}
+                {b.missing.length > 0 ? (
+                  <span className="tf-lib-warn" title={`Not in the library: ${b.missing.join(', ')}`}>
+                    {' '}
+                    +{b.missing.length} missing
+                  </span>
+                ) : null}
+              </td>
+              <td>{formatBytes(b.bytes)}</td>
+              <td className="tf-lib-budget-bar">
+                <span style={{ width: `${(b.bytes / largest) * 100}%` }} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** A blank sprite: ID, frame size and frame count, then the sprite editor opens. */
+function NewSpriteForm({ onCancel, onCreated }: { onCancel: () => void; onCreated: (path: string) => void }) {
+  const editor = useEditor();
+  const [id, setId] = useState('');
+  const [w, setW] = useState('16');
+  const [h, setH] = useState('16');
+  const [frames, setFrames] = useState('1');
+  const [error, setError] = useState<string | null>(null);
+  const stop = (e: { stopPropagation(): void }) => e.stopPropagation();
+  return (
+    <form
+      className="tf-lib-new"
+      data-testid="library-new-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setError(null);
+        editor.workbench
+          .createSprite(id.trim(), Number(w), Number(h), Number(frames))
+          .then(onCreated, (err: unknown) => setError(errorText(err)));
+      }}
+    >
+      <label>
+        ID
+        <input
+          value={id}
+          data-testid="new-sprite-id"
+          maxLength={32}
+          onChange={(e) => setId(e.target.value)}
+          onKeyDown={stop}
+        />
+      </label>
+      <label>
+        Width
+        <input type="number" min={1} max={1024} value={w} onChange={(e) => setW(e.target.value)} onKeyDown={stop} />
+      </label>
+      <label>
+        Height
+        <input type="number" min={1} max={1024} value={h} onChange={(e) => setH(e.target.value)} onKeyDown={stop} />
+      </label>
+      <label>
+        Frames
+        <input
+          type="number"
+          min={1}
+          max={255}
+          value={frames}
+          onChange={(e) => setFrames(e.target.value)}
+          onKeyDown={stop}
+        />
+      </label>
+      <button type="submit" data-testid="new-sprite-create" disabled={!id.trim()}>
+        Create
+      </button>
+      <button type="button" onClick={onCancel}>
+        Cancel
+      </button>
+      {error ? <span className="tf-lib-error">{error}</span> : null}
+    </form>
   );
 }

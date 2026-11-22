@@ -1,4 +1,5 @@
 import { matchShortcut } from '@tinyforge/editor-core';
+import { assetKindOf } from '@tinyforge/engine/tooling/project-layout';
 import {
   type DockviewApi,
   DockviewReact,
@@ -17,6 +18,8 @@ import { LibraryPanel } from './panels/LibraryPanel.tsx';
 import { MemoryPanel } from './panels/MemoryPanel.tsx';
 import { withBoundary } from './panels/PanelBoundary.tsx';
 import { RunPanel } from './panels/RunPanel.tsx';
+import { SoundPanel } from './panels/SoundPanel.tsx';
+import { SpritePanel } from './panels/SpritePanel.tsx';
 import { Toolbar } from './Toolbar.tsx';
 
 const LAYOUT_KEY = 'tinyforge.editor.layout.v3';
@@ -29,21 +32,34 @@ const components: Record<string, FunctionComponent<IDockviewPanelProps>> = {
   files: withBoundary('Files', FilesPanel),
   library: withBoundary('Library', LibraryPanel),
   code: withBoundary('Code', CodePanel as FunctionComponent<IDockviewPanelProps>),
+  sprite: withBoundary('Sprite', SpritePanel as FunctionComponent<IDockviewPanelProps>),
+  sound: withBoundary('Sound', SoundPanel as FunctionComponent<IDockviewPanelProps>),
 };
 
-/** Show a file: focus its panel, or open one next to the other code panels (left of the game). */
-function openCodePanel(api: DockviewApi, path: string): void {
-  const id = `code:${path}`;
-  const existing = api.getPanel(id);
+const EDITOR_PANELS = /^(code|sprite|sound):/;
+
+/** The panel kind that edits a file: the sprite editor, the sound player, or code. */
+function panelKind(path: string): 'code' | 'sprite' | 'sound' {
+  const kind = assetKindOf(path);
+  return kind === 'sprites' ? 'sprite' : kind ? 'sound' : 'code';
+}
+
+/** Show a file: focus its panel, or open one next to the other editor panels (left of the game). */
+function openFilePanel(api: DockviewApi, path: string): void {
+  const component = panelKind(path);
+  // A save can rename an asset file; its panel keeps its ID and follows the new path.
+  const existing =
+    api.getPanel(`${component}:${path}`) ??
+    api.panels.find((p) => EDITOR_PANELS.test(p.id) && (p.params as { path?: string } | undefined)?.path === path);
   if (existing) {
     existing.api.setActive();
     return;
   }
-  const sibling = api.panels.find((p) => p.id.startsWith('code:'));
+  const sibling = api.panels.find((p) => EDITOR_PANELS.test(p.id));
   const anchor = api.getPanel('game') ?? api.panels[0];
   api.addPanel({
-    id,
-    component: 'code',
+    id: `${component}:${path}`,
+    component,
     title: path.slice(path.lastIndexOf('/') + 1),
     params: { path },
     position: sibling
@@ -136,7 +152,7 @@ export function App({ editor }: { editor: Editor }) {
   useEffect(
     () =>
       editor.workbench.onOpenFile((path) => {
-        if (apiRef.current) openCodePanel(apiRef.current, path);
+        if (apiRef.current) openFilePanel(apiRef.current, path);
       }),
     [editor],
   );
@@ -163,8 +179,9 @@ export function App({ editor }: { editor: Editor }) {
       const shortcut = matchShortcut(e);
       if (!shortcut) return;
       const target = e.target as HTMLElement | null;
-      const typing = target?.closest('input, textarea, select, [contenteditable]');
-      if (typing && (shortcut.action === 'undo' || shortcut.action === 'redo')) return;
+      // Text fields, and panels with their own history (sprite editor, sound player), keep undo/redo.
+      const local = target?.closest('input, textarea, select, [contenteditable], [data-local-history]');
+      if (local && (shortcut.action === 'undo' || shortcut.action === 'redo')) return;
       e.preventDefault();
       e.stopPropagation();
       if (e.repeat && shortcut.action !== 'step') return;
