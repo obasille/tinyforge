@@ -20,7 +20,7 @@ import { encodeWav } from '../wav.ts';
 import type { FileChange } from '../workspace.ts';
 import { type PixelSpec, renderPixels } from './pixels.ts';
 import type { ToolCall, ToolSpec } from './provider.ts';
-import { renderSynth, type SynthSpec } from './synth.ts';
+import { MUSIC_RATE, renderSynth, SFX_RATE, type SynthSpec } from './synth.ts';
 
 /** What the tools reach in the editor. */
 export interface AgentContext {
@@ -44,22 +44,39 @@ export const AI_GENERATOR = 'tinyforge-ai';
 /** Longest wait for the file list to show the assets a request made, before compiling. */
 const LIST_WAIT_MS = 5000;
 
+const VOICE_PROPERTIES = {
+  wave: { type: 'string', enum: ['square', 'triangle', 'saw', 'sine', 'noise'] },
+  vol: { type: 'number', description: '0 to 1, default 0.5' },
+  attack: { type: 'number', description: 'Seconds, default 0.002' },
+  decay: { type: 'number', description: 'Seconds, default 0.05' },
+  sustain: { type: 'number', description: 'Level 0 to 1, default 0.7 (0 with a long decay: a plucked fade)' },
+  release: { type: 'number', description: 'Seconds, default 0.05' },
+  duty: { type: 'number', description: 'Square duty 0.05 to 0.95, default 0.5; 0.125 and 0.25 sound thin' },
+};
 const NOTE_SCHEMA = {
   type: 'object',
   properties: {
     at: { type: 'number', description: 'Start (seconds, or beats with bpm)' },
     len: { type: 'number', description: 'Held length (seconds, or beats with bpm)' },
-    note: { type: ['string', 'number'], description: 'Note name (C4, F#5, Bb3) or Hz' },
-    wave: { type: 'string', enum: ['square', 'triangle', 'saw', 'sine', 'noise'] },
+    note: { type: ['string', 'number'], description: 'Note name (C4, F#5, Bb3) or Hz; for noise, the clock in Hz' },
     to: { type: ['string', 'number'], description: 'Slide to this pitch over the note' },
-    vol: { type: 'number', description: '0 to 1, default 0.5' },
-    attack: { type: 'number', description: 'Seconds, default 0.005' },
-    decay: { type: 'number', description: 'Seconds, default 0.05' },
-    sustain: { type: 'number', description: 'Level 0 to 1, default 0.7' },
-    release: { type: 'number', description: 'Seconds, default 0.05' },
-    duty: { type: 'number', description: 'Square duty 0.05 to 0.95, default 0.5' },
+    ...VOICE_PROPERTIES,
   },
   required: ['at', 'len', 'note'],
+};
+const TRACK_SCHEMA = {
+  type: 'object',
+  properties: {
+    line: {
+      type: 'string',
+      description: 'One token per step: a note name (or Hz for noise), "." holds, "-" rests. Like "C4 . E4 - G4 . . -"',
+    },
+    step: { type: 'number', description: 'Length of one token (seconds, or beats with bpm)' },
+    at: { type: 'number', description: 'Start, default 0' },
+    hold: { type: 'number', description: 'Part of each note that sounds, 0.1 to 1, default 0.9' },
+    ...VOICE_PROPERTIES,
+  },
+  required: ['line', 'step'],
 };
 const TAGS_SCHEMA = { type: 'array', items: { type: 'string' } };
 
@@ -125,17 +142,22 @@ export const AGENT_TOOLS: ToolSpec[] = [
   {
     name: 'make_sound',
     description:
-      'Add a sound effect (kind "sfx") or music (kind "music") to the library, made by a small retro synthesizer from a list of notes. Notes may overlap (chords, a bass line). Times are seconds, or beats when bpm is set. At most 120 s. An ID already in the library replaces that asset once the user agrees (they are asked).',
+      'Add a sound effect (kind "sfx") or music (kind "music") to the library, made by the chiptune synthesizer the games\' sounds come from: square (pulse, with duty), triangle (8-bit stepped), noise (LFSR; its pitch is the clock, 1000 to 12000 Hz), saw and sine. Give single notes (effects: a pitch slide with `to`, noise bursts) or tracks (music: one line of tokens per voice, like a lead, a bass and a drum line), or both; they may overlap. Times are seconds, or beats when bpm is set. At most 120 s. Music that repeats should set loop. An ID already in the library replaces that asset once the user agrees (they are asked).',
     schema: {
       properties: {
         id: { type: 'string', description: 'Letters, digits and _; at most 16' },
         kind: { type: 'string', enum: ['sfx', 'music'] },
         bpm: { type: 'number' },
-        volume: { type: 'number', description: 'Master volume 0 to 1, default 0.8' },
+        volume: {
+          type: 'number',
+          description: 'Peak volume 0 to 1; default 0.35 for sfx, 0.5 for music (like the games)',
+        },
+        loop: { type: 'boolean', description: 'No fade-out at the end, for music that loops' },
         notes: { type: 'array', items: NOTE_SCHEMA },
+        tracks: { type: 'array', items: TRACK_SCHEMA },
         tags: TAGS_SCHEMA,
       },
-      required: ['id', 'kind', 'notes'],
+      required: ['id', 'kind'],
     },
   },
   {
@@ -401,10 +423,17 @@ export class AgentTools {
     const id = this.assetId(input);
     const kind = input.kind;
     if (kind !== 'sfx' && kind !== 'music') throw new ToolError('kind must be "sfx" or "music"');
-    const spec = { bpm: input.bpm, volume: input.volume, notes: input.notes } as SynthSpec;
+    const { bpm, volume, loop, notes, tracks } = input;
+    const spec = Object.fromEntries(
+      Object.entries({ bpm, volume, loop, notes, tracks }).filter(([, v]) => v !== undefined),
+    ) as SynthSpec;
     let sound: ReturnType<typeof renderSynth>;
     try {
-      sound = renderSynth(spec);
+      // The scripts' rates and loudness, so made sounds match the games' own.
+      sound = renderSynth(
+        spec,
+        kind === 'music' ? { sampleRate: MUSIC_RATE, volume: 0.5 } : { sampleRate: SFX_RATE, volume: 0.35 },
+      );
     } catch (e) {
       throw new ToolError((e as Error).message);
     }

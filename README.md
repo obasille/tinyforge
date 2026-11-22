@@ -1054,9 +1054,11 @@ Then open the URL Vite prints (http://localhost:5173/).
   static build has no AI. The agent's guide is `AGENTS.md`, and each game can
   keep design notes in `games/<name>/NOTES.md` that the agent reads and
   updates. The agent can also add assets the game needs: sprites drawn as a
-  text grid of palette characters, and sound effects or music played on a
-  small retro synthesizer (square, triangle, saw, sine and noise notes with
-  an envelope and pitch slides). Their sidecar keeps the request and the
+  text grid of palette characters, and sound effects or music played on
+  `synth.ts`, the TypeScript port of `scripts/chiptune.py` that made the
+  games' sounds (pulse, 16-step triangle and LFSR noise voices, plus saw and
+  sine, with envelopes, pitch slides and the scripts' one-line note
+  patterns), at the scripts' sample rates and loudness. Their sidecar keeps the request and the
   description (`spec`), and marks them `"generator": "tinyforge-ai"`. Before
   it replaces an asset that already exists (imported or made earlier), the
   agent pauses and the panel asks: Replace or Keep (Stop counts as Keep).
