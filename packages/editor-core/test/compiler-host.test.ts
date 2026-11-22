@@ -219,6 +219,21 @@ describe('live asset scan', () => {
 });
 
 describe('Workbench', () => {
+  it('rebuilds a game built before when a sprite it uses is deleted, even with no file open', async () => {
+    const { files, compiler } = await setup();
+    const workbench = new Workbench(files, { runFile: async (c) => void (await c.apply()) }, compiler, () => 'pong');
+    files.onChange(async (c) => workbench.filesChanged(c, compiler.invalidate(c)));
+    const source = newGameSource('fresh')
+      .replace('import {', 'import { drawSprite, s,')
+      .replace('clearFramebuffer(c(0x141828));', 'clearFramebuffer(c(0x141828));\n  drawSprite(s("heart"), 0, 0);');
+    await files.write('games/fresh/main.ts', source);
+    await settle();
+    await settle();
+    expect((await compiler.build('fresh')).ok).toBe(true);
+    await files.delete('assets/sprites/heart.png');
+    await expect.poll(() => compiler.builds.getState().fresh?.status).toBe('failed');
+  });
+
   it("reports the assets the current game's last build uses", async () => {
     const { files, compiler } = await setup();
     const runs: unknown[] = [];

@@ -198,13 +198,14 @@ export class Workbench {
   /**
    * Files changed: open editors reload or ask; the library may have changed.
    * `affected` are the games whose builds the changes made stale; the ones
-   * with open files (other than the running game, which reloads anyway) are
-   * rebuilt so their editors show fresh compile errors.
+   * built before or with open files (other than the running game, which
+   * reloads anyway) are rebuilt, so their compile status and errors stay true.
    */
   filesChanged(changes: FileChange[], affected: string[] = []): void {
     const running = this.currentGame();
+    const built = this.compiler.builds.getState();
     for (const game of affected) {
-      if (game !== running && this.files.games.includes(game) && this.hasOpenFiles(game))
+      if (game !== running && this.files.games.includes(game) && (built[game] || this.hasOpenFiles(game)))
         void this.compiler.build(game);
     }
     this.library = libraryFromFiles(this.files.assetFiles);
