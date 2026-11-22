@@ -1,7 +1,7 @@
 import { createServer, request, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createAiHandler } from './ai-proxy.ts';
+import { createAiHandler, openAiConfig } from './ai-proxy.ts';
 
 const KEY = 'sk-ant-test-key';
 let server: Server | null = null;
@@ -126,5 +126,70 @@ describe('AI proxy', () => {
     });
     expect(res.status).toBe(400);
     expect(res.text).toContain('not allowed');
+  });
+
+  it('forwards to the OpenAI-compatible server from .env, with its key, for its models only', async () => {
+    const seen: Array<{ url: string; headers: Record<string, string> }> = [];
+    const upstream = (async (url: string, init: RequestInit) => {
+      seen.push({ url, headers: init.headers as Record<string, string> });
+      return new Response('data: [DONE]\n\n', { headers: { 'content-type': 'text/event-stream' } });
+    }) as unknown as typeof fetch;
+    const env = {
+      TF_AI_OPENAI_URL: 'http://localhost:11434/v1/',
+      TF_AI_OPENAI_KEY: 'local-key',
+      TF_AI_OPENAI_MODELS: 'qwen3:8b, llama3.1:8b',
+    };
+    const port = await start({ env }, upstream);
+    const status = JSON.parse((await call(port, '/__tf/ai/status')).text);
+    expect(status.providers).toEqual([{ id: 'openai', models: ['qwen3:8b', 'llama3.1:8b'], defaultModel: 'qwen3:8b' }]);
+    expect(JSON.stringify(status)).not.toContain('local-key');
+    const path = '/__tf/ai/openai/v1/chat/completions';
+    const ok = await call(port, path, { method: 'POST', body: JSON.stringify({ model: 'llama3.1:8b' }) });
+    expect(ok.text).toContain('[DONE]');
+    expect(seen).toEqual([
+      {
+        url: 'http://localhost:11434/v1/chat/completions',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer local-key' },
+      },
+    ]);
+    const bad = await call(port, path, { method: 'POST', body: JSON.stringify({ model: 'gpt-x' }) });
+    expect(bad.status).toBe(400);
+    // Without the OpenAI settings, the route is off.
+    server?.close();
+    const off = await start({});
+    expect((await call(off, path, { method: 'POST', body: '{"model":"qwen3:8b"}' })).status).toBe(503);
+  });
+
+  it('reads the OpenAI settings strictly: https, or http to this machine only', async () => {
+    expect(openAiConfig({})).toBeNull();
+    expect(openAiConfig({ TF_AI_OPENAI_URL: 'http://localhost:11434/v1' })).toContain('TF_AI_OPENAI_MODELS');
+    expect(openAiConfig({ TF_AI_OPENAI_URL: 'not a url', TF_AI_OPENAI_MODELS: 'a' })).toContain('not a URL');
+    for (const url of ['http://192.168.1.5:11434/v1', 'http://ollama.example/v1', 'file:///etc', 'ftp://x']) {
+      expect(openAiConfig({ TF_AI_OPENAI_URL: url, TF_AI_OPENAI_MODELS: 'a' })).toContain('must be https');
+    }
+    expect(openAiConfig({ TF_AI_OPENAI_URL: 'http://127.0.0.1:1234/v1', TF_AI_OPENAI_MODELS: 'a' })).toMatchObject({
+      url: 'http://127.0.0.1:1234/v1',
+    });
+    expect(openAiConfig({ TF_AI_OPENAI_URL: 'https://api.example/v1', TF_AI_OPENAI_MODELS: 'a,,b' })).toEqual({
+      url: 'https://api.example/v1',
+      key: null,
+      models: ['a', 'b'],
+    });
+    // A refused URL is never used, and the panel says why.
+    const used: string[] = [];
+    const port = await start(
+      { env: { ANTHROPIC_API_KEY: KEY, TF_AI_OPENAI_URL: 'http://ollama.example/v1', TF_AI_OPENAI_MODELS: 'a' } },
+      (async (url: string) => {
+        used.push(url);
+        return new Response('{}');
+      }) as unknown as typeof fetch,
+    );
+    const status = JSON.parse((await call(port, '/__tf/ai/status')).text);
+    expect(status.providers.map((p: { id: string }) => p.id)).toEqual(['anthropic']);
+    expect(status.reason).toContain('must be https');
+    const post = await call(port, '/__tf/ai/openai/v1/chat/completions', { method: 'POST', body: '{"model":"a"}' });
+    expect(post.status).toBe(503);
+    expect(post.text).toContain('must be https');
+    expect(used).toEqual([]);
   });
 });

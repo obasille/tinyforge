@@ -125,7 +125,7 @@ test('the code agent edits the game, compiles, and one undo reverts the request'
 
   await page.getByTestId('show-ai').click();
   const panel = page.getByTestId('ai-panel');
-  await expect(panel.getByTestId('ai-model')).toHaveValue('claude-opus-5-5');
+  await expect(panel.getByTestId('ai-model')).toHaveValue('anthropic:claude-opus-5-5');
   await panel.getByTestId('ai-input').fill('Change the description');
   await panel.getByTestId('ai-input').press('Enter');
 
@@ -176,7 +176,8 @@ test('the agent makes a sprite and a sound the game can use, and undo removes th
     [
       {
         tool: 'make_sprite',
-        input: { id: game, palette: { r: '#ff0000' }, frames: [['.r.', 'rrr', '.r.']] },
+        // A 64x64 cover, the largest frame.
+        input: { id: game, palette: { r: '#ff0000' }, frames: [Array.from({ length: 64 }, () => 'r.'.repeat(32))] },
       },
       { tool: 'make_sound', input: { id: game, kind: 'sfx', notes: [{ at: 0, len: 0.1, note: 'C5', to: 'C6' }] } },
     ],
@@ -184,6 +185,14 @@ test('the agent makes a sprite and a sound the game can use, and undo removes th
       {
         tool: 'edit_file',
         input: { path: `games/${game}/main.ts`, old: 'import { Button,', new: 'import { playSfx, s, Button,' },
+      },
+      {
+        tool: 'edit_file',
+        input: {
+          path: `games/${game}/main.ts`,
+          old: 'const AUTHOR = "Your name";',
+          new: `const AUTHOR = "Your name";\nconst COVER = "${game}";`,
+        },
       },
       {
         tool: 'edit_file',
@@ -213,9 +222,80 @@ test('the agent makes a sprite and a sound the game can use, and undo removes th
   const sidecar = JSON.parse(readFileSync(path.join(ASSETS, 'sfx', `${game}.wav.json`), 'utf8'));
   expect(sidecar.generator).toBe('tinyforge-ai');
   expect(sidecar.prompt).toBe('Add a sprite and a sound');
+  // The library sees the new sprite as this game's cover.
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (g) =>
+          window.__tf?.editor.assets.state.getState().assets.find((a) => a.id === g && a.kind === 'sprites')?.usedBy,
+        game,
+      ),
+    )
+    .toEqual([game]);
 
   await page.getByRole('button', { name: 'Undo AI: Add a sprite and a sound' }).click();
   await expect.poll(() => existsSync(path.join(ASSETS, 'sprites', `${game}.png`))).toBe(false);
   expect(existsSync(path.join(ASSETS, 'sfx', `${game}.wav.json`))).toBe(false);
+  expect(errors).toEqual([]);
+});
+
+test('a model from the OpenAI-compatible server in .env works the same way', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const chunk = (delta: Record<string, unknown>, finish: string | null = null) =>
+    `data: ${JSON.stringify({ choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
+  const replies = [
+    chunk({
+      tool_calls: [
+        {
+          index: 0,
+          id: 'call_1',
+          type: 'function',
+          function: {
+            name: 'edit_file',
+            arguments: JSON.stringify({
+              path: `games/${game}/main.ts`,
+              old: 'const DESCRIPTION = "A new game";',
+              new: 'const DESCRIPTION = "Made locally";',
+            }),
+          },
+        },
+      ],
+    }) + chunk({}, 'tool_calls'),
+    `${chunk({ content: 'Changed it.' }, 'stop')}data: [DONE]\n\n`,
+  ];
+  const bodies: Array<Record<string, unknown>> = [];
+  await page.route('**/__tf/ai/status', (route) =>
+    route.fulfill({
+      json: {
+        providers: [
+          { id: 'anthropic', models: ['claude-opus-5-5'], defaultModel: 'claude-opus-5-5' },
+          { id: 'openai', models: ['qwen3:8b'], defaultModel: 'qwen3:8b' },
+        ],
+      },
+    }),
+  );
+  await page.route('**/__tf/ai/openai/v1/chat/completions', (route) => {
+    bodies.push(route.request().postDataJSON());
+    const next = replies.shift();
+    return next
+      ? route.fulfill({ status: 200, headers: { 'content-type': 'text/event-stream' }, body: next })
+      : route.fulfill({ status: 500, body: 'no more replies' });
+  });
+  await page.goto('/');
+  await createGame(page);
+  await page.getByTestId('show-ai').click();
+  const panel = page.getByTestId('ai-panel');
+  await panel.getByTestId('ai-model').selectOption('openai:qwen3:8b');
+  await expect(panel.getByTestId('ai-effort')).toBeDisabled();
+  await panel.getByTestId('ai-input').fill('Change the description');
+  await panel.getByTestId('ai-input').press('Enter');
+
+  await expect(panel.getByTestId('ai-items')).toContainText('Changed it.');
+  await expect(panel.getByTestId('ai-items')).toContainText(`✓ Edited games/${game}/main.ts`);
+  await expect(panel.getByText('This request: cost unknown')).toBeVisible();
+  expect(readFileSync(mainFile(), 'utf8')).toContain('"Made locally"');
+  expect(bodies[0].model).toBe('qwen3:8b');
+  expect((bodies[0].messages as Array<{ role: string }>)[0].role).toBe('system');
   expect(errors).toEqual([]);
 });

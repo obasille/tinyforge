@@ -2,13 +2,14 @@
 // current game, and the AI settings. Loaded only when the panel opens, so
 // the rest of the editor does not carry the AI code.
 //
-// The settings (model, effort, show cost) are a preference of this browser,
-// saved in localStorage; the dev server's .env sets the default model. The
-// API key never reaches the page.
+// The settings (provider and model, effort, show cost) are a preference of
+// this browser, saved in localStorage; the dev server's .env sets which
+// providers there are and the default model. No API key reaches the page.
 
 import { createStore } from '@tinyforge/editor-core';
 import {
   Agent,
+  type AiProvider,
   type AiStatus,
   type ChatItem,
   type ChatSettings,
@@ -17,6 +18,7 @@ import {
   type FileChangeView,
   fetchAiStatus,
   lineDiff,
+  OpenAiProvider,
   readSdkApi,
   systemPrompt,
 } from '@tinyforge/editor-core/ai';
@@ -30,6 +32,8 @@ const SETTINGS_KEY = 'tinyforge.editor.ai';
 const EFFORTS: Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
 interface AiSettings extends ChatSettings {
+  /** The provider's id in the dev server's status ('anthropic', 'openai'). */
+  provider: string;
   showCost: boolean;
 }
 
@@ -42,7 +46,13 @@ function loadSettings(): Partial<AiSettings> {
 }
 
 /** Saved settings; the model is filled in from the dev server's default once known. */
-const settings = createStore<AiSettings>({ model: '', effort: 'medium', showCost: true, ...loadSettings() });
+const settings = createStore<AiSettings>({
+  provider: '',
+  model: '',
+  effort: 'medium',
+  showCost: true,
+  ...loadSettings(),
+});
 settings.subscribe(() => {
   try {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings.getState()));
@@ -51,16 +61,22 @@ settings.subscribe(() => {
   }
 });
 
-/** One conversation per game, kept while the page is open. */
+type ProviderStatus = AiStatus['providers'][number];
+
+const makeProvider = (p: ProviderStatus): AiProvider =>
+  p.id === 'openai' ? new OpenAiProvider(location.origin, p.models) : new ClaudeProvider(location.origin);
+
+/** One conversation per game and provider, kept while the page is open. */
 const agents = new Map<string, Agent>();
 let system: Promise<ReturnType<typeof systemPrompt>> | null = null;
 
-async function agentFor(editor: Editor, game: string): Promise<Agent> {
-  const existing = agents.get(game);
+async function agentFor(editor: Editor, game: string, provider: ProviderStatus): Promise<Agent> {
+  const key = `${provider.id}/${game}`;
+  const existing = agents.get(key);
   if (existing) return existing;
   system ??= readSdkApi(editor.files).then((sdk) => systemPrompt(guide, sdk));
   const agent = new Agent({
-    provider: new ClaudeProvider(location.origin),
+    provider: makeProvider(provider),
     settings: () => settings.getState(),
     system: await system,
     commands: editor.commands,
@@ -80,7 +96,7 @@ async function agentFor(editor: Editor, game: string): Promise<Agent> {
       assets: () => editor.assets.state.getState().assets,
     },
   });
-  agents.set(game, agent);
+  agents.set(key, agent);
   return agent;
 }
 
@@ -89,31 +105,35 @@ export default function AiPanel() {
   const game = useStore(editor.project).game;
   const [status, setStatus] = useState<AiStatus | null | undefined>(undefined);
   const [agent, setAgent] = useState<Agent | null>(null);
+  const providerId = useStore(settings).provider;
+  const provider = status?.providers.find((p) => p.id === providerId) ?? null;
 
   useEffect(() => {
     void fetchAiStatus().then((s) => {
       setStatus(s);
-      const provider = s?.providers[0];
-      if (provider && !provider.models.includes(settings.getState().model)) {
-        settings.setState((x) => ({ ...x, model: provider.defaultModel }));
-      }
+      // Keep the saved choice while the dev server still offers it.
+      const { provider: id, model } = settings.getState();
+      const saved = s?.providers.find((p) => p.id === id);
+      if (saved?.models.includes(model)) return;
+      const first = saved ?? s?.providers[0];
+      if (first) settings.setState((x) => ({ ...x, provider: first.id, model: first.defaultModel }));
     });
   }, []);
 
   useEffect(() => {
     setAgent(null);
-    if (!game || !status?.providers.length) return;
+    if (!game || !provider) return;
     let live = true;
-    void agentFor(editor, game).then((a) => live && setAgent(a));
+    void agentFor(editor, game, provider).then((a) => live && setAgent(a));
     return () => {
       live = false;
     };
-  }, [editor, game, status]);
+  }, [editor, game, provider]);
 
   const newChat = () => {
-    if (!game || agent?.state.getState().running) return;
-    agents.delete(game);
-    void agentFor(editor, game).then(setAgent);
+    if (!game || !provider || agent?.state.getState().running) return;
+    agents.delete(`${provider.id}/${game}`);
+    void agentFor(editor, game, provider).then(setAgent);
   };
 
   let notice: string | null = null;
@@ -124,6 +144,11 @@ export default function AiPanel() {
   return (
     <div className="tf-ai" data-testid="ai-panel">
       <Settings status={status ?? null} onNewChat={newChat} />
+      {status?.reason && status.providers.length > 0 ? (
+        <div className="tf-ai-error" role="alert" data-testid="ai-setup-problem">
+          {status.reason}
+        </div>
+      ) : null}
       {notice ? (
         <div className="tf-ai-notice" data-testid="ai-notice">
           {notice}
@@ -135,30 +160,42 @@ export default function AiPanel() {
   );
 }
 
+const PROVIDER_LABELS: Record<string, string> = { anthropic: 'Claude', openai: 'OpenAI-compatible (.env)' };
+
 function Settings({ status, onNewChat }: { status: AiStatus | null; onNewChat: () => void }) {
   const s = useStore(settings);
-  const models = status?.providers.flatMap((p) => p.models) ?? [];
+  const providers = status?.providers ?? [];
+  // A provider's id never has a ':'; a model's name may (llama3.1:8b).
+  const choose = (value: string) => {
+    const at = value.indexOf(':');
+    settings.setState((x) => ({ ...x, provider: value.slice(0, at), model: value.slice(at + 1) }));
+  };
   return (
     <div className="tf-ai-settings">
       <label>
         Model
         <select
           data-testid="ai-model"
-          value={s.model}
-          disabled={models.length === 0}
-          onChange={(e) => settings.setState((x) => ({ ...x, model: e.target.value }))}
+          value={`${s.provider}:${s.model}`}
+          disabled={providers.length === 0}
+          onChange={(e) => choose(e.target.value)}
         >
-          {models.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
+          {providers.map((p) => (
+            <optgroup key={p.id} label={PROVIDER_LABELS[p.id] ?? p.id}>
+              {p.models.map((m) => (
+                <option key={m} value={`${p.id}:${m}`}>
+                  {m}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </select>
       </label>
-      <label title="More effort thinks longer: better on hard requests, slower and costlier">
+      <label title="More effort thinks longer: better on hard requests, slower and costlier (Claude only)">
         Effort
         <select
           data-testid="ai-effort"
+          disabled={s.provider !== 'anthropic'}
           value={s.effort}
           onChange={(e) => settings.setState((x) => ({ ...x, effort: e.target.value as Effort }))}
         >

@@ -298,6 +298,50 @@ describe('asset generators', () => {
   });
 });
 
+describe('asset list', () => {
+  it('names each asset file and its sidecar, and explains a wrong sidecar guess', async () => {
+    const cover = {
+      kind: 'sprites',
+      id: 'pong_cover',
+      path: 'assets/sprites/pong_cover.png',
+      cols: 1,
+      rows: 1,
+      image: { width: 64, height: 64 },
+      usedBy: ['pong'],
+      sidecar: null,
+    };
+    const jump = { kind: 'sfx', id: 'jump', path: 'assets/sfx/jump.wav', usedBy: [], sidecar: { tags: ['retro'] } };
+    const { inputs, agent } = await setup(
+      [
+        {
+          calls: [
+            call('list_assets'),
+            call('read_file', { path: 'assets/sprites/pong_cover.json' }),
+            call('read_file', { path: 'assets/sfx/jump.wav.json' }),
+          ],
+        },
+        { text: 'ok' },
+      ],
+      {
+        'assets/sprites/pong_cover.png': new Uint8Array([1]),
+        'assets/sfx/jump.wav': new Uint8Array([1]),
+        'assets/sfx/jump.wav.json': '{"tags":["retro"]}',
+      },
+      [cover, jump] as Array<Partial<LibraryAsset>>,
+    );
+    await agent.ask('Look at the assets');
+    const [list, guess, sidecar] = inputs[1].results?.map((r) => r.content) ?? [];
+    expect(list).toBe(
+      'sprite pong_cover: assets/sprites/pong_cover.png, frame 64x64, 1x1 frames; used by: pong\n' +
+        'sfx jump: assets/sfx/jump.wav; tags: retro; sidecar: assets/sfx/jump.wav.json',
+    );
+    expect(guess).toBe(
+      "assets/sprites/pong_cover.json not found. A sidecar is named after the asset's file (assets/sprites/<file>.json); list_assets shows the files and their sidecars. No sprites asset has one.",
+    );
+    expect(sidecar).toBe('{"tags":["retro"]}');
+  });
+});
+
 describe('synth and pixels', () => {
   it('plays notes', () => {
     expect(pitchHz('A4')).toBe(440);
