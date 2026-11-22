@@ -524,25 +524,13 @@ describe('synth and pixels', () => {
         .map((f) => ({ kind, file: f.slice(0, -5) })),
     );
     expect(recipes.length).toBe(35);
-    const render = (kind: string, file: string) => {
+    // The committed WAVs are these renders, byte for byte: a recipe change must come with its WAV.
+    for (const { kind, file } of recipes) {
       const { spec } = JSON.parse(readFileSync(path.join(assets, kind, `${file}.json`), 'utf8'));
       const options = kind === 'music' ? { sampleRate: MUSIC_RATE, volume: 0.5 } : undefined;
-      return decodeWav(encodeWav(renderSynth(spec, options)))?.channels[0] ?? new Float32Array();
-    };
-    // Two of them sample by sample: equal within one 16-bit step (the old WAVs were truncated, not rounded).
-    for (const [kind, file] of [
-      ['sfx', 'pong_hit_p1.wav'],
-      ['music', 'pong_theme.wav'],
-    ]) {
-      const ours = render(kind, file);
-      const theirs = decodeWav(new Uint8Array(readFileSync(path.join(assets, kind, file))))?.channels[0] ?? [];
-      expect(ours.length).toBe(theirs.length);
-      let max = 0;
-      for (let i = 0; i < ours.length; i++) max = Math.max(max, Math.abs(ours[i] - theirs[i]));
-      expect(max * 32768).toBeLessThanOrEqual(1.0001);
+      const wav = new Uint8Array(readFileSync(path.join(assets, kind, file)));
+      expect(encodeWav(renderSynth(spec, options)), file).toEqual(wav);
     }
-    // The others render.
-    for (const { kind, file } of recipes) expect(render(kind, file).length).toBeGreaterThan(0);
   });
 
   it('plays notes', () => {
