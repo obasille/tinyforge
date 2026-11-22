@@ -34,21 +34,35 @@ export interface AiEnv {
   TF_AI_OPENAI_MODELS?: string;
 }
 
-/** The OpenAI-compatible server from .env, or null when it is not set up (or the URL is not http(s)). */
-export function openAiConfig(env: AiEnv): { url: string; key: string | null; models: string[] } | null {
+export interface OpenAiConfig {
+  url: string;
+  key: string | null;
+  models: string[];
+}
+
+/**
+ * The OpenAI-compatible server from .env: its settings, null when it is not
+ * set up, or why it is refused. The URL must be https, or http to this
+ * machine (a local Ollama), so a key never travels unencrypted.
+ */
+export function openAiConfig(env: AiEnv): OpenAiConfig | string | null {
+  const raw = env.TF_AI_OPENAI_URL?.trim();
+  if (!raw) return null;
   const models = (env.TF_AI_OPENAI_MODELS ?? '')
     .split(',')
     .map((m) => m.trim())
     .filter(Boolean);
-  const raw = env.TF_AI_OPENAI_URL?.trim();
-  if (!raw || models.length === 0) return null;
+  if (models.length === 0) return 'TF_AI_OPENAI_MODELS is empty: list the models to use, comma-separated.';
   let url: URL;
   try {
     url = new URL(raw);
   } catch {
-    return null;
+    return `TF_AI_OPENAI_URL is not a URL: ${raw}`;
   }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+  const local = url.protocol === 'http:' && LOCAL_HOSTS.has(url.hostname);
+  if (url.protocol !== 'https:' && !local) {
+    return `TF_AI_OPENAI_URL must be https (or http://localhost): ${raw}`;
+  }
   return { url: url.href.replace(/\/+$/, ''), key: env.TF_AI_OPENAI_KEY?.trim() || null, models };
 }
 
@@ -140,7 +154,10 @@ function allowedModel(body: Buffer, allowed: string[]): void {
 /** The middleware, separate from Vite so it can be tested. */
 export function createAiHandler({ env, disabled, fetchFn = fetch }: AiHandlerOptions) {
   const key = env.ANTHROPIC_API_KEY?.trim() || null;
-  const openai = openAiConfig(env);
+  const config = openAiConfig(env);
+  const openai = typeof config === 'string' ? null : config;
+  /** A setting in .env that is refused, shown in the panel. */
+  const problem = typeof config === 'string' ? `${config} The OpenAI-compatible server is off.` : null;
   const pick = (models: string[], fallback: string) =>
     env.TF_AI_MODEL && models.includes(env.TF_AI_MODEL) ? env.TF_AI_MODEL : fallback;
   const providers = [
@@ -160,7 +177,7 @@ export function createAiHandler({ env, disabled, fetchFn = fetch }: AiHandlerOpt
     try {
       checkLocal(req);
       if (pathname === '/__tf/ai/status' && req.method === 'GET') {
-        const reason = disabled ?? (providers.length > 0 ? undefined : SETUP);
+        const reason = disabled ?? problem ?? (providers.length > 0 ? undefined : SETUP);
         send(res, 200, JSON.stringify({ providers: disabled ? [] : providers, reason }), 'application/json');
         return;
       }
@@ -182,7 +199,7 @@ export function createAiHandler({ env, disabled, fetchFn = fetch }: AiHandlerOpt
       }
       if (pathname === '/__tf/ai/openai/v1/chat/completions' && req.method === 'POST') {
         if (disabled) throw new HttpError(403, disabled);
-        if (!openai) throw new HttpError(503, 'No TF_AI_OPENAI_URL and TF_AI_OPENAI_MODELS in .env');
+        if (!openai) throw new HttpError(503, problem ?? 'No TF_AI_OPENAI_URL in .env');
         const body = await readBody(req);
         allowedModel(body, openai.models);
         const headers: Record<string, string> = { 'content-type': 'application/json' };
@@ -218,15 +235,7 @@ export function aiProxy({ envDir }: { envDir: string }): Plugin {
       const disabled = exposedReason(dev.config.server.host);
       const openai = openAiConfig(env);
       if (disabled && (env.ANTHROPIC_API_KEY || openai)) dev.config.logger.warn(disabled);
-      if (env.TF_AI_OPENAI_URL && !openai) {
-        dev.config.logger.warn(
-          'TF_AI_OPENAI_URL needs an http(s) URL and TF_AI_OPENAI_MODELS: the OpenAI route is off.',
-        );
-      }
-      const host = openai ? new URL(openai.url).hostname : '';
-      if (openai?.key && openai.url.startsWith('http:') && !LOCAL_HOSTS.has(host)) {
-        dev.config.logger.warn(`TF_AI_OPENAI_KEY is sent unencrypted to ${host} (http). Use an https URL.`);
-      }
+      if (typeof openai === 'string') dev.config.logger.error(`${openai} The OpenAI-compatible server is off.`);
       dev.middlewares.use(createAiHandler({ env, disabled }));
     },
   };

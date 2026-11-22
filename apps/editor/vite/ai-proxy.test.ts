@@ -160,14 +160,36 @@ describe('AI proxy', () => {
     expect((await call(off, path, { method: 'POST', body: '{"model":"qwen3:8b"}' })).status).toBe(503);
   });
 
-  it('reads the OpenAI settings strictly', () => {
-    expect(openAiConfig({ TF_AI_OPENAI_URL: 'http://x/v1' })).toBeNull();
-    expect(openAiConfig({ TF_AI_OPENAI_URL: 'file:///etc', TF_AI_OPENAI_MODELS: 'a' })).toBeNull();
-    expect(openAiConfig({ TF_AI_OPENAI_URL: 'not a url', TF_AI_OPENAI_MODELS: 'a' })).toBeNull();
+  it('reads the OpenAI settings strictly: https, or http to this machine only', async () => {
+    expect(openAiConfig({})).toBeNull();
+    expect(openAiConfig({ TF_AI_OPENAI_URL: 'http://localhost:11434/v1' })).toContain('TF_AI_OPENAI_MODELS');
+    expect(openAiConfig({ TF_AI_OPENAI_URL: 'not a url', TF_AI_OPENAI_MODELS: 'a' })).toContain('not a URL');
+    for (const url of ['http://192.168.1.5:11434/v1', 'http://ollama.example/v1', 'file:///etc', 'ftp://x']) {
+      expect(openAiConfig({ TF_AI_OPENAI_URL: url, TF_AI_OPENAI_MODELS: 'a' })).toContain('must be https');
+    }
+    expect(openAiConfig({ TF_AI_OPENAI_URL: 'http://127.0.0.1:1234/v1', TF_AI_OPENAI_MODELS: 'a' })).toMatchObject({
+      url: 'http://127.0.0.1:1234/v1',
+    });
     expect(openAiConfig({ TF_AI_OPENAI_URL: 'https://api.example/v1', TF_AI_OPENAI_MODELS: 'a,,b' })).toEqual({
       url: 'https://api.example/v1',
       key: null,
       models: ['a', 'b'],
     });
+    // A refused URL is never used, and the panel says why.
+    const used: string[] = [];
+    const port = await start(
+      { env: { ANTHROPIC_API_KEY: KEY, TF_AI_OPENAI_URL: 'http://ollama.example/v1', TF_AI_OPENAI_MODELS: 'a' } },
+      (async (url: string) => {
+        used.push(url);
+        return new Response('{}');
+      }) as unknown as typeof fetch,
+    );
+    const status = JSON.parse((await call(port, '/__tf/ai/status')).text);
+    expect(status.providers.map((p: { id: string }) => p.id)).toEqual(['anthropic']);
+    expect(status.reason).toContain('must be https');
+    const post = await call(port, '/__tf/ai/openai/v1/chat/completions', { method: 'POST', body: '{"model":"a"}' });
+    expect(post.status).toBe(503);
+    expect(post.text).toContain('must be https');
+    expect(used).toEqual([]);
   });
 });

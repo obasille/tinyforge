@@ -89,7 +89,7 @@ export interface AiProvider {
 export interface AiStatus {
   /** The providers with a key (or an address) in .env. */
   providers: Array<{ id: string; models: string[]; defaultModel: string }>;
-  /** Why AI is off, when no provider is listed. */
+  /** Why AI is off when no provider is listed, or a setting in .env that is refused. */
   reason?: string;
 }
 

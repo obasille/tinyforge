@@ -1062,7 +1062,8 @@ Then open the URL Vite prints (http://localhost:5173/).
   Instead of Claude (or as well), the agent can use any OpenAI-compatible
   server, such as a local Ollama: set `TF_AI_OPENAI_URL`,
   `TF_AI_OPENAI_MODELS` and, if it needs one, `TF_AI_OPENAI_KEY` in `.env`
-  (see `.env.example`). Its models appear in the panel's model list; it has
+  (see `.env.example`). The URL must be https, or http to this machine;
+  any other is refused, with the reason shown in the AI panel. Its models appear in the panel's model list; it has
   no effort setting and no cost estimate. Small local models follow the
   rules less well than Claude, and need a context of 32k tokens or more.
 - **Debugging:** debug builds carry their source map, so Chrome DevTools can

@@ -144,6 +144,11 @@ export default function AiPanel() {
   return (
     <div className="tf-ai" data-testid="ai-panel">
       <Settings status={status ?? null} onNewChat={newChat} />
+      {status?.reason && status.providers.length > 0 ? (
+        <div className="tf-ai-error" role="alert" data-testid="ai-setup-problem">
+          {status.reason}
+        </div>
+      ) : null}
       {notice ? (
         <div className="tf-ai-notice" data-testid="ai-notice">
           {notice}
