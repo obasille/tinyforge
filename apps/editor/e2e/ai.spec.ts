@@ -2,13 +2,14 @@
 // scripted replies: the page's requests to the AI routes are answered here,
 // so no key is needed and nothing reaches the Anthropic API.
 
-import { readFileSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, type Page, test } from '@playwright/test';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const GAMES = path.join(REPO, 'packages', 'engine', 'assembly', 'games');
+const ASSETS = path.join(REPO, 'assets');
 
 let game = '';
 
@@ -24,6 +25,10 @@ test.beforeEach(async ({ page }) => {
 
 test.afterEach(() => {
   rmSync(path.join(GAMES, game), { recursive: true, force: true });
+  for (const file of [`sprites/${game}.png`, `sfx/${game}.wav`]) {
+    rmSync(path.join(ASSETS, file), { force: true });
+    rmSync(path.join(ASSETS, `${file}.json`), { force: true });
+  }
 });
 
 type Block = { text: string } | { tool: string; input: Record<string, unknown> };
@@ -141,7 +146,7 @@ test('the code agent edits the game, compiles, and one undo reverts the request'
   expect(system[0].text).toContain('TinyForge guide (AGENTS.md)');
   expect(system[0].text).toContain('export function buttonDown(');
   expect(JSON.stringify(first.body.messages)).toContain(`Current game: ${game}`);
-  expect((first.body.tools as unknown[]).length).toBe(8);
+  expect((first.body.tools as unknown[]).length).toBe(10);
 
   // One undo step for the whole request.
   await expect(page.getByRole('button', { name: 'Undo AI: Change the description' })).toBeVisible();
@@ -162,4 +167,55 @@ test('without a key the panel says how to set it up', async ({ page }) => {
   expect(ok.status()).toBe(200);
   expect(await ok.text()).not.toContain('sk-ant');
   expect((await page.request.get('/__tf/ai/status')).status()).toBe(403);
+});
+
+test('the agent makes a sprite and a sound the game can use, and undo removes them', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await fakeModel(page, [
+    [
+      {
+        tool: 'make_sprite',
+        input: { id: game, palette: { r: '#ff0000' }, frames: [['.r.', 'rrr', '.r.']] },
+      },
+      { tool: 'make_sound', input: { id: game, kind: 'sfx', notes: [{ at: 0, len: 0.1, note: 'C5', to: 'C6' }] } },
+    ],
+    [
+      {
+        tool: 'edit_file',
+        input: { path: `games/${game}/main.ts`, old: 'import { Button,', new: 'import { playSfx, s, Button,' },
+      },
+      {
+        tool: 'edit_file',
+        input: {
+          path: `games/${game}/main.ts`,
+          old: 'export function init(): void {',
+          new: `export function init(): void {\n  playSfx("${game}", 1.0);\n  s("${game}");`,
+        },
+      },
+    ],
+    [{ tool: 'compile', input: {} }],
+    [{ text: 'Added a sprite and a sound.' }],
+  ]);
+  await page.goto('/');
+  await createGame(page);
+  await page.getByTestId('show-ai').click();
+  const panel = page.getByTestId('ai-panel');
+  await panel.getByTestId('ai-input').fill('Add a sprite and a sound');
+  await panel.getByTestId('ai-input').press('Enter');
+
+  await expect(panel.getByTestId('ai-items')).toContainText('Added a sprite and a sound.');
+  await expect(panel.getByTestId('ai-items')).toContainText(`✓ Made sprite ${game}`);
+  await expect(panel.getByTestId('ai-items')).toContainText(`✓ Made sound ${game}`);
+  // The compile found the new IDs.
+  await expect(panel.getByTestId('ai-items')).toContainText('✓ Compiled: ok');
+  expect(existsSync(path.join(ASSETS, 'sprites', `${game}.png`))).toBe(true);
+  const sidecar = JSON.parse(readFileSync(path.join(ASSETS, 'sfx', `${game}.wav.json`), 'utf8'));
+  expect(sidecar.generator).toBe('tinyforge-ai');
+  expect(sidecar.prompt).toBe('Add a sprite and a sound');
+
+  await page.getByRole('button', { name: 'Undo AI: Add a sprite and a sound' }).click();
+  await expect.poll(() => existsSync(path.join(ASSETS, 'sprites', `${game}.png`))).toBe(false);
+  expect(existsSync(path.join(ASSETS, 'sfx', `${game}.wav.json`))).toBe(false);
+  expect(errors).toEqual([]);
 });

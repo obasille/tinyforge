@@ -1,18 +1,26 @@
 // The code agent's tools, and the rules they enforce whatever the model asks:
 // it writes only text files in the current game's folder, reads any project
 // file, and cannot write a file it has not read (or that changed since it read
-// it). There is no shell and no network.
+// it). It adds sprites and sounds to the library only through make_sprite and
+// make_sound, and replaces only assets those tools made. There is no shell
+// and no network.
 //
 // Writes go to disk at once, so compile and hot reload see them. Everything a
 // request changed becomes one command (`commit`): one undo step.
 
+import type { AssetKind } from '@tinyforge/engine/tooling/asset-scan';
 import type { CompileResult } from '@tinyforge/engine/tooling/compiler';
 import { gameOf, isProjectPath } from '@tinyforge/engine/tooling/project-layout';
-import type { LibraryAsset } from '../asset-library.ts';
+import { idProblem, type LibraryAsset, type Sidecar, sidecarPath } from '../asset-library.ts';
 import type { FileCommand } from '../commands.ts';
-import type { ProjectFiles } from '../project-files.ts';
+import { encodePng } from '../png.ts';
+import { type ProjectFiles, parseAssetName } from '../project-files.ts';
+import { spriteFileName } from '../sprite-editor.ts';
+import { encodeWav } from '../wav.ts';
 import type { FileChange } from '../workspace.ts';
+import { type PixelSpec, renderPixels } from './pixels.ts';
 import type { ToolCall, ToolSpec } from './provider.ts';
+import { renderSynth, type SynthSpec } from './synth.ts';
 
 /** What the tools reach in the editor. */
 export interface AgentContext {
@@ -31,6 +39,29 @@ const TEXT_FILE = /\.(ts|md|json|txt)$/i;
 const WRITABLE_FILE = /\.(ts|md)$/i;
 /** Largest file the agent reads or writes, in characters. */
 const MAX_TEXT = 200_000;
+/** The sidecar mark of an asset the agent made (and so may replace). */
+export const AI_GENERATOR = 'tinyforge-ai';
+/** Longest wait for the file list to show the assets a request made, before compiling. */
+const LIST_WAIT_MS = 5000;
+
+const NOTE_SCHEMA = {
+  type: 'object',
+  properties: {
+    at: { type: 'number', description: 'Start (seconds, or beats with bpm)' },
+    len: { type: 'number', description: 'Held length (seconds, or beats with bpm)' },
+    note: { type: ['string', 'number'], description: 'Note name (C4, F#5, Bb3) or Hz' },
+    wave: { type: 'string', enum: ['square', 'triangle', 'saw', 'sine', 'noise'] },
+    to: { type: ['string', 'number'], description: 'Slide to this pitch over the note' },
+    vol: { type: 'number', description: '0 to 1, default 0.5' },
+    attack: { type: 'number', description: 'Seconds, default 0.005' },
+    decay: { type: 'number', description: 'Seconds, default 0.05' },
+    sustain: { type: 'number', description: 'Level 0 to 1, default 0.7' },
+    release: { type: 'number', description: 'Seconds, default 0.05' },
+    duty: { type: 'number', description: 'Square duty 0.05 to 0.95, default 0.5' },
+  },
+  required: ['at', 'len', 'note'],
+};
+const TAGS_SCHEMA = { type: 'array', items: { type: 'string' } };
 
 export const AGENT_TOOLS: ToolSpec[] = [
   {
@@ -70,6 +101,44 @@ export const AGENT_TOOLS: ToolSpec[] = [
     schema: { properties: {}, required: [] },
   },
   {
+    name: 'make_sprite',
+    description:
+      'Add a sprite to the library by drawing it as a text grid: one palette character per pixel, "." transparent. Several frames make a horizontal sheet. At most 64x64 pixels and 16 frames. Use an ID that is new, or one you made before (that replaces it).',
+    schema: {
+      properties: {
+        id: { type: 'string', description: 'Letters, digits and _; at most 16' },
+        palette: {
+          type: 'object',
+          additionalProperties: { type: 'string' },
+          description: 'Character to colour, like {"k": "#000000", "r": "#ff2020"}',
+        },
+        frames: {
+          type: 'array',
+          items: { type: 'array', items: { type: 'string' } },
+          description: 'Each frame: its rows, top to bottom, all the same width',
+        },
+        tags: TAGS_SCHEMA,
+      },
+      required: ['id', 'palette', 'frames'],
+    },
+  },
+  {
+    name: 'make_sound',
+    description:
+      'Add a sound effect (kind "sfx") or music (kind "music") to the library, made by a small retro synthesizer from a list of notes. Notes may overlap (chords, a bass line). Times are seconds, or beats when bpm is set. At most 120 s. Use an ID that is new, or one you made before (that replaces it).',
+    schema: {
+      properties: {
+        id: { type: 'string', description: 'Letters, digits and _; at most 16' },
+        kind: { type: 'string', enum: ['sfx', 'music'] },
+        bpm: { type: 'number' },
+        volume: { type: 'number', description: 'Master volume 0 to 1, default 0.8' },
+        notes: { type: 'array', items: NOTE_SCHEMA },
+        tags: TAGS_SCHEMA,
+      },
+      required: ['id', 'kind', 'notes'],
+    },
+  },
+  {
     name: 'compile',
     description: 'Compile the current game. Returns "ok" or the errors. Compile before you finish.',
     schema: { properties: {}, required: [] },
@@ -84,6 +153,14 @@ export const AGENT_TOOLS: ToolSpec[] = [
 
 export class ToolError extends Error {}
 
+/** One file a request changed. A binary file (an image, a sound) has empty text for its before and after. */
+export interface FileChangeView {
+  path: string;
+  before: string | null;
+  after: string | null;
+  binary: boolean;
+}
+
 const str = (input: Record<string, unknown>, key: string): string => {
   const value = input[key];
   if (typeof value !== 'string') throw new ToolError(`Missing "${key}" (a string)`);
@@ -94,9 +171,11 @@ export class AgentTools {
   /** Each changed path's bytes before the request (null: it did not exist). */
   private readonly before = new Map<string, Uint8Array | null>();
   /** Each changed path's content now (null: deleted). */
-  private readonly after = new Map<string, string | null>();
+  private readonly after = new Map<string, Uint8Array | string | null>();
   /** What the agent last read or wrote per path. */
   private readonly seen = new Map<string, string | null>();
+  /** The user's request, kept in a made asset's sidecar. */
+  private request = '';
 
   constructor(private readonly ctx: AgentContext) {}
 
@@ -106,15 +185,21 @@ export class AgentTools {
   }
 
   /** Start a new request: forget the previous request's changes (not what was read). */
-  begin(): void {
+  begin(request = ''): void {
     this.before.clear();
     this.after.clear();
+    this.request = request;
   }
 
   /** What this request changed, file by file. */
-  changes(): Array<{ path: string; before: string | null; after: string | null }> {
-    const decode = (b: Uint8Array | null) => (b ? new TextDecoder().decode(b) : null);
-    return [...this.after].map(([path, after]) => ({ path, before: decode(this.before.get(path) ?? null), after }));
+  changes(): FileChangeView[] {
+    return [...this.after].map(([path, after]) => {
+      const before = this.before.get(path) ?? null;
+      const binary = !TEXT_FILE.test(path);
+      const text = (data: Uint8Array | string | null) =>
+        data === null ? null : binary ? '' : typeof data === 'string' ? data : new TextDecoder().decode(data);
+      return { path, before: text(before), after: text(after), binary };
+    });
   }
 
   async run(call: ToolCall): Promise<string> {
@@ -132,6 +217,10 @@ export class AgentTools {
         return this.remove(str(input, 'path'));
       case 'list_assets':
         return this.listAssets();
+      case 'make_sprite':
+        return this.makeSprite(input);
+      case 'make_sound':
+        return this.makeSound(input);
       case 'compile':
         return this.compile();
       case 'game_log':
@@ -207,24 +296,122 @@ export class AgentTools {
     if (path === `games/${this.ctx.game}/main.ts`) throw new ToolError('main.ts cannot be deleted');
     const text = await this.current(path);
     if (text === null) throw new ToolError(`${path} not found`);
-    this.remember(path, text);
-    await this.ctx.files.delete(path);
-    this.after.set(path, null);
+    await this.put(path, null);
     this.seen.set(path, null);
-    this.ctx.invalidate([{ path, kind: 'unlink' }]);
     return `Deleted ${path}`;
   }
 
   private async save(path: string, before: string | null, content: string): Promise<void> {
-    this.remember(path, before);
-    await this.ctx.files.write(path, content);
-    this.after.set(path, content);
+    if (!this.before.has(path)) this.before.set(path, before === null ? null : new TextEncoder().encode(before));
+    await this.put(path, content);
     this.seen.set(path, content);
-    this.ctx.invalidate([{ path, kind: before === null ? 'add' : 'change' }]);
   }
 
-  private remember(path: string, text: string | null): void {
-    if (!this.before.has(path)) this.before.set(path, text === null ? null : new TextEncoder().encode(text));
+  /** Write (or delete, with null) a file, keeping what it was before the request. */
+  private async put(path: string, data: Uint8Array | string | null): Promise<void> {
+    const { files } = this.ctx;
+    const existed = files.exists(path);
+    if (!this.before.has(path)) this.before.set(path, existed ? await files.readBytes(path) : null);
+    if (data === null) await files.delete(path);
+    else await files.write(path, data);
+    this.after.set(path, data);
+    this.ctx.invalidate([{ path, kind: data === null ? 'unlink' : existed ? 'change' : 'add' }]);
+  }
+
+  /**
+   * Write a made asset as `assets/<kind>/<file>` with its sidecar. The ID may
+   * be new, or one of an asset the agent made: that one is replaced (its old
+   * files go when the new file name differs, as for a sheet with more frames).
+   */
+  private async putAsset(
+    kind: AssetKind,
+    id: string,
+    file: string,
+    data: Uint8Array,
+    spec: unknown,
+    tags: unknown,
+  ): Promise<string> {
+    const { files } = this.ctx;
+    const path = `assets/${kind}/${file}`;
+    const sameId = (p: string) => p.startsWith(`assets/${kind}/`) && parseAssetName(p.split('/')[2]).id === id;
+    const old = new Set(this.ctx.assets().flatMap((a) => (a.kind === kind && a.id === id ? [a] : [])));
+    for (const a of old) {
+      if (a.sidecar?.generator !== AI_GENERATOR) {
+        throw new ToolError(`The library already has ${kind} "${id}", not made by you. Pick another ID.`);
+      }
+    }
+    // The assets this request made may not be in the library yet.
+    const stale = new Set([...old].map((a) => a.path));
+    for (const [p, v] of this.after) if (v !== null && sameId(p) && !p.endsWith('.json')) stale.add(p);
+    stale.delete(path);
+    for (const p of stale) {
+      if (files.exists(p)) await this.put(p, null);
+      if (files.exists(sidecarPath(p))) await this.put(sidecarPath(p), null);
+    }
+    const sidecar: Sidecar = { source: 'TinyForge AI', prompt: this.request, generator: AI_GENERATOR, spec };
+    if (Array.isArray(tags) && tags.every((t) => typeof t === 'string') && tags.length > 0) sidecar.tags = tags;
+    await this.put(path, data);
+    await this.put(sidecarPath(path), `${JSON.stringify(sidecar, null, 2)}\n`);
+    return path;
+  }
+
+  private assetId(input: Record<string, unknown>): string {
+    const id = str(input, 'id');
+    const problem = idProblem(id);
+    if (problem) throw new ToolError(problem);
+    return id;
+  }
+
+  private async makeSprite(input: Record<string, unknown>): Promise<string> {
+    const id = this.assetId(input);
+    const spec = { palette: input.palette, frames: input.frames } as PixelSpec;
+    let image: ReturnType<typeof renderPixels>;
+    try {
+      image = renderPixels(spec);
+    } catch (e) {
+      throw new ToolError((e as Error).message);
+    }
+    const file = spriteFileName(`${id}.png`, image.frames, 1);
+    const path = await this.putAsset('sprites', id, file, await encodePng(image), spec, input.tags);
+    const frame = `${image.width / image.frames}x${image.height}`;
+    return `Made ${path}: ${image.frames} frame${image.frames > 1 ? 's' : ''} of ${frame}`;
+  }
+
+  private async makeSound(input: Record<string, unknown>): Promise<string> {
+    const id = this.assetId(input);
+    const kind = input.kind;
+    if (kind !== 'sfx' && kind !== 'music') throw new ToolError('kind must be "sfx" or "music"');
+    const spec = { bpm: input.bpm, volume: input.volume, notes: input.notes } as SynthSpec;
+    let sound: ReturnType<typeof renderSynth>;
+    try {
+      sound = renderSynth(spec);
+    } catch (e) {
+      throw new ToolError((e as Error).message);
+    }
+    const path = await this.putAsset(kind, id, `${id}.wav`, encodeWav(sound), spec, input.tags);
+    return `Made ${path}: ${(sound.channels[0].length / sound.sampleRate).toFixed(2)} s`;
+  }
+
+  /**
+   * The compiler finds asset IDs in the file list, which shows a written file
+   * once the workspace reports it: wait for the assets this request made.
+   */
+  private async listed(): Promise<void> {
+    const { files } = this.ctx;
+    const ready = () =>
+      [...this.after].every(([p, v]) => !p.startsWith('assets/') || (files.entry(p) !== undefined) === (v !== null));
+    if (ready()) return;
+    await new Promise<void>((resolve) => {
+      const done = () => {
+        clearTimeout(timer);
+        off();
+        resolve();
+      };
+      const timer = setTimeout(done, LIST_WAIT_MS);
+      const off = files.onChange(() => {
+        if (ready()) done();
+      });
+    });
   }
 
   private listAssets(): string {
@@ -238,6 +425,7 @@ export class AgentTools {
   }
 
   private async compile(): Promise<string> {
+    await this.listed();
     const result = await this.ctx.build();
     const errors = result.diagnostics.filter((d) => d.severity === 'error');
     if (result.ok) return errors.length === 0 ? 'ok' : `ok, with messages:\n${result.log.slice(-4000)}`;

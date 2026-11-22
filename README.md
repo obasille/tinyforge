@@ -1053,7 +1053,12 @@ Then open the URL Vite prints (http://localhost:5173/).
   on localhost and are off when the server is started with `--host`. A
   static build has no AI. The agent's guide is `AGENTS.md`, and each game can
   keep design notes in `games/<name>/NOTES.md` that the agent reads and
-  updates.
+  updates. The agent can also add assets the game needs: sprites drawn as a
+  text grid of palette characters, and sound effects or music played on a
+  small retro synthesizer (square, triangle, saw, sine and noise notes with
+  an envelope and pitch slides). Their sidecar keeps the request and the
+  description (`spec`), and marks them `"generator": "tinyforge-ai"`: the
+  agent replaces only assets with that mark, never imported ones.
 - **Debugging:** debug builds carry their source map, so Chrome DevTools can
   set breakpoints in the AssemblyScript source.
 - **Panels:** Game, Run (pause, single step, restart, save/load state, seed),

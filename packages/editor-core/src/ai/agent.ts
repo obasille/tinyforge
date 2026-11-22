@@ -17,13 +17,7 @@ import {
   type ToolResult,
   type Usage,
 } from './provider.ts';
-import { AGENT_TOOLS, type AgentContext, AgentTools, ToolError } from './tools.ts';
-
-export interface FileChangeView {
-  path: string;
-  before: string | null;
-  after: string | null;
-}
+import { AGENT_TOOLS, type AgentContext, AgentTools, type FileChangeView, ToolError } from './tools.ts';
 
 export type ChatItem =
   | { kind: 'user'; text: string }
@@ -56,6 +50,7 @@ const short = (text: string, n: number) => (text.length > n ? `${text.slice(0, n
 
 function describe(call: ToolCall): string {
   const path = typeof call.input.path === 'string' ? call.input.path : '';
+  const id = typeof call.input.id === 'string' ? call.input.id : '';
   const verbs: Record<string, string> = {
     list_files: 'Listed files',
     read_file: `Read ${path}`,
@@ -63,6 +58,8 @@ function describe(call: ToolCall): string {
     write_file: `Wrote ${path}`,
     delete_file: `Deleted ${path}`,
     list_assets: 'Listed assets',
+    make_sprite: `Made sprite ${id}`,
+    make_sound: `Made ${call.input.kind === 'music' ? 'music' : 'sound'} ${id}`,
     compile: 'Compiled',
     game_log: 'Checked the game',
   };
@@ -109,7 +106,7 @@ export class Agent {
     const { signal } = this.abort;
     this.add({ kind: 'user', text: request });
     this.state.setState((s) => ({ ...s, running: true }));
-    this.tools.begin();
+    this.tools.begin(request);
     let cost: number | null = 0;
     try {
       const game = await gameContext(context.files, context.game, this.options.buildStatus(), { first: this.first });

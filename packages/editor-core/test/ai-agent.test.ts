@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { Agent } from '../src/ai/agent.ts';
 import { lineDiff } from '../src/ai/diff.ts';
+import { renderPixels } from '../src/ai/pixels.ts';
 import { readSdkApi, sdkApi } from '../src/ai/prompt.ts';
 import type { AiProvider, Chat, ChatInput, ChatTurn, ToolCall } from '../src/ai/provider.ts';
+import { pitchHz, renderSynth } from '../src/ai/synth.ts';
+import type { LibraryAsset } from '../src/asset-library.ts';
 import { CommandStack } from '../src/commands.ts';
+import { decodePng } from '../src/png.ts';
 import { ProjectFiles } from '../src/project-files.ts';
 import { createStore } from '../src/store.ts';
+import { decodeWav } from '../src/wav.ts';
 import { MemoryWorkspace } from './memory-workspace.ts';
 
 const MAIN = 'export function init(): void {}\nexport function update(): void {}\nexport function draw(): void {}\n';
@@ -45,13 +50,18 @@ function scripted(turns: Array<Partial<ChatTurn> | ((input: ChatInput) => Partia
 let ids = 0;
 const call = (name: string, input: Record<string, unknown> = {}): ToolCall => ({ id: `t${++ids}`, name, input });
 
-async function setup(turns: Parameters<typeof scripted>[0], extra: Record<string, string> = {}) {
+async function setup(
+  turns: Parameters<typeof scripted>[0],
+  extra: Record<string, string | Uint8Array> = {},
+  assets: Array<Partial<LibraryAsset>> = [],
+) {
   const ws = new MemoryWorkspace({ 'games/pong/main.ts': MAIN, 'games/snake/main.ts': MAIN, ...extra });
   const files = new ProjectFiles(ws);
   await files.start();
   const stack = new CommandStack(createStore({}));
   const { provider, inputs } = scripted(turns);
   let builds = 0;
+  let assetFiles = files.assetFiles;
   const agent = new Agent({
     provider,
     settings: () => ({ model: 'fake', effort: 'medium' }),
@@ -63,6 +73,7 @@ async function setup(turns: Parameters<typeof scripted>[0], extra: Record<string
       game: 'pong',
       build: async () => {
         builds++;
+        assetFiles = files.assetFiles;
         const text = (await files.readText('games/pong/main.ts')) ?? '';
         return text.includes('oops')
           ? {
@@ -84,10 +95,10 @@ async function setup(turns: Parameters<typeof scripted>[0], extra: Record<string
       },
       invalidate: () => {},
       gameLog: () => 'running',
-      assets: () => [],
+      assets: () => assets as LibraryAsset[],
     },
   });
-  return { ws, files, stack, agent, inputs, builds: () => builds };
+  return { ws, files, stack, agent, inputs, builds: () => builds, assetFiles: () => assetFiles };
 }
 
 describe('code agent', () => {
@@ -203,6 +214,121 @@ describe('code agent', () => {
     await agent.ask('y');
     expect(errors()[1]).toContain('The request failed');
     expect(agent.state.getState().running).toBe(false);
+  });
+});
+
+describe('asset generators', () => {
+  const beep = { id: 'beep', kind: 'sfx', notes: [{ at: 0, len: 0.1, note: 'C5', to: 'C6' }] };
+  const coin = {
+    id: 'coin',
+    palette: { y: '#ffd000', k: '#000' },
+    frames: [
+      ['.y.', 'yky', '.y.'],
+      ['...', '.y.', '...'],
+    ],
+  };
+
+  it('makes a sprite and a sound with sidecars, waits for them to be listed, and undoes them', async () => {
+    const { ws, stack, agent, inputs, assetFiles } = await setup([
+      { calls: [call('make_sprite', coin), call('make_sound', beep), call('compile')] },
+      { text: 'Done.' },
+    ]);
+    await agent.ask('Add a coin');
+    expect(inputs[1].results?.map((r) => r.content)).toEqual([
+      'Made assets/sprites/coin~2x1.png: 2 frames of 3x3',
+      'Made assets/sfx/beep.wav: 0.15 s',
+      'ok',
+    ]);
+    // The compile saw the new assets.
+    expect(assetFiles().sprites).toEqual(['coin~2x1.png']);
+    expect(assetFiles().sfx).toEqual(['beep.wav']);
+    const image = await decodePng(ws.data.get('assets/sprites/coin~2x1.png') as Uint8Array);
+    expect([image?.width, image?.height]).toEqual([6, 3]);
+    expect([...(image?.rgba.subarray(4, 8) ?? [])]).toEqual([255, 208, 0, 255]);
+    expect([...(image?.rgba.subarray(0, 4) ?? [])]).toEqual([0, 0, 0, 0]);
+    const sound = decodeWav(ws.data.get('assets/sfx/beep.wav') as Uint8Array);
+    expect(sound?.sampleRate).toBe(22050);
+    const sidecar = JSON.parse(ws.text('assets/sfx/beep.wav.json') ?? '{}');
+    expect(sidecar).toMatchObject({ generator: 'tinyforge-ai', prompt: 'Add a coin', spec: { notes: beep.notes } });
+    const changes = agent.state.getState().items.find((i) => i.kind === 'changes');
+    expect(changes?.kind === 'changes' && changes.files.map((f) => [f.path, f.binary])).toEqual([
+      ['assets/sprites/coin~2x1.png', true],
+      ['assets/sprites/coin~2x1.png.json', false],
+      ['assets/sfx/beep.wav', true],
+      ['assets/sfx/beep.wav.json', false],
+    ]);
+    stack.undo();
+    await stack.idle();
+    expect([...ws.data.keys()].filter((p) => p.startsWith('assets/'))).toEqual([]);
+  });
+
+  it('replaces only assets it made, and moves a sheet whose frame count changed', async () => {
+    const made = {
+      kind: 'sprites',
+      id: 'coin',
+      path: 'assets/sprites/coin~2x1.png',
+      sidecar: { generator: 'tinyforge-ai' },
+    };
+    const theirs = { kind: 'sfx', id: 'beep', path: 'assets/sfx/beep.wav', sidecar: null };
+    const { ws, stack, agent, inputs } = await setup(
+      [
+        { calls: [call('make_sound', beep), call('make_sprite', { ...coin, frames: [coin.frames[0]] })] },
+        { text: 'ok' },
+      ],
+      {
+        'assets/sprites/coin~2x1.png': new Uint8Array([1]),
+        'assets/sprites/coin~2x1.png.json': '{"generator":"tinyforge-ai"}',
+        'assets/sfx/beep.wav': new Uint8Array([2]),
+      },
+      [made, theirs] as Array<Partial<LibraryAsset>>,
+    );
+    await agent.ask('Redo the coin');
+    expect(inputs[1].results?.map((r) => r.content)).toEqual([
+      'The library already has sfx "beep", not made by you. Pick another ID.',
+      'Made assets/sprites/coin.png: 1 frame of 3x3',
+    ]);
+    expect(ws.data.has('assets/sprites/coin~2x1.png')).toBe(false);
+    expect(ws.data.has('assets/sprites/coin~2x1.png.json')).toBe(false);
+    expect(ws.data.has('assets/sprites/coin.png')).toBe(true);
+    expect([...(ws.data.get('assets/sfx/beep.wav') ?? [])]).toEqual([2]);
+    stack.undo();
+    await stack.idle();
+    expect([...(ws.data.get('assets/sprites/coin~2x1.png') ?? [])]).toEqual([1]);
+    expect(ws.data.has('assets/sprites/coin.png')).toBe(false);
+  });
+});
+
+describe('synth and pixels', () => {
+  it('plays notes', () => {
+    expect(pitchHz('A4')).toBe(440);
+    expect(pitchHz('C4')).toBeCloseTo(261.63, 2);
+    expect(pitchHz('Bb3')).toBeCloseTo(pitchHz('A#3'));
+    const spec = {
+      bpm: 120,
+      notes: [
+        { at: 0, len: 1, note: 'C4', wave: 'triangle' as const },
+        { at: 0, len: 1, note: 'E4', wave: 'noise' as const, vol: 1 },
+      ],
+    };
+    const a = renderSynth(spec);
+    // One beat at 120 bpm plus the default release.
+    expect(a.channels[0].length).toBe(Math.ceil(0.55 * 22050));
+    expect(renderSynth(spec).channels[0]).toEqual(a.channels[0]);
+    expect(Math.max(...a.channels[0].map(Math.abs))).toBeCloseTo(0.8, 2);
+    expect(() => renderSynth({ notes: [{ at: 0, len: 1, note: 'H4' }] })).toThrow('Not a note');
+    expect(() => renderSynth({ notes: [{ at: 0, len: 1, note: 'C4', wave: 'pulse' as never }] })).toThrow('wave');
+    expect(() => renderSynth({ notes: [{ at: 119, len: 2, note: 'C4' }] })).toThrow('at most 120 s');
+    expect(() => renderSynth({ notes: [] })).toThrow('at least one note');
+  });
+
+  it('draws a grid and refuses a bad one', () => {
+    expect(() => renderPixels({ palette: {}, frames: [['x']] })).toThrow('"x" is not in the palette');
+    expect(() => renderPixels({ palette: { a: '#fff' }, frames: [['aa', 'a']] })).toThrow('must have 2 characters');
+    expect(() => renderPixels({ palette: { a: 'red' }, frames: [['a']] })).toThrow('colour');
+    expect(() => renderPixels({ palette: {}, frames: [['.'.repeat(65)]] })).toThrow('1 to 64');
+    expect(renderPixels({ palette: { a: '#11223380' }, frames: [['a']] }).rgba).toEqual(
+      new Uint8ClampedArray([0x11, 0x22, 0x33, 0x80]),
+    );
   });
 });
 
