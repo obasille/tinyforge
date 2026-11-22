@@ -412,6 +412,30 @@ button:disabled {
   background: #2d3348;
 }
 
+/* The file of the active code tab. */
+.tf-files-active {
+  box-shadow: inset 2px 0 0 var(--tf-accent);
+}
+
+.tf-files-active .tf-files-name {
+  color: var(--tf-accent);
+}
+
+/* A section heading (Code, Assets, Engine): a top-level folder. */
+.tf-files-section + .tf-files-section {
+  margin-top: 4px;
+  border-top: 1px solid #2c2c38;
+  padding-top: 4px;
+}
+
+button.tf-files-section-head {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tf-muted);
+}
+
 .tf-files-readonly .tf-files-name {
   color: var(--tf-muted);
 }

@@ -82,6 +82,38 @@ test('the file tree opens files in the code editor; engine files are read-only',
   expect(errors).toEqual([]);
 });
 
+test('the tree has Code, Assets and Engine sections; the active code tab is highlighted', async ({ page }) => {
+  const errors = trackErrors(page);
+  await page.goto('/');
+  await expect(page.getByTestId('run-status')).toHaveText('running');
+  await expect(page.getByTestId('files').locator('.tf-files-section-head .tf-files-name')).toHaveText([
+    'Code',
+    'Assets',
+    'Engine',
+  ]);
+
+  // Opening a file reveals it: its folders open and its row is marked.
+  const pong = page.getByTestId('file-games/pong/main.ts');
+  const drawing = page.getByTestId('file-engine/sdk/drawing.ts');
+  await page.evaluate(() => window.__tf?.editor.workbench.openFile('games/pong/main.ts'));
+  await expect(pong).toHaveClass(/tf-files-active/);
+  await page.evaluate(() => window.__tf?.editor.workbench.openFile('engine/sdk/drawing.ts'));
+  await expect(drawing).toHaveClass(/tf-files-active/);
+  await expect(drawing).toBeInViewport();
+  await expect(pong).not.toHaveClass(/tf-files-active/);
+
+  // Switching tabs moves the mark; focusing another panel keeps it.
+  await page.locator('.dv-default-tab', { hasText: 'main.ts' }).click();
+  await expect(pong).toHaveClass(/tf-files-active/);
+  await page.locator('.dv-default-tab', { hasText: 'Game' }).click();
+  await expect(pong).toHaveClass(/tf-files-active/);
+
+  // Closing the active tab moves the mark to the code tab still shown.
+  await page.locator('.dv-default-tab', { hasText: 'main.ts' }).locator('.dv-default-tab-action').click();
+  await expect(drawing).toHaveClass(/tf-files-active/);
+  expect(errors).toEqual([]);
+});
+
 test('a new game compiles in the browser; saving hot reloads it and keeps its state', async ({ page }) => {
   const errors = trackErrors(page);
   await page.goto('/');

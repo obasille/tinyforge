@@ -98,6 +98,8 @@ export class Editor {
   readonly assets: AssetLibrary;
   /** The asset the library panel shows (a project path), set from elsewhere (the file tree). */
   readonly assetFocus = createStore<string | null>(null);
+  /** The file of the active code tab (the last code tab shown), or null when none is open. Set by the dock. */
+  readonly activeCode = createStore<string | null>(null);
   /** Open sprite editors and sound players (for tests and agents, through window.__tf). */
   readonly openSprites = new Set<SpriteEditor>();
   readonly openSounds = new Set<SoundEditor>();
