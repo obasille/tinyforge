@@ -1,15 +1,7 @@
 #!/usr/bin/env node
-// TinyForge command-line tools, for working without the editor:
-//
-//   pnpm tf export <game> [--out <dir>]   save the game as <dir>/<game>.zip (default: the current folder):
-//                                         its folder and the library assets it uses, with their sidecars
-//   pnpm tf import <file.zip> [--replace] add a game from such a zip; assets that differ from the
-//                                         project's are kept unless --replace
-//   pnpm tf cartridge <game> [--out <dir>] save a playable <dir>/<game>.wasm: a release build with the
-//                                         library files it uses embedded (tinyforge.assets)
-//
-// The same code as the editor's Export, Import and Cartridge (engine/tooling/game-zip.ts,
-// engine/tooling/cartridge-assets.ts).
+// TinyForge command-line tools, for working without the editor. `pnpm tf help`
+// lists the commands (USAGE below). The same code as the editor's Export,
+// Import and Cartridge (engine/tooling/game-zip.ts, cartridge-assets.ts).
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -26,6 +18,19 @@ const flag = (name) => {
   rest.splice(i, 2);
   return value ?? '';
 };
+
+const USAGE = `TinyForge command line (pnpm tf <command>):
+
+  export <game> [--out <dir>]      save the game as <dir>/<game>.zip (default: the current folder):
+                                   its folder and the library assets it uses, with their sidecars
+  import <file.zip> [--replace]    add a game from such a zip; assets that differ from the
+                                   project's are kept unless --replace
+  cartridge <game> [--out <dir>]   save a playable <dir>/<game>.wasm: a release build with the
+                                   library files it uses (and its cover) embedded
+  help                             this list
+
+Builds: pnpm build:games (all games), pnpm build:debug. The editor: pnpm dev, or
+pnpm editor:static for a read-only copy with no AI.`;
 
 function fail(message) {
   console.error(`✗ ${message}`);
@@ -57,7 +62,8 @@ async function exportGame(game, outDir) {
 async function exportCartridge(game, outDir) {
   if (!game) fail('Usage: pnpm tf cartridge <game> [--out <dir>]');
   const files = nodeFiles();
-  if ((await files.readText(`games/${game}/main.ts`)) === null) fail(`No game named ${game}`);
+  const main = await files.readText(`games/${game}/main.ts`);
+  if (main === null) fail(`No game named ${game}`);
   const result = await compileGame(game, 'release');
   if (!result.ok) {
     process.stderr.write(result.log);
@@ -65,7 +71,7 @@ async function exportCartridge(game, outDir) {
   }
   const paths = (await listProjectFiles()).map((f) => f.path);
   const assets = [];
-  for (const p of cartridgeAssetPaths(paths, result.meta.assets)) {
+  for (const p of cartridgeAssetPaths(paths, result.meta.assets, coverIdOf(main))) {
     const [, kind, file] = p.split('/');
     assets.push({ kind, file, bytes: await files.readBytes(p) });
   }
@@ -112,6 +118,9 @@ else if (command === 'cartridge') {
 } else if (command === 'import') {
   const replace = rest.includes('--replace');
   await importGame(rest.filter((a) => a !== '--replace')[0], replace);
+} else if (command === 'help' || command === '--help' || command === undefined) {
+  console.log(USAGE);
 } else {
-  fail('Commands: export <game> [--out <dir>], import <file.zip> [--replace], cartridge <game> [--out <dir>]');
+  console.error(USAGE);
+  fail(`Unknown command ${command}`);
 }

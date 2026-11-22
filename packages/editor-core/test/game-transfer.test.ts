@@ -130,26 +130,33 @@ describe('cartridge export', () => {
 
   it('embeds the library files the build uses, which the library imports back as drafts', async () => {
     const ws = new MemoryWorkspace({
-      'games/pong/main.ts': 'pong',
+      'games/pong/main.ts': 'const COVER = "pong_cover";\n',
       'assets/sprites/ball~2x1.png': new Uint8Array([1]),
       'assets/sprites/ball~2x1.png.json': '{"tags":["round"]}',
+      'assets/sprites/pong_cover.png': new Uint8Array([5]),
       'assets/sfx/hit.wav': new Uint8Array([2]),
       'assets/music/pong_theme.wav': new Uint8Array([3]),
       'assets/sfx/other.wav': new Uint8Array([4]),
     });
     const files = new ProjectFiles(ws);
     await files.start();
-    const wasm = await exportCartridge(files, built({ sprites: ['ball'], sfx: ['hit'], music: ['pong_theme'] }));
+    const wasm = await exportCartridge(
+      files,
+      'pong',
+      built({ sprites: ['ball'], sfx: ['hit'], music: ['pong_theme'] }),
+    );
     expect(cartridgeAssets(wasm)?.map((a) => `${a.kind}/${a.file}`)).toEqual([
       'music/pong_theme.wav',
       'sfx/hit.wav',
       'sprites/ball~2x1.png',
+      'sprites/pong_cover.png',
     ]);
     const drafts = draftsForFile('pong.wasm', wasm);
     expect(drafts.map((d) => [d.kind, d.id, d.cols, d.source])).toEqual([
       ['music', 'pong_theme', 1, 'pong.wasm'],
       ['sfx', 'hit', 1, 'pong.wasm'],
       ['sprites', 'ball', 2, 'pong.wasm'],
+      ['sprites', 'pong_cover', 1, 'pong.wasm'],
     ]);
   });
 
@@ -157,7 +164,7 @@ describe('cartridge export', () => {
     const files = new ProjectFiles(new MemoryWorkspace({ 'games/pong/main.ts': 'pong' }));
     await files.start();
     const failed = async () => ({ ok: false, log: '', diagnostics: [] }) as unknown as CompileResult;
-    await expect(exportCartridge(files, failed)).rejects.toThrow('does not compile');
+    await expect(exportCartridge(files, 'pong', failed)).rejects.toThrow('does not compile');
     expect(() => draftsForFile('plain.wasm', EMPTY)).toThrow('no embedded assets');
     expect(draftsForFile('jump.wav', new Uint8Array([1]))[0].kind).toBe('sfx');
   });

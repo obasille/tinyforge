@@ -22,6 +22,8 @@ import { AGENT_TOOLS, type AgentContext, AgentTools, type FileChangeView, ToolEr
 export type ChatItem =
   | { kind: 'user'; text: string }
   | { kind: 'assistant'; text: string }
+  /** What the model thought before a reply (a summary, for Claude). */
+  | { kind: 'thinking'; text: string }
   | { kind: 'step'; text: string; ok: boolean }
   | { kind: 'error'; text: string }
   /** A yes or no question; `answer` is null until the user answers. */
@@ -46,6 +48,13 @@ export interface AgentOptions {
   buildStatus(): string;
   /** Most model replies in one request. */
   maxSteps?: number;
+}
+
+/** Which games this request may change, as the user set it. */
+function scopeLine(context: AgentContext): string {
+  return context.onlyGame()
+    ? `You may change only games/${context.game}/ (the user limited changes to this game).`
+    : `You may change any game's files (games/<name>/), not only ${context.game}; compile each game you change.`;
 }
 
 const short = (text: string, n: number) => (text.length > n ? `${text.slice(0, n - 1)}…` : text);
@@ -122,31 +131,40 @@ export class Agent {
           content: 'Not run: the user stopped the request.',
           isError: true,
         })),
-        text: `${game.text}\n\n${request}`,
+        text: `${game.text}\n${scopeLine(context)}\n\n${request}`,
       };
       for (let step = 0; ; step++) {
         if (step >= maxSteps) {
           this.add({ kind: 'error', text: `Stopped after ${maxSteps} steps.` });
           break;
         }
-        const index = this.add({ kind: 'assistant', text: '' });
+        // Each shows up when its first words arrive: thinking first, then the reply.
         let text = '';
+        let index = -1;
+        let thought = '';
+        let thinking = -1;
         const turn = await this.chat.send(input, {
           signal,
+          onThinking: (delta) => {
+            thought += delta;
+            if (thinking < 0) thinking = this.add({ kind: 'thinking', text: thought });
+            else this.update(thinking, { kind: 'thinking', text: thought });
+          },
           onText: (delta) => {
             text += delta;
-            this.update(index, { kind: 'assistant', text });
+            if (index < 0) index = this.add({ kind: 'assistant', text });
+            else this.update(index, { kind: 'assistant', text });
           },
         });
         this.pending = turn.calls;
-        this.update(index, { kind: 'assistant', text: turn.text });
+        if (index >= 0) this.update(index, { kind: 'assistant', text: turn.text });
+        else if (turn.text) this.add({ kind: 'assistant', text: turn.text });
         cost = cost !== null && turn.cost !== null ? cost + turn.cost : null;
         this.state.setState((s) => ({
           ...s,
           usage: addUsage(s.usage, turn.usage),
           cost: s.cost !== null && turn.cost !== null ? s.cost + turn.cost : null,
         }));
-        if (!turn.text) this.state.setState((s) => ({ ...s, items: s.items.filter((_, i) => i !== index) }));
         if (turn.stop === 'refusal') {
           this.add({ kind: 'error', text: 'The model declined this request.' });
           break;

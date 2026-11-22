@@ -27,12 +27,17 @@ export interface CartridgeAsset {
   bytes: Uint8Array;
 }
 
-/** The library paths of the assets a game uses (no sidecars: a cartridge is for playing). */
-export function cartridgeAssetPaths(paths: Iterable<string>, used: AssetList): string[] {
+/**
+ * The library paths of the assets a game uses, and its cover sprite (no
+ * sidecars: a cartridge is for playing).
+ */
+export function cartridgeAssetPaths(paths: Iterable<string>, used: AssetList, cover: string | null = null): string[] {
   const out: string[] = [];
   for (const p of paths) {
     const kind = assetKindOf(p);
-    if (kind && used[kind].includes(assetId(p.slice(`assets/${kind}/`.length)))) out.push(p);
+    if (!kind) continue;
+    const id = assetId(p.slice(`assets/${kind}/`.length));
+    if (used[kind].includes(id) || (kind === 'sprites' && id === cover)) out.push(p);
   }
   return out.sort();
 }

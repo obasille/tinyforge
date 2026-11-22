@@ -16,7 +16,9 @@ import { MemoryWorkspace } from './memory-workspace.ts';
 const MAIN = 'export function init(): void {}\nexport function update(): void {}\nexport function draw(): void {}\n';
 
 /** A model that plays back scripted turns and records what it was sent. */
-function scripted(turns: Array<Partial<ChatTurn> | ((input: ChatInput) => Partial<ChatTurn>)>) {
+type Turn = Partial<ChatTurn> & { thinking?: string };
+
+function scripted(turns: Array<Turn | ((input: ChatInput) => Turn)>) {
   const inputs: ChatInput[] = [];
   const provider: AiProvider = {
     id: 'fake',
@@ -25,12 +27,13 @@ function scripted(turns: Array<Partial<ChatTurn> | ((input: ChatInput) => Partia
     hasEffort: false,
     createChat(): Chat {
       return {
-        async send(input, { onText, signal } = {}) {
+        async send(input, { onText, onThinking, signal } = {}) {
           inputs.push(input);
           if (signal?.aborted) throw new Error('aborted');
           const next = turns.shift();
           if (!next) throw new Error('no more turns');
           const turn = typeof next === 'function' ? next(input) : next;
+          if (turn.thinking) onThinking?.(turn.thinking);
           if (turn.text) onText?.(turn.text);
           return {
             text: '',
@@ -54,6 +57,7 @@ async function setup(
   turns: Parameters<typeof scripted>[0],
   extra: Record<string, string | Uint8Array> = {},
   assets: Array<Partial<LibraryAsset>> = [],
+  scope = { onlyGame: true },
 ) {
   const ws = new MemoryWorkspace({ 'games/pong/main.ts': MAIN, 'games/snake/main.ts': MAIN, ...extra });
   const files = new ProjectFiles(ws);
@@ -61,6 +65,7 @@ async function setup(
   const stack = new CommandStack(createStore({}));
   const { provider, inputs } = scripted(turns);
   let builds = 0;
+  const built: string[] = [];
   let assetFiles = files.assetFiles;
   const agent = new Agent({
     provider,
@@ -71,8 +76,10 @@ async function setup(
     context: {
       files,
       game: 'pong',
-      build: async () => {
+      onlyGame: () => scope.onlyGame,
+      build: async (game) => {
         builds++;
+        built.push(game);
         assetFiles = files.assetFiles;
         const text = (await files.readText('games/pong/main.ts')) ?? '';
         return text.includes('oops')
@@ -98,7 +105,7 @@ async function setup(
       assets: () => assets as LibraryAsset[],
     },
   });
-  return { ws, files, stack, agent, inputs, builds: () => builds, assetFiles: () => assetFiles };
+  return { ws, files, stack, agent, inputs, built, builds: () => builds, assetFiles: () => assetFiles };
 }
 
 describe('code agent', () => {
@@ -171,8 +178,8 @@ describe('code agent', () => {
     await agent.ask('Try things');
     const results = inputs[1].results?.map((r) => [r.isError === true, r.content]);
     expect(results).toEqual([
-      [true, 'You can only change files in games/pong/'],
-      [true, 'You can only change files in games/pong/'],
+      [true, 'You can only change files in games/pong/ (the user limited changes to it)'],
+      [true, 'You can only change files in games/pong/ (the user limited changes to it)'],
       [false, 'Created games/pong/util.ts'],
       [true, 'Read games/pong/extra.ts before changing it.'],
       [true, 'main.ts cannot be deleted'],
@@ -180,6 +187,75 @@ describe('code agent', () => {
     ]);
     expect(inputs[2].results?.[0].content).toMatch(/changed since you last read it/);
     expect(ws.text('games/pong/util.ts')).toBe('export const A = 2;');
+  });
+
+  it('changes other games only when the user allows it, as they set it mid-chat', async () => {
+    const scope = { onlyGame: true };
+    const { ws, agent, inputs, built } = await setup(
+      [
+        { calls: [call('read_file', { path: 'games/snake/main.ts' }), call('compile', { game: 'snake' })] },
+        { text: 'Limited.' },
+        () => {
+          return {
+            calls: [
+              call('list_files'),
+              call('edit_file', { path: 'games/snake/main.ts', old: 'draw(): void {}', new: 'draw(): void { }' }),
+              call('compile', { game: 'snake' }),
+              call('write_file', { path: 'games/newgame/main.ts', content: 'x' }),
+              call('delete_file', { path: 'games/snake/main.ts' }),
+            ],
+          };
+        },
+        { text: 'Done.' },
+      ],
+      {},
+      [],
+      scope,
+    );
+    await agent.ask('Look at snake');
+    expect(inputs[0].text).toContain('You may change only games/pong/');
+    expect(inputs[1].results?.map((r) => r.content)[1]).toBe(
+      'You can only compile pong (the user limited changes to it)',
+    );
+    scope.onlyGame = false;
+    await agent.ask('Fix snake too');
+    expect(inputs[2].text).toContain("You may change any game's files");
+    const results = inputs[3].results?.map((r) => r.content) ?? [];
+    expect(results[0]).toContain('games/snake/main.ts');
+    expect(results.slice(1)).toEqual([
+      'Edited games/snake/main.ts',
+      'ok',
+      "You can only change files in an existing game's folder (games/<name>/)",
+      'main.ts cannot be deleted',
+    ]);
+    expect(built).toEqual(['snake']);
+    expect(ws.text('games/snake/main.ts')).toContain('draw(): void { }');
+  });
+
+  it('edits a file with CRLF line endings, keeping them, and shows thinking', async () => {
+    const crlf = MAIN.replace(/\n/g, '\r\n');
+    const { ws, agent, inputs } = await setup(
+      [
+        { thinking: 'Read it first.', calls: [call('read_file', { path: 'games/pong/util.ts' })] },
+        {
+          calls: [
+            call('edit_file', {
+              path: 'games/pong/util.ts',
+              old: 'init(): void {}\nexport function update',
+              new: 'init(): void { }\nexport function update',
+            }),
+          ],
+        },
+        { text: 'Done.' },
+      ],
+      { 'games/pong/util.ts': crlf },
+    );
+    await agent.ask('Edit util');
+    expect(inputs[1].results?.[0].content).toBe(MAIN); // the model sees LF
+    expect(inputs[2].results?.[0].content).toBe('Edited games/pong/util.ts');
+    expect(ws.text('games/pong/util.ts')).toBe(crlf.replace('init(): void {}', 'init(): void { }'));
+    const items = agent.state.getState().items;
+    expect(items[1]).toEqual({ kind: 'thinking', text: 'Read it first.' });
   });
 
   it('keeps partial changes when stopped, and answers the unrun tools next time', async () => {

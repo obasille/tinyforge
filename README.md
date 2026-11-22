@@ -848,7 +848,7 @@ of an asset that differs unless `--replace` is given.
 pnpm tf cartridge gameName [--out dir]   # dir/gameName.wasm
 ```
 
-A release build with the library files the game uses embedded in a
+A release build with the library files the game uses, and its cover sprite, embedded in a
 `tinyforge.assets` custom section, added at the end so the code and the
 metadata are unchanged. Sidecars are left out. Sounds are WAV, so a game with
 music can weigh a megabyte or more (Pong is about 1.4 MB, most of it its
@@ -898,6 +898,13 @@ pnpm watch:games
 - `pnpm serve` - Serve the classic host on http://localhost:8080 (with directory listings)
 - `pnpm dev:classic` - Build the classic host and all games, then serve it
 - `pnpm dev` - Start the new editor (see [The Editor](#the-editor))
+- `pnpm editor:static` - Build the editor as static files with a read-only copy of the project, and serve them on http://localhost:4173 (no AI)
+
+**Command line (`pnpm tf help` lists them):**
+
+- `pnpm tf export <game> [--out dir]` - Save a game as a zip (its folder and the assets it uses)
+- `pnpm tf import <file.zip> [--replace]` - Add a game from such a zip
+- `pnpm tf cartridge <game> [--out dir]` - Save a playable `.wasm` with its assets and cover inside
 
 **Test scripts:**
 
@@ -1003,13 +1010,20 @@ pnpm dev
 
 Then open the URL Vite prints (http://localhost:5173/).
 
+**Static editor:** `pnpm editor:static` builds the same editor as plain files
+(`apps/editor/dist`, with a read-only copy of the project under `__tf/`) and
+serves them at http://localhost:4173/. It runs, compiles and exports games,
+but cannot change files and has no AI. The `dist` folder can be put on any
+static web host.
+
 - **The game runs in a Web Worker** with an `OffscreenCanvas`, so heavy gameplay
   code cannot stall the editor. Audio is played on the main thread
   (`AudioContext` does not exist in Workers). If a game hangs in an infinite
   loop, the editor notices within 3 s and offers to stop and reload it.
 - **Files and code:** the Files panel shows the games, the asset library and
   the (read-only) SDK. Click a file to edit it in a code panel (CodeMirror).
-  Ctrl+S saves. New game, New file, Rename and Delete are in the panel, and
+  Ctrl+S saves. New game, New file, Rename and Delete are in the panel (deleting
+  the running game runs another one), and
   every file change can be undone with Ctrl+Z outside the text. If a file
   changes on disk while you edit it, a clean buffer reloads and an edited one
   asks which version to keep.
@@ -1068,17 +1082,23 @@ Then open the URL Vite prints (http://localhost:5173/).
   (such as `prompt` for a generated asset) are kept. Renaming or deleting an
   asset in the editor takes its sidecar along.
 - **AI code agent (dev server only):** the AI button opens a chat with
-  Claude about the current game. It reads the game, the SDK and the asset
-  list, edits files in the game's folder only, compiles until the game
-  builds, and checks the running game's log. Each request is one undo step,
+  Claude about the current game ("Working on <game>" at the top). There is
+  one chat per game and model provider, kept until the page reloads; New chat
+  starts it over. It reads the game, the SDK, the other games and the asset
+  list, edits files in the game's folder only (untick "Only change this
+  game" to let it change other games too, for a refactor across games),
+  compiles until each game it changed builds, and checks the running game's
+  log. Its thinking (a summary, for Claude; the reasoning of local models
+  that send one) shows as a collapsed Thinking line. On a Windows checkout
+  with CRLF line endings, its edits match and keep them. Each request is one undo step,
   and the panel lists every file it changed with a diff. Model, effort and
   "show cost" are set in the panel and saved in the browser. Setup: put
   `ANTHROPIC_API_KEY=...` in a `.env` file at the repository root (it is
   git-ignored) and restart `pnpm dev`; `TF_AI_MODEL` sets the default model.
   The key stays in the dev server: the page sends requests to
   `/__tf/ai/anthropic`, which adds it. The AI routes answer only the editor
-  on localhost and are off when the server is started with `--host`. A
-  static build has no AI. The agent's guide is `AGENTS.md`, and each game can
+  at `localhost` (opened from another address, the panel says so) and are off
+  when the server is started with `--host`. A static build has no AI. The agent's guide is `AGENTS.md`, and each game can
   keep design notes in `games/<name>/NOTES.md` that the agent reads and
   updates. The agent can also add assets the game needs: sprites drawn as a
   text grid of palette characters, and sound effects or music played on
@@ -1096,8 +1116,8 @@ Then open the URL Vite prints (http://localhost:5173/).
   any other is refused, with the reason shown in the AI panel. Its models appear in the panel's model list; it has
   no effort setting and no cost estimate. Small local models follow the
   rules less well than Claude, and need a context of 32k tokens or more.
-- **Export and import:** the Files panel's Export saves the selected game (or
-  the current one) as a zip of its folder and the assets it uses, with their
+- **Export and import:** the Files panel's Export saves the selected game (a
+  game's folder or a file in it) as a zip of its folder and the assets it uses, with their
   sidecars: the same zip as `pnpm tf export`. Import adds a game from such a
   zip, as one undo step; when some of its assets differ from the project's,
   it asks whether to replace them or keep yours. A game that already exists

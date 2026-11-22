@@ -210,7 +210,21 @@ export class Editor {
     if (metaChanged.length > 0) void this.catalog.load(metaChanged);
     if (changes.some((c) => assetKindOf(c.path))) void this.reloadAssets();
     const { game } = this.project.getState();
-    if (game && affected.includes(game) && games.includes(game)) this.hotReload(game);
+    if (game && !games.includes(game)) this.gameRemoved(games, changes);
+    else if (game && affected.includes(game)) this.hotReload(game);
+  }
+
+  /**
+   * The current game was deleted (or renamed): run another one, or none. Not
+   * an undo step: undoing the delete brings the files back, and the user picks
+   * the game again.
+   */
+  private gameRemoved(games: string[], changes: FileChange[]): void {
+    // A renamed game folder: follow it.
+    const renamed = games.find((g) => changes.some((c) => c.kind === 'add' && c.path === gameEntryPath(g)));
+    const next = renamed ?? (games.includes('pong') ? 'pong' : (games[0] ?? null));
+    if (!next) this.host.kill({ reload: false });
+    this.project.setState((p) => ({ ...p, game: next }));
   }
 
   setVolume(volume: number): void {

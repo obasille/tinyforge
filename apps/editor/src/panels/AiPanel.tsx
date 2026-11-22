@@ -35,6 +35,8 @@ interface AiSettings extends ChatSettings {
   /** The provider's id in the dev server's status ('anthropic', 'openai'). */
   provider: string;
   showCost: boolean;
+  /** The AI may change only the current game's files (it can read every game's). */
+  onlyGame: boolean;
 }
 
 function loadSettings(): Partial<AiSettings> {
@@ -51,6 +53,7 @@ const settings = createStore<AiSettings>({
   model: '',
   effort: 'medium',
   showCost: true,
+  onlyGame: true,
   ...loadSettings(),
 });
 settings.subscribe(() => {
@@ -84,7 +87,8 @@ async function agentFor(editor: Editor, game: string, provider: ProviderStatus):
     context: {
       files: editor.files,
       game,
-      build: () => editor.compiler.build(game),
+      onlyGame: () => settings.getState().onlyGame,
+      build: (g) => editor.compiler.build(g),
       invalidate: (changes) => editor.compiler.invalidate(changes),
       gameLog: () => {
         const lines = editor.logs
@@ -105,7 +109,7 @@ export default function AiPanel() {
   const game = useStore(editor.project).game;
   const [status, setStatus] = useState<AiStatus | null | undefined>(undefined);
   const [agent, setAgent] = useState<Agent | null>(null);
-  const providerId = useStore(settings).provider;
+  const { provider: providerId, onlyGame } = useStore(settings);
   const provider = status?.providers.find((p) => p.id === providerId) ?? null;
 
   useEffect(() => {
@@ -144,6 +148,20 @@ export default function AiPanel() {
   return (
     <div className="tf-ai" data-testid="ai-panel">
       <Settings status={status ?? null} onNewChat={newChat} />
+      {game && !notice ? (
+        <div className="tf-ai-scope" data-testid="ai-scope">
+          Working on <strong>{game}</strong>
+          <label title="Off: the AI may also change other games' files (for a refactor across games). It can always read them.">
+            <input
+              type="checkbox"
+              data-testid="ai-only-game"
+              checked={onlyGame}
+              onChange={(e) => settings.setState((x) => ({ ...x, onlyGame: e.target.checked }))}
+            />
+            Only change this game
+          </label>
+        </div>
+      ) : null}
       {status?.reason && status.providers.length > 0 ? (
         <div className="tf-ai-error" role="alert" data-testid="ai-setup-problem">
           {status.reason}
@@ -288,6 +306,13 @@ function Item({ item, showCost, agent }: { item: ChatItem; showCost: boolean; ag
   switch (item.kind) {
     case 'user':
       return <div className="tf-ai-user">{item.text}</div>;
+    case 'thinking':
+      return (
+        <details className="tf-ai-thinking" data-testid="ai-thinking">
+          <summary>Thinking</summary>
+          {item.text}
+        </details>
+      );
     case 'assistant':
       return item.text ? <div className="tf-ai-assistant">{item.text}</div> : <div className="tf-ai-step">…</div>;
     case 'step':

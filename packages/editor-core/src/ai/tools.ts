@@ -1,5 +1,6 @@
 // The code agent's tools, and the rules they enforce whatever the model asks:
-// it writes only text files in the current game's folder, reads any project
+// it writes only text files in the current game's folder (or in any game's,
+// when the user allows it), reads any project
 // file, and cannot write a file it has not read (or that changed since it read
 // it). It adds sprites and sounds to the library only through make_sprite and
 // make_sound, and replaces an existing asset only once the user says yes.
@@ -26,8 +27,10 @@ import { MUSIC_RATE, renderSynth, SFX_RATE, type SynthSpec } from './synth.ts';
 export interface AgentContext {
   files: ProjectFiles;
   game: string;
-  /** Compile the game (the editor's build cache). */
-  build(): Promise<CompileResult>;
+  /** The user limits changes to this game (read on every call: they may change it mid-chat). */
+  onlyGame(): boolean;
+  /** Compile a game (the editor's build cache). */
+  build(game: string): Promise<CompileResult>;
   /** Tell the build cache a file changed (the change event may arrive later). */
   invalidate(changes: FileChange[]): void;
   /** The running game's status and recent log lines. */
@@ -83,7 +86,8 @@ const TAGS_SCHEMA = { type: 'array', items: { type: 'string' } };
 export const AGENT_TOOLS: ToolSpec[] = [
   {
     name: 'list_files',
-    description: "List the current game's files and the SDK files, with their sizes.",
+    description:
+      "List the current game's files (every game's, when you may change them all) and the SDK files, with their sizes.",
     schema: { properties: {}, required: [] },
   },
   {
@@ -95,7 +99,7 @@ export const AGENT_TOOLS: ToolSpec[] = [
   {
     name: 'edit_file',
     description:
-      'Replace one exact passage of a file in the current game. `old` must appear exactly once; include enough surrounding lines to make it unique.',
+      'Replace one exact passage of a file in a game you may change. `old` must appear exactly once; include enough surrounding lines to make it unique.',
     schema: {
       properties: { path: { type: 'string' }, old: { type: 'string' }, new: { type: 'string' } },
       required: ['path', 'old', 'new'],
@@ -104,12 +108,12 @@ export const AGENT_TOOLS: ToolSpec[] = [
   {
     name: 'write_file',
     description:
-      "Create a file in the current game's folder, or replace one you have read. Only .ts and .md files. Prefer edit_file for changes to an existing file.",
+      'Create a file in a game you may change (the current one, unless told otherwise), or replace one you have read. Only .ts and .md files. Prefer edit_file for changes to an existing file.',
     schema: { properties: { path: { type: 'string' }, content: { type: 'string' } }, required: ['path', 'content'] },
   },
   {
     name: 'delete_file',
-    description: "Delete a file you have read in the current game's folder (not main.ts).",
+    description: 'Delete a file you have read in a game you may change (not its main.ts).',
     schema: { properties: { path: { type: 'string' } }, required: ['path'] },
   },
   {
@@ -162,8 +166,9 @@ export const AGENT_TOOLS: ToolSpec[] = [
   },
   {
     name: 'compile',
-    description: 'Compile the current game. Returns "ok" or the errors. Compile before you finish.',
-    schema: { properties: {}, required: [] },
+    description:
+      'Compile a game: the current one, or `game` when you may change others. Returns "ok" or the errors. Compile each game you changed before you finish.',
+    schema: { properties: { game: { type: 'string' } }, required: [] },
   },
   {
     name: 'game_log',
@@ -182,6 +187,9 @@ export interface FileChangeView {
   after: string | null;
   binary: boolean;
 }
+
+/** Text with LF line endings. */
+const lf = (text: string) => text.replace(/\r\n/g, '\n');
 
 const str = (input: Record<string, unknown>, key: string): string => {
   const value = input[key];
@@ -248,7 +256,7 @@ export class AgentTools {
       case 'make_sound':
         return this.makeSound(input);
       case 'compile':
-        return this.compile();
+        return this.compile(typeof input.game === 'string' && input.game ? input.game : this.ctx.game);
       case 'game_log':
         return this.ctx.gameLog();
       default:
@@ -258,8 +266,9 @@ export class AgentTools {
 
   private listFiles(): string {
     const { files, game } = this.ctx;
+    const mine = this.ctx.onlyGame() ? `games/${game}/` : 'games/';
     const lines = files.files
-      .filter((f) => f.path.startsWith(`games/${game}/`) || f.path.startsWith('engine/sdk/'))
+      .filter((f) => f.path.startsWith(mine) || f.path.startsWith('engine/sdk/'))
       .map((f) => `${f.path} (${f.size} bytes)`);
     return lines.join('\n') || '(no files)';
   }
@@ -281,15 +290,12 @@ export class AgentTools {
     }
     if (text.length > MAX_TEXT) throw new ToolError(`${path} is too large (${text.length} characters)`);
     this.seen.set(path, text);
-    return text;
+    return lf(text);
   }
 
   /** The current text of a file the agent may change, checking it read the latest version. */
   private async current(path: string): Promise<string | null> {
-    const { game } = this.ctx;
-    if (!isProjectPath(path) || gameOf(path) !== game) {
-      throw new ToolError(`You can only change files in games/${game}/`);
-    }
+    this.mayChange(path);
     if (!WRITABLE_FILE.test(path)) throw new ToolError('You can only write .ts and .md files');
     const text = await this.ctx.files.readText(path);
     if (text !== null && this.seen.get(path) !== text) {
@@ -302,9 +308,26 @@ export class AgentTools {
     return text;
   }
 
+  /** Throws unless the agent may change this path: a file in its game, or in any existing game when allowed. */
+  private mayChange(path: string): void {
+    const { game, files } = this.ctx;
+    const target = isProjectPath(path) ? gameOf(path) : null;
+    if (this.ctx.onlyGame()) {
+      if (target !== game)
+        throw new ToolError(`You can only change files in games/${game}/ (the user limited changes to it)`);
+    } else if (!target || !files.games.includes(target)) {
+      throw new ToolError(`You can only change files in an existing game's folder (games/<name>/)`);
+    }
+  }
+
   private async edit(path: string, old: string, replacement: string): Promise<string> {
-    const text = await this.current(path);
-    if (text === null) throw new ToolError(`${path} not found`);
+    const raw = await this.current(path);
+    if (raw === null) throw new ToolError(`${path} not found`);
+    // Files checked out on Windows may have CRLF line endings; the model writes LF. Match
+    // on LF and keep the file's own endings.
+    const crlf = raw.includes('\r\n');
+    const text = lf(raw);
+    old = lf(old);
     const count = old ? text.split(old).length - 1 : 0;
     if (count !== 1) {
       throw new ToolError(
@@ -313,23 +336,22 @@ export class AgentTools {
           : `The passage appears ${count} times; include more context`,
       );
     }
-    await this.save(
-      path,
-      text,
-      text.replace(old, () => replacement),
-    );
+    const edited = text.replace(old, () => lf(replacement));
+    await this.save(path, raw, crlf ? edited.replace(/\n/g, '\r\n') : edited);
     return `Edited ${path}`;
   }
 
   private async write(path: string, content: string): Promise<string> {
     if (content.length > MAX_TEXT) throw new ToolError(`Too large (${content.length} characters)`);
     const text = await this.current(path);
-    await this.save(path, text, content);
+    // A replaced file keeps its line endings (CRLF on a Windows checkout).
+    const body = text?.includes('\r\n') ? lf(content).replace(/\n/g, '\r\n') : content;
+    await this.save(path, text, body);
     return text === null ? `Created ${path}` : `Replaced ${path}`;
   }
 
   private async remove(path: string): Promise<string> {
-    if (path === `games/${this.ctx.game}/main.ts`) throw new ToolError('main.ts cannot be deleted');
+    if (/^games\/[^/]+\/main\.ts$/.test(path)) throw new ToolError('main.ts cannot be deleted');
     const text = await this.current(path);
     if (text === null) throw new ToolError(`${path} not found`);
     await this.put(path, null);
@@ -479,9 +501,13 @@ export class AgentTools {
     return lines.join('\n') || '(the library is empty)';
   }
 
-  private async compile(): Promise<string> {
+  private async compile(game: string): Promise<string> {
+    if (game !== this.ctx.game && this.ctx.onlyGame()) {
+      throw new ToolError(`You can only compile ${this.ctx.game} (the user limited changes to it)`);
+    }
+    if (!this.ctx.files.games.includes(game)) throw new ToolError(`No game named ${game}`);
     await this.listed();
-    const result = await this.ctx.build();
+    const result = await this.ctx.build(game);
     const errors = result.diagnostics.filter((d) => d.severity === 'error');
     if (result.ok) return errors.length === 0 ? 'ok' : `ok, with messages:\n${result.log.slice(-4000)}`;
     if (errors.length === 0) return `Failed:\n${result.log.slice(-4000)}`;

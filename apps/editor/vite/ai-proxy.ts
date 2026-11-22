@@ -96,7 +96,11 @@ function checkLocal(req: IncomingMessage): void {
   const host = req.headers.host ?? '';
   const hostname = host.startsWith('[') ? host.slice(0, host.indexOf(']') + 1) : host.split(':')[0];
   // A page on another site can reach localhost through a DNS name that points to it: refuse other Host names.
-  if (!LOCAL_HOSTS.has(hostname)) throw new HttpError(403, 'AI routes answer only on localhost');
+  if (!LOCAL_HOSTS.has(hostname)) {
+    // Only a port number is echoed back, nothing else from the request.
+    const port = /^:\d{1,5}$/.test(host.slice(hostname.length)) ? host.slice(hostname.length) : '';
+    throw new HttpError(403, `AI works only on this computer: open http://localhost${port}`);
+  }
   const origin = req.headers.origin;
   if (origin !== undefined && origin !== `http://${host}` && origin !== `https://${host}`) {
     throw new HttpError(403, 'AI routes answer only the editor itself');
