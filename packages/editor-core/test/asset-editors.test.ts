@@ -103,7 +103,7 @@ describe('SpriteEditor', () => {
     expect(sprite.state.getState().dirty).toBe(false);
     const saved = await decodePng(ws.data.get('assets/sprites/dot.png') as Uint8Array);
     expect(saved?.rgba.slice((3 * 4 + 0) * 4, (3 * 4 + 0) * 4 + 4)).toEqual(new Uint8ClampedArray([255, 0, 0, 255]));
-    expect(stack.getState().undoLabel).toBe('Edit dot.png');
+    expect(stack.getState().undoLabel).toBe("Edit 'assets/sprites/dot.png'");
     sprite.dispose();
   });
 
@@ -203,7 +203,7 @@ describe('SoundEditor', () => {
     await settle();
     const saved = decodeWav(ws.data.get('assets/sfx/beep.wav') as Uint8Array);
     expect(saved?.channels[0]).toHaveLength(500);
-    expect(stack.getState().undoLabel).toBe('Edit beep.wav');
+    expect(stack.getState().undoLabel).toBe("Edit 'assets/sfx/beep.wav'");
     sound.dispose();
   });
 

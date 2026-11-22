@@ -1,6 +1,7 @@
 import { useEditor } from './EditorContext.ts';
 import { GamePicker } from './GamePicker.tsx';
 import { useStore } from './hooks.ts';
+import { UndoHistory } from './UndoHistory.tsx';
 
 export function Toolbar({ onResetLayout }: { onResetLayout: () => void }) {
   const editor = useEditor();
@@ -13,9 +14,12 @@ export function Toolbar({ onResetLayout }: { onResetLayout: () => void }) {
     <header className="tf-toolbar">
       <strong className="tf-brand">TinyForge</strong>
       <GamePicker />
-      <button type="button" disabled={!stack.canUndo} onClick={() => editor.commands.undo()} title="Undo (Ctrl+Z)">
-        Undo{stack.undoLabel ? ` ${stack.undoLabel}` : ''}
-      </button>
+      <span className="tf-undo-group">
+        <button type="button" disabled={!stack.canUndo} onClick={() => editor.commands.undo()} title="Undo (Ctrl+Z)">
+          Undo{stack.undoLabel ? ` ${stack.undoLabel}` : ''}
+        </button>
+        <UndoHistory />
+      </span>
       <button
         type="button"
         disabled={!stack.canRedo}

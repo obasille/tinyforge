@@ -175,6 +175,68 @@ button:disabled {
   flex: 1;
 }
 
+.tf-undo-group {
+  display: flex;
+  align-items: stretch;
+}
+
+.tf-undo-group > button {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.tf-history {
+  position: relative;
+  display: flex;
+}
+
+.tf-history-button {
+  padding: 0 4px;
+  margin-left: -1px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  color: var(--tf-muted);
+}
+
+.tf-history-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--tf-panel);
+  border: 1px solid #3a3a48;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 50%);
+}
+
+.tf-history-item {
+  padding: 3px 8px;
+  text-align: left;
+  white-space: nowrap;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+}
+
+.tf-history-item[data-active="true"] {
+  background: #34344a;
+  outline: none;
+}
+
+.tf-history-footer {
+  padding: 4px 8px 2px;
+  border-top: 1px solid #3a3a48;
+  margin-top: 4px;
+  color: var(--tf-muted);
+  font-size: 12px;
+}
+
 .tf-volume {
   display: flex;
   align-items: center;

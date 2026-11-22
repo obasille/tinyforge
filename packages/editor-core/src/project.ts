@@ -2,7 +2,7 @@
 // through commands. It is small today (which game, run settings) and grows as
 // the editor gains editing features.
 
-import type { Command } from './commands.ts';
+import { type Command, commandLabel } from './commands.ts';
 
 export interface ProjectState {
   version: 1;
@@ -33,10 +33,20 @@ function setField<K extends keyof ProjectState>(
 }
 
 export const projectCommands = {
-  setGame: (state: ProjectState, game: string | null) =>
-    setField('project.setGame', 'Select game', 'game', game)(state),
-  setSeed: (state: ProjectState, seed: number | null) =>
-    setField('project.setSeed', 'Set seed', 'seed', seed === null ? null : (seed >>> 0) & 0x7fffffff)(state),
+  /** `title` is the game's display name for the label; the name is used when it is not given. */
+  setGame: (state: ProjectState, game: string | null, title?: string) =>
+    setField(
+      'project.setGame',
+      game === null ? 'Clear game' : commandLabel('Select game', title ?? game),
+      'game',
+      game,
+    )(state),
+  setSeed: (state: ProjectState, seed: number | null) => {
+    const value = seed === null ? null : (seed >>> 0) & 0x7fffffff;
+    const label =
+      value === null ? 'Use random seed' : commandLabel('Set seed', `0x${value.toString(16).toUpperCase()}`);
+    return setField('project.setSeed', label, 'seed', value)(state);
+  },
 };
 
 /** Rebuild commands from a recorded log entry, for replay. */

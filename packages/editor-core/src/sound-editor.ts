@@ -7,7 +7,7 @@
 // is saved as a WAV under the same ID; its sidecar follows.
 
 import { sidecarPath } from './asset-library.ts';
-import type { FileCommand } from './commands.ts';
+import { commandLabel, type FileCommand } from './commands.ts';
 import { type FileOp, fileBatch } from './file-commands.ts';
 import type { ProjectFiles } from './project-files.ts';
 import { createStore, type Store } from './store.ts';
@@ -307,8 +307,9 @@ export class SoundEditor {
         if (side) ops.push({ delete: sidecarPath(this.path) }, { write: sidecarPath(target), data: side });
       }
       this.disk = bytes;
-      const name = target.slice(dir.length);
-      await this.host.commands.runFile(await fileBatch(this.host.files, ops, `Edit ${name}`, 'sounds.save'));
+      await this.host.commands.runFile(
+        await fileBatch(this.host.files, ops, commandLabel('Edit', target), 'sounds.save'),
+      );
       this.update({ path: target, dirty: false, conflict: null, saving: false });
     } catch (e) {
       this.update({ saving: false, error: `Save failed: ${e instanceof Error ? e.message : String(e)}` });
