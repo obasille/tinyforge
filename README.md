@@ -459,6 +459,12 @@ assets/
 Files are **ID-based**: the filename ID is a string parsed from the prefix before `~`/`-`.
 Only the ID is required, and it must be ≤ 16 characters.
 
+The games' sounds were made with the editor's chiptune synth
+(`packages/editor-core/src/ai/synth.ts`). Each keeps its recipe, the synth
+description that renders it, as `spec` in its sidecar (`<file>.wav.json`).
+To change one, edit the recipe and render it again (ask the AI panel to
+remake the sound from its sidecar).
+
 ### Audio API
 
 ```ts
@@ -1102,11 +1108,15 @@ static web host.
   keep design notes in `games/<name>/NOTES.md` that the agent reads and
   updates. The agent can also add assets the game needs: sprites drawn as a
   text grid of palette characters, and sound effects or music played on
-  `synth.ts`, the TypeScript port of `scripts/chiptune.py` that made the
-  games' sounds (pulse, 16-step triangle and LFSR noise voices, plus saw and
-  sine, with envelopes, pitch slides and the scripts' one-line note
-  patterns), at the scripts' sample rates and loudness. Their sidecar keeps the request and the
-  description (`spec`), and marks them `"generator": "tinyforge-ai"`. Before
+  `synth.ts`, the synth that made the games' sounds (pulse, 16-step and
+  smooth triangle, LFSR noise, saw and sine voices, with envelopes, fades,
+  pitch slides, one-line note patterns and noise shared along a drum line),
+  at the games' sample rates and loudness. Their sidecar keeps the request and
+  the description (`spec`, the recipe), and marks them
+  `"generator": "tinyforge-ai"`. The games' own sounds keep their recipe in
+  their sidecar too (`"generator": "tinyforge-synth"`), so the agent can
+  make a sound in their style, or change one by editing its recipe. When the
+  synth lacks something a request needs, the agent says what is missing. Before
   it replaces an asset that already exists (imported or made earlier), the
   agent pauses and the panel asks: Replace or Keep (Stop counts as Keep).
   Instead of Claude (or as well), the agent can use any OpenAI-compatible

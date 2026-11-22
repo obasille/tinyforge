@@ -1,16 +1,18 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { Agent } from '../src/ai/agent.ts';
 import { lineDiff } from '../src/ai/diff.ts';
 import { renderPixels } from '../src/ai/pixels.ts';
 import { readSdkApi, sdkApi } from '../src/ai/prompt.ts';
 import type { AiProvider, Chat, ChatInput, ChatTurn, ToolCall } from '../src/ai/provider.ts';
-import { pitchHz, renderSynth, type SynthNote } from '../src/ai/synth.ts';
+import { MUSIC_RATE, pitchHz, renderSynth, type SynthNote } from '../src/ai/synth.ts';
 import type { LibraryAsset } from '../src/asset-library.ts';
 import { CommandStack } from '../src/commands.ts';
 import { decodePng } from '../src/png.ts';
 import { ProjectFiles } from '../src/project-files.ts';
 import { createStore } from '../src/store.ts';
-import { decodeWav } from '../src/wav.ts';
+import { decodeWav, encodeWav } from '../src/wav.ts';
 import { MemoryWorkspace } from './memory-workspace.ts';
 
 const MAIN = 'export function init(): void {}\nexport function update(): void {}\nexport function draw(): void {}\n';
@@ -421,7 +423,13 @@ describe('asset list', () => {
       usedBy: ['pong'],
       sidecar: null,
     };
-    const jump = { kind: 'sfx', id: 'jump', path: 'assets/sfx/jump.wav', usedBy: [], sidecar: { tags: ['retro'] } };
+    const jump = {
+      kind: 'sfx',
+      id: 'jump',
+      path: 'assets/sfx/jump.wav',
+      usedBy: [],
+      sidecar: { tags: ['retro'], spec: { notes: [] } },
+    };
     const { inputs, agent } = await setup(
       [
         {
@@ -444,7 +452,7 @@ describe('asset list', () => {
     const [list, guess, sidecar] = inputs[1].results?.map((r) => r.content) ?? [];
     expect(list).toBe(
       'sprite pong_cover: assets/sprites/pong_cover.png, frame 64x64, 1x1 frames; used by: pong\n' +
-        'sfx jump: assets/sfx/jump.wav; tags: retro; sidecar: assets/sfx/jump.wav.json',
+        'sfx jump: assets/sfx/jump.wav; tags: retro; sidecar: assets/sfx/jump.wav.json (with its synth recipe)',
     );
     expect(guess).toBe(
       "assets/sprites/pong_cover.json not found. A sidecar is named after the asset's file (assets/sprites/<file>.json); list_assets shows the files and their sidecars. No sprites asset has one.",
@@ -454,6 +462,89 @@ describe('asset list', () => {
 });
 
 describe('synth and pixels', () => {
+  it('shares noise along a group, fades note ends, cuts at the length, and has a smooth triangle and a drum slide', () => {
+    const hit = (at: number, noiseGroup?: string) =>
+      ({
+        at,
+        len: 0.01,
+        note: 8000,
+        wave: 'noise',
+        vol: 1,
+        attack: 0,
+        decay: 0,
+        sustain: 1,
+        release: 0,
+        noiseGroup,
+      }) as const;
+    const render = (notes: SynthNote[], extra = {}) =>
+      renderSynth({ notes, loop: true, volume: 1, ...extra }, { sampleRate: 1000 }).channels[0];
+    // Each hit restarts the generator (the same 10 samples twice); a group continues it.
+    const fresh = render([hit(0), hit(0.01)]);
+    expect([...fresh.slice(10, 20)]).toEqual([...fresh.slice(0, 10)]);
+    const shared = render([hit(0, 'd'), hit(0.01, 'd')]);
+    expect([...shared.slice(0, 10)]).toEqual([...fresh.slice(0, 10)]);
+    expect([...shared.slice(10, 20)]).not.toEqual([...shared.slice(0, 10)]);
+    // In the order written: the second hit written first takes the generator's start.
+    const reversed = render([hit(0.01, 'd'), hit(0, 'd')]);
+    expect([...reversed.slice(10, 20)]).toEqual([...shared.slice(0, 10)]);
+    // Fades ramp from 0 at the start and down to the end, over at most the note's length.
+    const flat = {
+      at: 0,
+      len: 0.1,
+      note: 'A4',
+      vol: 1,
+      attack: 0,
+      decay: 0,
+      sustain: 1,
+      release: 0,
+      duty: 0.5,
+    } as const;
+    const faded = render([{ ...flat, fadeIn: 0.01, fadeOut: 1 }]);
+    expect(faded[0]).toBe(0);
+    // At 50 of 100 samples the fade-out (over the whole note) is 0.5; the peak, 0.9 at sample 10.
+    expect(Math.abs(faded[50] / faded[10])).toBeCloseTo(0.5 / 0.9, 5);
+    // A length cuts the sound, as a loop's end.
+    expect(render([flat], { length: 0.05 }).length).toBe(50);
+    // softtriangle is not stepped; a drum slide falls fast, then settles.
+    const soft = render([{ ...flat, wave: 'softtriangle', note: 50 }]);
+    expect(new Set(soft).size).toBeGreaterThan(16);
+    const drum = renderSynth({ notes: [{ ...flat, len: 1, note: 400, to: 100, curve: 'drum' }] }, { sampleRate: 8000 })
+      .channels[0];
+    const crossings = (from: number, to: number) =>
+      drum.slice(from, to).reduce((n, v, i, a) => n + (i > 0 && a[i - 1] < 0 && v >= 0 ? 1 : 0), 0);
+    // The first quarter falls most of the way: far fewer cycles in the second half than in the first.
+    expect(crossings(0, 4000)).toBeGreaterThan(crossings(4000, 8000) * 1.5);
+  });
+
+  it("renders the games' sounds from the recipes in their sidecars, as their WAVs", () => {
+    const assets = path.resolve(import.meta.dirname, '../../../assets');
+    const recipes = ['sfx', 'music'].flatMap((kind) =>
+      readdirSync(path.join(assets, kind))
+        .filter((f) => f.endsWith('.wav.json'))
+        .map((f) => ({ kind, file: f.slice(0, -5) })),
+    );
+    expect(recipes.length).toBe(35);
+    const render = (kind: string, file: string) => {
+      const { spec } = JSON.parse(readFileSync(path.join(assets, kind, `${file}.json`), 'utf8'));
+      const options = kind === 'music' ? { sampleRate: MUSIC_RATE, volume: 0.5 } : undefined;
+      return decodeWav(encodeWav(renderSynth(spec, options)))?.channels[0] ?? new Float32Array();
+    };
+    // Two of them sample by sample: equal within one 16-bit step (the old WAVs were truncated, not rounded).
+    for (const [kind, file] of [
+      ['sfx', 'pong_hit_p1.wav'],
+      ['music', 'pong_theme.wav'],
+    ]) {
+      const ours = render(kind, file);
+      const theirs = decodeWav(new Uint8Array(readFileSync(path.join(assets, kind, file))))?.channels[0] ?? [];
+      expect(ours.length).toBe(theirs.length);
+      let max = 0;
+      for (let i = 0; i < ours.length; i++) max = Math.max(max, Math.abs(ours[i] - theirs[i]));
+      expect(max * 32768).toBeLessThanOrEqual(1.0001);
+    }
+    // The others render.
+    for (const { kind, file } of recipes) expect(render(kind, file).length).toBeGreaterThan(0);
+  });
+
   it('plays notes', () => {
     expect(pitchHz('A4')).toBe(440);
     expect(pitchHz('C4')).toBeCloseTo(261.63, 2);
@@ -468,7 +559,7 @@ describe('synth and pixels', () => {
     const a = renderSynth(spec);
     // One beat at 120 bpm plus the default release, at the effects rate.
     expect(a.sampleRate).toBe(44100);
-    expect(a.channels[0].length).toBe(Math.ceil(0.55 * 44100));
+    expect(a.channels[0].length).toBe(Math.floor(0.55 * 44100));
     expect(renderSynth(spec).channels[0]).toEqual(a.channels[0]);
     // Normalized to the games' effect loudness, and faded out at the end.
     expect(Math.max(...a.channels[0].map(Math.abs))).toBeCloseTo(0.35, 3);
@@ -479,10 +570,10 @@ describe('synth and pixels', () => {
     expect(() => renderSynth({ notes: [] })).toThrow('at least one note');
   });
 
-  it('matches chiptune.py: LFSR noise, a 16-step triangle, and track lines', () => {
+  it("plays LFSR noise, a 16-step triangle, and track lines like the games' sounds", () => {
     const one = (note: SynthNote) =>
       renderSynth({ notes: [{ attack: 0, sustain: 1, release: 0, vol: 1, ...note }], loop: true }).channels[0];
-    // chiptune.py's Noise() clocked at 4000 Hz: the same bits.
+    // A 15-bit LFSR clocked at 4000 Hz: the bits the games' noise has.
     const noise = one({ at: 0, len: 0.01, note: 4000, wave: 'noise' });
     const bits = [...noise.slice(0, 200)].map((v) => (v > 0 ? '1' : '0')).join('');
     expect(bits).toBe(`${'1'.repeat(11)}${'0'.repeat(154)}${'1'.repeat(11)}${'0'.repeat(24)}`);
