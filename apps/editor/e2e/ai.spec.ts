@@ -176,7 +176,8 @@ test('the agent makes a sprite and a sound the game can use, and undo removes th
     [
       {
         tool: 'make_sprite',
-        input: { id: game, palette: { r: '#ff0000' }, frames: [['.r.', 'rrr', '.r.']] },
+        // A 64x64 cover, the largest frame.
+        input: { id: game, palette: { r: '#ff0000' }, frames: [Array.from({ length: 64 }, () => 'r.'.repeat(32))] },
       },
       { tool: 'make_sound', input: { id: game, kind: 'sfx', notes: [{ at: 0, len: 0.1, note: 'C5', to: 'C6' }] } },
     ],
@@ -184,6 +185,14 @@ test('the agent makes a sprite and a sound the game can use, and undo removes th
       {
         tool: 'edit_file',
         input: { path: `games/${game}/main.ts`, old: 'import { Button,', new: 'import { playSfx, s, Button,' },
+      },
+      {
+        tool: 'edit_file',
+        input: {
+          path: `games/${game}/main.ts`,
+          old: 'const AUTHOR = "Your name";',
+          new: `const AUTHOR = "Your name";\nconst COVER = "${game}";`,
+        },
       },
       {
         tool: 'edit_file',
@@ -213,6 +222,16 @@ test('the agent makes a sprite and a sound the game can use, and undo removes th
   const sidecar = JSON.parse(readFileSync(path.join(ASSETS, 'sfx', `${game}.wav.json`), 'utf8'));
   expect(sidecar.generator).toBe('tinyforge-ai');
   expect(sidecar.prompt).toBe('Add a sprite and a sound');
+  // The library sees the new sprite as this game's cover.
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (g) =>
+          window.__tf?.editor.assets.state.getState().assets.find((a) => a.id === g && a.kind === 'sprites')?.usedBy,
+        game,
+      ),
+    )
+    .toEqual([game]);
 
   await page.getByRole('button', { name: 'Undo AI: Add a sprite and a sound' }).click();
   await expect.poll(() => existsSync(path.join(ASSETS, 'sprites', `${game}.png`))).toBe(false);

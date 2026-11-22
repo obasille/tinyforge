@@ -72,7 +72,7 @@ export const AGENT_TOOLS: ToolSpec[] = [
   {
     name: 'read_file',
     description:
-      'Read a text file by project path (games/<name>/..., engine/sdk/..., assets/<kind>/<file>.json). You must read a file before changing it.',
+      "Read a text file by project path: games/<name>/..., engine/sdk/..., or an asset's sidecar (its file name plus .json, like assets/sprites/coin~8x1.png.json; list_assets says which exist). Images and sounds cannot be read. You must read a file before changing it.",
     schema: { properties: { path: { type: 'string' } }, required: ['path'] },
   },
   {
@@ -242,7 +242,17 @@ export class AgentTools {
     if (!isProjectPath(path)) throw new ToolError(`Invalid path "${path}"`);
     if (!TEXT_FILE.test(path)) throw new ToolError(`${path} is not a text file`);
     const text = await this.ctx.files.readText(path);
-    if (text === null) throw new ToolError(`${path} not found`);
+    if (text === null) {
+      // A common guess: the sidecar named after the ID rather than the file.
+      const kind = /^assets\/([^/]+)\//.exec(path)?.[1];
+      const sidecars = this.ctx.files.files.filter(
+        (f) => kind && f.path.startsWith(`assets/${kind}/`) && f.path.endsWith('.json'),
+      );
+      const hint = kind
+        ? ` A sidecar is named after the asset's file (assets/${kind}/<file>.json); list_assets shows the files and their sidecars.${sidecars.length === 0 ? ` No ${kind} asset has one.` : ''}`
+        : '';
+      throw new ToolError(`${path} not found.${hint}`);
+    }
     if (text.length > MAX_TEXT) throw new ToolError(`${path} is too large (${text.length} characters)`);
     this.seen.set(path, text);
     return text;
@@ -415,11 +425,17 @@ export class AgentTools {
   }
 
   private listAssets(): string {
+    const { files } = this.ctx;
     const lines = this.ctx.assets().map((a) => {
-      const tags = a.sidecar?.tags?.length ? ` tags: ${a.sidecar.tags.join(', ')}` : '';
-      if (a.kind !== 'sprites') return `${a.kind} ${a.id}${tags}`;
+      const extra = [
+        a.sidecar?.tags?.length ? `tags: ${a.sidecar.tags.join(', ')}` : '',
+        a.usedBy.length ? `used by: ${a.usedBy.join(', ')}` : '',
+        files.exists(sidecarPath(a.path)) ? `sidecar: ${sidecarPath(a.path)}` : '',
+      ].filter(Boolean);
+      const more = extra.length ? `; ${extra.join('; ')}` : '';
+      if (a.kind !== 'sprites') return `${a.kind} ${a.id}: ${a.path}${more}`;
       const frame = a.image ? `${a.image.width / a.cols}x${a.image.height / a.rows}` : '?';
-      return `sprite ${a.id} frame ${frame}, ${a.cols}x${a.rows} frames${tags}`;
+      return `sprite ${a.id}: ${a.path}, frame ${frame}, ${a.cols}x${a.rows} frames${more}`;
     });
     return lines.join('\n') || '(the library is empty)';
   }
