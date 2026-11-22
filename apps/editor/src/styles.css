@@ -1370,11 +1370,15 @@ button.tf-files-row.tf-files-selected {
 
 .tf-ai-file summary {
   cursor: pointer;
+}
+
+div.tf-ai-file,
+.tf-ai-file summary {
   font-family: var(--tf-mono);
   font-size: 12px;
 }
 
-.tf-ai-file summary button {
+.tf-ai-file button {
   margin-left: 8px;
   font-size: 11px;
 }

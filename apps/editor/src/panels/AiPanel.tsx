@@ -276,26 +276,29 @@ function Item({ item, showCost }: { item: ChatItem; showCost: boolean }) {
 function FileDiff({ file }: { file: FileChangeView }) {
   const editor = useEditor();
   const verb = file.before === null ? 'created' : file.after === null ? 'deleted' : 'changed';
+  const title = (
+    <>
+      {`${file.path} (${verb})`}
+      {file.after !== null ? (
+        <button type="button" onClick={() => editor.workbench.openFile(file.path)}>
+          Open
+        </button>
+      ) : null}
+    </>
+  );
+  // An image or a sound has no diff: its name and Open are enough.
+  if (file.binary) return <div className="tf-ai-file">{title}</div>;
   return (
     <details className="tf-ai-file">
-      <summary>
-        {`${file.path} (${verb})`}
-        {file.after !== null ? (
-          <button type="button" onClick={() => editor.workbench.openFile(file.path)}>
-            Open
-          </button>
-        ) : null}
-      </summary>
-      {file.binary ? null : (
-        <pre className="tf-ai-diff">
-          {lineDiff(file.before, file.after).map((l, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: a static list
-            <div key={i} className={`tf-ai-diff-${l.kind === '+' ? 'add' : l.kind === '-' ? 'del' : 'same'}`}>
-              {l.kind === '…' ? '…' : `${l.kind} ${l.text}`}
-            </div>
-          ))}
-        </pre>
-      )}
+      <summary>{title}</summary>
+      <pre className="tf-ai-diff">
+        {lineDiff(file.before, file.after).map((l, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: a static list
+          <div key={i} className={`tf-ai-diff-${l.kind === '+' ? 'add' : l.kind === '-' ? 'del' : 'same'}`}>
+            {l.kind === '…' ? '…' : `${l.kind} ${l.text}`}
+          </div>
+        ))}
+      </pre>
     </details>
   );
 }
