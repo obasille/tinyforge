@@ -24,7 +24,8 @@ pnpm workspace. Two hosts share one engine:
   (`sprite-editor.ts`, `sprite-canvas.ts`, `sound-editor.ts`, `sound-view.ts`,
   with plain-TS `png.ts` and `wav.ts`), viewport, memory view. The AI tools
   are apart in `src/ai/` (`@tinyforge/editor-core/ai`, loaded only by the AI
-  panel): provider interface and Claude adapter, the code agent and its tools.
+  panel): provider interface and Claude adapter, the code agent and its tools,
+  and the asset generators (`synth.ts` for sounds, `pixels.ts` for sprites).
 - `apps/editor`: React + Dockview UI, Vite, the `tinyforge` Vite plugin (serves
   and watches project files; it does not compile), and `vite/ai-proxy.ts` (dev
   server only: adds the API key from `.env` to the AI panel's requests).

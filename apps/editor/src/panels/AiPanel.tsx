@@ -286,14 +286,16 @@ function FileDiff({ file }: { file: FileChangeView }) {
           </button>
         ) : null}
       </summary>
-      <pre className="tf-ai-diff">
-        {lineDiff(file.before, file.after).map((l, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: a static list
-          <div key={i} className={`tf-ai-diff-${l.kind === '+' ? 'add' : l.kind === '-' ? 'del' : 'same'}`}>
-            {l.kind === '…' ? '…' : `${l.kind} ${l.text}`}
-          </div>
-        ))}
-      </pre>
+      {file.binary ? null : (
+        <pre className="tf-ai-diff">
+          {lineDiff(file.before, file.after).map((l, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: a static list
+            <div key={i} className={`tf-ai-diff-${l.kind === '+' ? 'add' : l.kind === '-' ? 'del' : 'same'}`}>
+              {l.kind === '…' ? '…' : `${l.kind} ${l.text}`}
+            </div>
+          ))}
+        </pre>
+      )}
     </details>
   );
 }
