@@ -130,7 +130,9 @@ class Player {
   falling: i32; // 36  0 on the ring, then frames since stepping off
 }
 
-const PLAYER_BASE: usize = 64;
+// Players start right after Vars. offsetof<Vars>() is the struct size;
+// sizeof<Vars>() would be the size of a pointer (4).
+const PLAYER_BASE: usize = offsetof<Vars>();
 const PLAYER_STRIDE: usize = 48;
 
 const vars = changetype<Vars>(RAM_START);

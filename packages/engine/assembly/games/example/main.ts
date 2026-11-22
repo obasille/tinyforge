@@ -60,16 +60,24 @@ class Vars {
 const vars = changetype<Vars>(RAM_START);
 
 // Zero-allocation arrays using @unmanaged pattern
-const grid = UncheckedArrayView.fromAddress<u8>(RAM_START + 12); // 100 u8 values
-const scores = changetype<UncheckedArrayView<i32>>(RAM_START + 112); // 10 i32 values
+// Each array starts right after the previous one, the first right after Vars.
+// offsetof<Vars>() is the struct size; sizeof<Vars>() would be the size of a
+// pointer (4).
+const GRID_ADDR = RAM_START + offsetof<Vars>();
+const SCORES_ADDR = GRID_ADDR + 100;
+const ITEMS_ADDR = SCORES_ADDR + 40;
+const TAGS_ADDR = ITEMS_ADDR + 44;
+const VECS_ADDR = TAGS_ADDR + 12;
+const grid = UncheckedArrayView.fromAddress<u8>(GRID_ADDR); // 100 u8 values
+const scores = changetype<UncheckedArrayView<i32>>(SCORES_ADDR); // 10 i32 values
 
 // Zero-allocation array with dynamic length tracking (default u16 counters: 4 bytes metadata)
-const items = ArrayView.fromAddress<u16>(RAM_START + 152, 20); // max 20 u16 values, capacity 20 items
+const items = ArrayView.fromAddress<u16>(ITEMS_ADDR, 20); // max 20 u16 values, capacity 20 items
 
 // Zero-allocation array with u8 counters (only 2 bytes metadata for small arrays!)
-const tags = ArrayView.fromAddress<u8, u8>(RAM_START + 196, 10); // max 10 u8 values, capacity 10 items
+const tags = ArrayView.fromAddress<u8, u8>(TAGS_ADDR, 10); // max 10 u8 values, capacity 10 items
 
-const arrOfVec = UncheckedArrayObjView.fromAddress<Vec2i>(RAM_START + 208, 8); // Array of Vec2 objects (x,y as f32)
+const arrOfVec = UncheckedArrayObjView.fromAddress<Vec2i>(VECS_ADDR, 8); // Array of Vec2 objects (x,y as f32)
 
 // === Input test panel ===
 // Shows the live state of every input the SDK supports. A box lights up while
