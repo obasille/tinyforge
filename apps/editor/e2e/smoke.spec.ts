@@ -8,8 +8,22 @@ const ASSETS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 
 /** Collect console errors and page errors; any of them fails the test. */
 function trackErrors(page: Page): string[] {
   const errors: string[] = [];
+  // Tests in other files run in parallel on the same project and add and
+  // remove their own `e2e...` files; reading one just as it goes is a 404
+  // that says nothing about this test.
+  // The console error and the response arrive in either order.
+  const NOT_FOUND = 'Failed to load resource: the server responded with a status of 404 (Not Found)';
+  let vanished = 0;
+  page.on('response', (r) => {
+    if (r.status() !== 404 || !/\/__tf\/files\/.*\/e2e[a-z0-9]+/.test(r.url())) return;
+    const at = errors.indexOf(NOT_FOUND);
+    if (at >= 0) errors.splice(at, 1);
+    else vanished++;
+  });
   page.on('console', (m) => {
-    if (m.type() === 'error') errors.push(m.text());
+    if (m.type() !== 'error') return;
+    if (m.text() === NOT_FOUND && vanished > 0) vanished--;
+    else errors.push(m.text());
   });
   page.on('pageerror', (e) => errors.push(e.message));
   return errors;

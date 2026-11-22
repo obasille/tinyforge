@@ -8,7 +8,7 @@ import type { ProjectFiles } from './project-files.ts';
 
 /** A file's bytes, or null. Also finds a file written so recently that the file list does not show it yet. */
 function current(files: ProjectFiles, path: string): Promise<Uint8Array | null> {
-  return files.readBytes(path);
+  return files.exists(path) ? files.readBytes(path) : Promise.resolve(null);
 }
 
 /** Create or replace a file. */
@@ -51,7 +51,7 @@ export async function deleteFiles(files: ProjectFiles, paths: string[], label?: 
 
 /** Move files: each `[from, to]` pair (a folder is the files in it). */
 export function renameFiles(files: ProjectFiles, moves: Array<[string, string]>, label?: string): FileCommand {
-  for (const [, to] of moves) if (files.entry(to)) throw new Error(`${to} already exists`);
+  for (const [, to] of moves) if (files.exists(to)) throw new Error(`${to} already exists`);
   return {
     type: 'files.rename',
     label:

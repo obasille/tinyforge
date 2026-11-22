@@ -79,7 +79,9 @@ class Vars {
 }
 
 const vars = changetype<Vars>(RAM_START);
-const BRICK_DATA = 40; // offset in RAM (after Vars), 60 bytes - brick state (1 byte per brick, 0 = destroyed, 1 = active)
+// Offset in RAM, right after Vars. offsetof<Vars>() is the struct size;
+// sizeof<Vars>() would be the size of a pointer (4).
+const BRICK_DATA = offsetof<Vars>(); // 60 bytes - brick state (1 byte per brick, 0 = destroyed, 1 = active)
 
 // === Brick Helpers ===
 function getBrick(col: i32, row: i32): u8 {

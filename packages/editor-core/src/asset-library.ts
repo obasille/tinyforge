@@ -6,10 +6,12 @@
 // (no compile), plus each game's COVER, plus the current game's open buffers.
 // Plain TS: the library panel renders `state`.
 
+import { SPRITE_ID_ENTRY_SIZE, SPRITE_INFO_ENTRY_SIZE, SPRITE_TABLE_HEADER_SIZE } from '@tinyforge/engine/memory-map';
 import { ASSET_KINDS, type AssetKind } from '@tinyforge/engine/tooling/asset-scan';
 import { coverIdOf } from '@tinyforge/engine/tooling/game-meta';
 import { assetKindOf, gameOf } from '@tinyforge/engine/tooling/project-layout';
 import { scanAssets } from './live-scan.ts';
+import { type ImageSize, imageSize } from './png.ts';
 import { type ProjectFiles, parseAssetName } from './project-files.ts';
 import { createStore, type Store } from './store.ts';
 import type { FileChange, FileEntry } from './workspace.ts';
@@ -55,10 +57,36 @@ export interface LibraryAsset {
   usedBy: string[];
   /** Problems with the file name: an invalid or duplicate ID, a bad sheet format. */
   issues: string[];
+  /** A sprite's image size (from its header), or null. */
+  image: ImageSize | null;
+  /** Bytes the sprite takes in a game's sprite table (its pixels plus its table entries). */
+  tableBytes: number;
+}
+
+/** Most sprites a game can load (the sprite table's limit). */
+export const MAX_GAME_SPRITES = 256;
+
+/** What a game's sprites cost: the sprite table the host writes past its static data. */
+export interface SpriteBudget {
+  /** Sprites the game uses that are in the library. */
+  sprites: number;
+  /** Sprite table size in bytes. */
+  bytes: number;
+  /** IDs it uses that are not in the library. */
+  missing: string[];
+}
+
+/** Bytes one sprite (or sheet) takes in the sprite table. */
+export function spriteTableCost(image: ImageSize | null, cols: number, rows: number): number {
+  const entries = SPRITE_ID_ENTRY_SIZE + SPRITE_INFO_ENTRY_SIZE;
+  if (!image) return entries;
+  return entries + Math.floor(image.width / cols) * Math.floor(image.height / rows) * cols * rows * 4;
 }
 
 export interface LibraryState {
   assets: LibraryAsset[];
+  /** Sprite budget per game. */
+  budgets: Record<string, SpriteBudget>;
   ready: boolean;
 }
 
@@ -93,12 +121,14 @@ export function tagCounts(assets: readonly LibraryAsset[]): Array<{ tag: string;
 const key = (kind: AssetKind, id: string) => `${kind}/${id}`;
 
 export class AssetLibrary {
-  readonly state: Store<LibraryState> = createStore<LibraryState>({ assets: [], ready: false });
+  readonly state: Store<LibraryState> = createStore<LibraryState>({ assets: [], budgets: {}, ready: false });
   /** Asset key → games using it, from the files on disk. */
   private usage = new Map<string, Set<string>>();
   /** Per game: the asset keys its files use. */
   private usageByGame = new Map<string, Set<string>>();
   private sidecars = new Map<string, Sidecar | null>();
+  /** Sprite image sizes by path, with the mtime they were read at. */
+  private sizes = new Map<string, { mtime: number; size: ImageSize | null }>();
   /** The current game's assets from its open buffers (unsaved code). */
   private live: { game: string | null; keys: Set<string> } = { game: null, keys: new Set() };
   private refreshing: Promise<void> = Promise.resolve();
@@ -110,6 +140,7 @@ export class AssetLibrary {
     return this.enqueue(async () => {
       await Promise.all(this.files.games.map((g) => this.scanGame(g)));
       await this.readSidecars(this.files.files.map((f) => f.path));
+      await this.readSizes();
     });
   }
 
@@ -125,6 +156,7 @@ export class AssetLibrary {
       for (const g of [...this.usageByGame.keys()]) if (!this.files.games.includes(g)) games.add(g);
       await Promise.all([...games].map((g) => this.scanGame(g)));
       await this.readSidecars(changes.map((c) => c.path));
+      await this.readSizes();
     });
   }
 
@@ -202,6 +234,21 @@ export class AssetLibrary {
     );
   }
 
+  /** Read the size of every sprite that is new or changed. */
+  private async readSizes(): Promise<void> {
+    const sprites = this.files.files.filter((f) => assetKindOf(f.path) === 'sprites');
+    const listed = new Set(sprites.map((f) => f.path));
+    for (const p of [...this.sizes.keys()]) if (!listed.has(p)) this.sizes.delete(p);
+    await Promise.all(
+      sprites
+        .filter((f) => this.sizes.get(f.path)?.mtime !== f.mtime)
+        .map(async (f) => {
+          const bytes = await this.files.readBytes(f.path);
+          this.sizes.set(f.path, { mtime: f.mtime, size: bytes ? imageSize(bytes) : null });
+        }),
+    );
+  }
+
   private publish(): void {
     const assets: LibraryAsset[] = [];
     const seen = new Map<string, LibraryAsset[]>();
@@ -221,7 +268,26 @@ export class AssetLibrary {
         a.issues.push(`Same ID as ${others.join(', ')}: only one of them is used`);
       }
     }
-    this.state.setState({ assets, ready: true });
+    this.state.setState({ assets, budgets: this.budgets(assets), ready: true });
+  }
+
+  private budgets(assets: LibraryAsset[]): Record<string, SpriteBudget> {
+    const byId = new Map<string, LibraryAsset>();
+    for (const a of assets) if (a.kind === 'sprites' && !byId.has(a.id)) byId.set(a.id, a);
+    const out: Record<string, SpriteBudget> = {};
+    const games = new Set([...this.usageByGame.keys(), ...(this.live.game ? [this.live.game] : [])]);
+    for (const game of games) {
+      const keys = new Set(this.usageByGame.get(game) ?? []);
+      if (game === this.live.game) for (const k of this.live.keys) keys.add(k);
+      const ids = [...keys].filter((k) => k.startsWith('sprites/')).map((k) => k.slice('sprites/'.length));
+      const found = ids.flatMap((id) => byId.get(id) ?? []).slice(0, MAX_GAME_SPRITES);
+      out[game] = {
+        sprites: found.length,
+        bytes: found.length ? SPRITE_TABLE_HEADER_SIZE + found.reduce((n, a) => n + a.tableBytes, 0) : 0,
+        missing: ids.filter((id) => !byId.has(id)).sort(),
+      };
+    }
+    return out;
   }
 
   private describe(kind: AssetKind, entry: FileEntry): LibraryAsset {
@@ -237,6 +303,10 @@ export class AssetLibrary {
     const k = key(kind, name.id);
     const usedBy = new Set(this.usage.get(k) ?? []);
     if (this.live.game && this.live.keys.has(k)) usedBy.add(this.live.game);
+    const image = kind === 'sprites' ? (this.sizes.get(entry.path)?.size ?? null) : null;
+    if (image && layout && (image.width % layout.cols !== 0 || image.height % layout.rows !== 0)) {
+      issues.push(`${image.width}×${image.height} does not split into ${layout.cols}×${layout.rows} equal frames`);
+    }
     return {
       kind,
       id: name.id,
@@ -249,6 +319,8 @@ export class AssetLibrary {
       sidecar: this.sidecars.get(entry.path) ?? null,
       usedBy: [...usedBy].sort(),
       issues,
+      image,
+      tableBytes: kind === 'sprites' ? spriteTableCost(image, layout?.cols ?? 1, layout?.rows ?? 1) : 0,
     };
   }
 }

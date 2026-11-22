@@ -128,7 +128,7 @@ describe('GameMachine with real cartridges', () => {
     const STATE = 0;
     const ROUND_WINNER = 1;
     const RADIUS = 16;
-    const PLAYER = (i: number) => 64 + i * 48;
+    const PLAYER = (i: number) => 28 + i * 48; // right after Vars (28 bytes)
     const X = 0;
     const VX = 8;
     const VY = 12;
@@ -364,7 +364,7 @@ describe('GameMachine with real cartridges', () => {
   describe('tank duel', () => {
     // Layout of tankDuel's RAM: Vars (32 bytes), then two 16-byte tanks.
     const STATE = 0;
-    const TANKS = 32;
+    const TANKS = 20; // right after Vars (20 bytes)
     const PLAYING = 2;
     const MATCH_OVER = 4;
     const START: InputState = { ...NO_INPUT, buttons: Button.start };

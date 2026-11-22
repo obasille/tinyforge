@@ -9,49 +9,11 @@ import { ASSET_PATTERNS, type AssetKind } from '@tinyforge/engine/tooling/asset-
 import { idProblem, type LibraryAsset, MAX_ID_LENGTH, type Sidecar, sidecarPath } from './asset-library.ts';
 import { commandLabel, type FileCommand } from './commands.ts';
 import { type FileOp, fileBatch } from './file-commands.ts';
+import { type ImageSize, imageSize } from './png.ts';
 import { type ProjectFiles, parseAssetName } from './project-files.ts';
 
 /** Most columns or rows in a sheet (the sprite table stores them in a byte). */
 export const MAX_SHEET = 255;
-
-export interface ImageSize {
-  width: number;
-  height: number;
-}
-
-/** Width and height of a PNG or JPEG from its header, or null. */
-export function imageSize(bytes: Uint8Array): ImageSize | null {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const png = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
-  if (bytes.length >= 24 && png.every((b, i) => bytes[i] === b)) {
-    const width = view.getUint32(16);
-    const height = view.getUint32(20);
-    return width > 0 && height > 0 ? { width, height } : null;
-  }
-  if (bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xd8) {
-    let i = 2;
-    while (i + 9 < bytes.length) {
-      if (bytes[i] !== 0xff) return null;
-      const marker = bytes[i + 1];
-      if (marker === 0xff) {
-        i++;
-        continue;
-      }
-      // Start of frame (SOF0-SOF15, except DHT, JPG and DAC).
-      if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
-        const height = view.getUint16(i + 5);
-        const width = view.getUint16(i + 7);
-        return width > 0 && height > 0 ? { width, height } : null;
-      }
-      if (marker === 0xd8 || (marker >= 0xd0 && marker <= 0xd7) || marker === 0x01) {
-        i += 2;
-        continue;
-      }
-      i += 2 + view.getUint16(i + 2);
-    }
-  }
-  return null;
-}
 
 export interface ImportDraft {
   /** The dropped file's name. */
@@ -210,7 +172,7 @@ export async function importCommand(
     if (own) sidecar = sidecarText(own);
     for (const old of replacedBy(draft, assets)) {
       const oldSidecar = sidecarPath(old.path);
-      const oldBytes = await files.readBytes(oldSidecar);
+      const oldBytes = files.exists(oldSidecar) ? await files.readBytes(oldSidecar) : null;
       if (oldBytes) {
         sidecar ??= oldBytes;
         if (oldSidecar !== sidecarPath(path)) ops.push({ delete: oldSidecar });
