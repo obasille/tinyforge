@@ -4,9 +4,11 @@
 // Create, rename, delete and import are undoable
 // (Ctrl+Z outside a text field). Names are typed in place, never in a dialog.
 // Export saves the selected (or current) game as a zip; import adds one.
+// Cartridge saves it as a release .wasm with the assets it uses embedded.
 
 import {
   buildTree,
+  exportCartridge,
   exportGameZip,
   gameImportCommand,
   isTextFile,
@@ -75,20 +77,32 @@ export function FilesPanel() {
     );
   };
 
-  const exportGame = (game: string) => {
+  const download = (file: Promise<Uint8Array>, name: string, type: string) => {
     setError(null);
-    exportGameZip(editor.files, game, editor.assets.state.getState().assets).then(
-      (zip) => {
-        const url = URL.createObjectURL(new Blob([zip as Uint8Array<ArrayBuffer>], { type: 'application/zip' }));
+    file.then(
+      (bytes) => {
+        const url = URL.createObjectURL(new Blob([bytes as Uint8Array<ArrayBuffer>], { type }));
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${game}.zip`;
+        a.download = name;
         a.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
       },
       (e: unknown) => setError(e instanceof Error ? e.message : String(e)),
     );
   };
+  const exportGame = (game: string) =>
+    download(
+      exportGameZip(editor.files, game, editor.assets.state.getState().assets),
+      `${game}.zip`,
+      'application/zip',
+    );
+  const exportGameCartridge = (game: string) =>
+    download(
+      exportCartridge(editor.files, () => editor.compiler.build(game, 'release')),
+      `${game}.wasm`,
+      'application/wasm',
+    );
 
   const readZip = (file: File) => {
     setError(null);
@@ -315,6 +329,19 @@ export function FilesPanel() {
           onClick={() => exportTarget && exportGame(exportTarget)}
         >
           Export
+        </button>
+        <button
+          type="button"
+          data-testid="files-export-cartridge"
+          disabled={!exportTarget}
+          title={
+            exportTarget
+              ? `Save ${exportTarget} as a playable cartridge (.wasm) with the assets it uses inside`
+              : 'Pick a game first'
+          }
+          onClick={() => exportTarget && exportGameCartridge(exportTarget)}
+        >
+          Cartridge
         </button>
         <button
           type="button"

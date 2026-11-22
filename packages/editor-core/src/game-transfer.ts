@@ -3,7 +3,10 @@
 // one command, so one undo step removes everything it added.
 
 import { ASSET_KINDS, type AssetList } from '@tinyforge/engine/tooling/asset-scan';
+import { cartridgeAssetPaths, embedAssets } from '@tinyforge/engine/tooling/cartridge-assets';
+import type { CompileResult } from '@tinyforge/engine/tooling/compiler';
 import { type ImportPlan, planImport, readGameZip, zipGame } from '@tinyforge/engine/tooling/game-zip';
+import { assetKindOf } from '@tinyforge/engine/tooling/project-layout';
 import type { LibraryAsset } from './asset-library.ts';
 import type { FileCommand } from './commands.ts';
 import { commandLabel } from './commands.ts';
@@ -26,6 +29,28 @@ export function exportGameZip(files: ProjectFiles, game: string, assets: readonl
     usedAssets(assets, game),
     (path) => files.readBytes(path),
   );
+}
+
+/**
+ * The game as a playable cartridge: a release build with the library files it
+ * uses embedded (the tinyforge.assets section). Throws when it does not compile.
+ */
+export async function exportCartridge(
+  files: ProjectFiles,
+  build: () => Promise<CompileResult>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const result = await build();
+  if (!result.ok) throw new Error('The game does not compile: fix it before exporting a cartridge');
+  const embedded = [];
+  for (const path of cartridgeAssetPaths(
+    files.files.map((f) => f.path),
+    result.meta.assets,
+  )) {
+    const bytes = await files.readBytes(path);
+    const kind = assetKindOf(path);
+    if (bytes && kind) embedded.push({ kind, file: path.slice(`assets/${kind}/`.length), bytes });
+  }
+  return embedAssets(result.wasm, embedded);
 }
 
 /** Read a game zip and compare it with the project. Throws when it is not a game zip. */

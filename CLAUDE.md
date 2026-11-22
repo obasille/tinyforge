@@ -12,7 +12,8 @@ pnpm workspace. Two hosts share one engine:
   `compiler.ts` (asc JS API using `assembly/games/asconfig.json`, no Node or
   DOM APIs: the editor runs it in a Worker), `compile-game.ts` (the same from
   disk, for Node: CLI builds and tests), `project-layout.ts` (project paths),
-  `game-meta.ts`, `asset-scan.ts`, `cartridge-meta.ts`, and `zip.ts` with
+  `game-meta.ts`, `asset-scan.ts`, `cartridge-meta.ts`, `cartridge-assets.ts`
+  (assets embedded in an exported cartridge), and `zip.ts` with
   `game-zip.ts` (a game as a zip, for the editor and `scripts/tf.js`, the
   `pnpm tf` command line).
 - `packages/runtime`: host runtime in plain TS with no DOM (cartridge imports,

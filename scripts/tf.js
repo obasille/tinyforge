@@ -5,12 +5,16 @@
 //                                         its folder and the library assets it uses, with their sidecars
 //   pnpm tf import <file.zip> [--replace] add a game from such a zip; assets that differ from the
 //                                         project's are kept unless --replace
+//   pnpm tf cartridge <game> [--out <dir>] save a playable <dir>/<game>.wasm: a release build with the
+//                                         library files it uses embedded (tinyforge.assets)
 //
-// The same code as the editor's Export and Import (engine/tooling/game-zip.ts).
+// The same code as the editor's Export, Import and Cartridge (engine/tooling/game-zip.ts,
+// engine/tooling/cartridge-assets.ts).
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { compileGame, diskPath, listProjectFiles, nodeFiles } from '../packages/engine/tooling/compile-game.ts';
+import { cartridgeAssetPaths, embedAssets } from '../packages/engine/tooling/cartridge-assets.ts';
 import { coverIdOf } from '../packages/engine/tooling/game-meta.ts';
 import { planImport, readGameZip, zipGame } from '../packages/engine/tooling/game-zip.ts';
 
@@ -50,6 +54,28 @@ async function exportGame(game, outDir) {
   console.log(`✓ ${out} (${(zip.length / 1024).toFixed(1)} KB)`);
 }
 
+async function exportCartridge(game, outDir) {
+  if (!game) fail('Usage: pnpm tf cartridge <game> [--out <dir>]');
+  const files = nodeFiles();
+  if ((await files.readText(`games/${game}/main.ts`)) === null) fail(`No game named ${game}`);
+  const result = await compileGame(game, 'release');
+  if (!result.ok) {
+    process.stderr.write(result.log);
+    fail(`${game} does not compile`);
+  }
+  const paths = (await listProjectFiles()).map((f) => f.path);
+  const assets = [];
+  for (const p of cartridgeAssetPaths(paths, result.meta.assets)) {
+    const [, kind, file] = p.split('/');
+    assets.push({ kind, file, bytes: await files.readBytes(p) });
+  }
+  const wasm = embedAssets(result.wasm, assets);
+  mkdirSync(outDir, { recursive: true });
+  const out = path.join(outDir, `${game}.wasm`);
+  writeFileSync(out, wasm);
+  console.log(`✓ ${out} (${(wasm.length / 1024).toFixed(1)} KB, ${assets.length} asset file(s))`);
+}
+
 async function importGame(file, replace) {
   if (!file) fail('Usage: pnpm tf import <file.zip> [--replace]');
   if (!existsSync(file)) fail(`${file} not found`);
@@ -80,9 +106,12 @@ if (command === 'export') {
   const out = flag('--out') ?? '.';
   await exportGame(rest[0], out);
 }
-else if (command === 'import') {
+else if (command === 'cartridge') {
+  const out = flag('--out') ?? '.';
+  await exportCartridge(rest[0], out);
+} else if (command === 'import') {
   const replace = rest.includes('--replace');
   await importGame(rest.filter((a) => a !== '--replace')[0], replace);
 } else {
-  fail('Commands: export <game> [--out <dir>], import <file.zip> [--replace]');
+  fail('Commands: export <game> [--out <dir>], import <file.zip> [--replace], cartridge <game> [--out <dir>]');
 }

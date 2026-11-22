@@ -5,7 +5,7 @@
 // (Ctrl+Z outside a text field) and never use a browser dialog.
 
 import {
-  draftImport,
+  draftsForFile,
   frameSize,
   type ImportDraft,
   idProblem,
@@ -212,7 +212,13 @@ export function LibraryPanel() {
   const addFiles = async (list: FileList | File[]) => {
     setError(null);
     const added: ImportDraft[] = [];
-    for (const file of [...list]) added.push(draftImport(file.name, new Uint8Array(await file.arrayBuffer())));
+    for (const file of [...list]) {
+      try {
+        added.push(...draftsForFile(file.name, new Uint8Array(await file.arrayBuffer())));
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    }
     if (added.length === 0) return;
     setDrafts((d) => [...d, ...added]);
     const first = added.find((d) => d.kind);
@@ -296,7 +302,7 @@ export function LibraryPanel() {
               type="file"
               multiple
               hidden
-              accept=".png,.jpg,.jpeg,.wav,.mp3,.ogg"
+              accept=".png,.jpg,.jpeg,.wav,.mp3,.ogg,.wasm"
               data-testid="library-file-input"
               onChange={(e) => {
                 if (e.target.files) void addFiles(e.target.files);

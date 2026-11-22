@@ -165,6 +165,19 @@ export function insertCustomSection(
   return { wasm: out, inserted: section.length };
 }
 
+/** Append a custom section at the end of a module (code offsets do not move). */
+export function appendCustomSection(wasm: Uint8Array, name: string, payload: Uint8Array): Uint8Array<ArrayBuffer> {
+  if (!isWasm(wasm)) throw new Error('Not a WASM module');
+  const nameBytes = new TextEncoder().encode(name);
+  const content = [...leb128(nameBytes.length), ...nameBytes];
+  const head = [0x00, ...leb128(content.length + payload.length), ...content];
+  const out = new Uint8Array(wasm.length + head.length + payload.length);
+  out.set(wasm, 0);
+  out.set(head, wasm.length);
+  out.set(payload, wasm.length + head.length);
+  return out;
+}
+
 /** Payload of the first custom section with this name, or null. Does not compile the module. */
 export function findCustomSection(wasm: Uint8Array, name: string): Uint8Array | null {
   if (!isWasm(wasm)) throw new Error('Not a WASM module');

@@ -1,9 +1,12 @@
+import { cartridgeAssets } from '@tinyforge/engine/tooling/cartridge-assets';
+import type { CompileResult } from '@tinyforge/engine/tooling/compiler';
 import { readGameZip } from '@tinyforge/engine/tooling/game-zip';
 import { crc32, MAX_UNZIPPED, readZip, writeZip } from '@tinyforge/engine/tooling/zip';
 import { describe, expect, it } from 'vitest';
+import { draftsForFile } from '../src/asset-import.ts';
 import type { LibraryAsset } from '../src/asset-library.ts';
 import { CommandStack } from '../src/commands.ts';
-import { exportGameZip, gameImportCommand, planGameImport, usedAssets } from '../src/game-transfer.ts';
+import { exportCartridge, exportGameZip, gameImportCommand, planGameImport, usedAssets } from '../src/game-transfer.ts';
 import { ProjectFiles } from '../src/project-files.ts';
 import { createStore } from '../src/store.ts';
 import { MemoryWorkspace } from './memory-workspace.ts';
@@ -116,5 +119,46 @@ describe('game export and import', () => {
     const again = await planGameImport(other, zip);
     expect(again.gameExists).toBe(true);
     await expect(gameImportCommand(other, again, false)).rejects.toThrow('already has a game named pong');
+  });
+});
+
+describe('cartridge export', () => {
+  // The smallest valid module: just the header.
+  const EMPTY = new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
+  const built = (assets: { sprites: string[]; sfx: string[]; music: string[] }) => async () =>
+    ({ ok: true, wasm: EMPTY, meta: { assets } }) as unknown as CompileResult;
+
+  it('embeds the library files the build uses, which the library imports back as drafts', async () => {
+    const ws = new MemoryWorkspace({
+      'games/pong/main.ts': 'pong',
+      'assets/sprites/ball~2x1.png': new Uint8Array([1]),
+      'assets/sprites/ball~2x1.png.json': '{"tags":["round"]}',
+      'assets/sfx/hit.wav': new Uint8Array([2]),
+      'assets/music/pong_theme.wav': new Uint8Array([3]),
+      'assets/sfx/other.wav': new Uint8Array([4]),
+    });
+    const files = new ProjectFiles(ws);
+    await files.start();
+    const wasm = await exportCartridge(files, built({ sprites: ['ball'], sfx: ['hit'], music: ['pong_theme'] }));
+    expect(cartridgeAssets(wasm)?.map((a) => `${a.kind}/${a.file}`)).toEqual([
+      'music/pong_theme.wav',
+      'sfx/hit.wav',
+      'sprites/ball~2x1.png',
+    ]);
+    const drafts = draftsForFile('pong.wasm', wasm);
+    expect(drafts.map((d) => [d.kind, d.id, d.cols, d.source])).toEqual([
+      ['music', 'pong_theme', 1, 'pong.wasm'],
+      ['sfx', 'hit', 1, 'pong.wasm'],
+      ['sprites', 'ball', 2, 'pong.wasm'],
+    ]);
+  });
+
+  it('refuses a game that does not compile, and a cartridge without assets', async () => {
+    const files = new ProjectFiles(new MemoryWorkspace({ 'games/pong/main.ts': 'pong' }));
+    await files.start();
+    const failed = async () => ({ ok: false, log: '', diagnostics: [] }) as unknown as CompileResult;
+    await expect(exportCartridge(files, failed)).rejects.toThrow('does not compile');
+    expect(() => draftsForFile('plain.wasm', EMPTY)).toThrow('no embedded assets');
+    expect(draftsForFile('jump.wav', new Uint8Array([1]))[0].kind).toBe('sfx');
   });
 });
