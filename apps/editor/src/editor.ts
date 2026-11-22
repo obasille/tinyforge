@@ -22,6 +22,8 @@ import {
   pixelHex,
   projectCommands,
   type ShortcutAction,
+  type SoundEditor,
+  type SpriteEditor,
   type Store,
   Viewport,
   Workbench,
@@ -96,6 +98,9 @@ export class Editor {
   readonly assets: AssetLibrary;
   /** The asset the library panel shows (a project path), set from elsewhere (the file tree). */
   readonly assetFocus = createStore<string | null>(null);
+  /** Open sprite editors and sound players (for tests and agents, through window.__tf). */
+  readonly openSprites = new Set<SpriteEditor>();
+  readonly openSounds = new Set<SoundEditor>();
   /** The asset library (refreshed when files change) and the current game's part of it. */
   private library: AssetManifest;
   private gameAssets: AssetList | null = null;

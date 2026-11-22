@@ -44,6 +44,8 @@ export class ProjectFiles {
   private stopWatch: (() => void) | null = null;
   /** Change batches are applied one at a time, in order. */
   private queue: Promise<void> = Promise.resolve();
+  /** The editor's own writes (true) and deletes (false) since the last listing. */
+  private readonly own = new Map<string, boolean>();
 
   constructor(readonly workspace: Workspace) {}
 
@@ -71,6 +73,15 @@ export class ProjectFiles {
 
   entry(path: string): FileEntry | undefined {
     return this.byPath.get(path);
+  }
+
+  /**
+   * Whether a file exists, counting the editor's own writes and deletes that
+   * the file list does not show yet. Never asks the workspace, so it never
+   * makes a request that fails.
+   */
+  exists(path: string): boolean {
+    return this.own.get(path) ?? this.byPath.has(path);
   }
 
   /** Names of the games (folders in games/ with a main.ts). */
@@ -133,12 +144,14 @@ export class ProjectFiles {
     const existed = this.byPath.has(path);
     this.cache.delete(path);
     await this.workspace.write(path, data);
+    this.own.set(path, true);
     await this.afterOwnChange([{ path, kind: existed ? 'change' : 'add' }]);
   }
 
   async delete(path: string): Promise<void> {
     this.cache.delete(path);
     await this.workspace.delete(path);
+    this.own.set(path, false);
     await this.afterOwnChange([{ path, kind: 'unlink' }]);
   }
 
@@ -146,6 +159,8 @@ export class ProjectFiles {
     this.cache.delete(from);
     this.cache.delete(to);
     await this.workspace.rename(from, to);
+    this.own.set(from, false);
+    this.own.set(to, true);
     await this.afterOwnChange([
       { path: from, kind: 'unlink' },
       { path: to, kind: 'add' },
@@ -175,6 +190,7 @@ export class ProjectFiles {
   private setFiles(files: FileEntry[], writable: boolean): void {
     const sorted = [...files].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
     this.byPath = new Map(sorted.map((f) => [f.path, f]));
+    this.own.clear();
     this.state.setState({ files: sorted, writable, ready: true });
   }
 }

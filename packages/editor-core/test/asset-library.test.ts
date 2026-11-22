@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   draftImport,
   idFromName,
-  imageSize,
   importCommand,
   importProblems,
   kindForFile,
@@ -12,6 +11,7 @@ import {
 import { AssetLibrary, idProblem, type LibraryAsset, matchesSearch, tagCounts } from '../src/asset-library.ts';
 import { CommandStack } from '../src/commands.ts';
 import type { CompilerHost } from '../src/compiler-host.ts';
+import { imageSize } from '../src/png.ts';
 import { ProjectFiles } from '../src/project-files.ts';
 import { createStore } from '../src/store.ts';
 import { Workbench } from '../src/workbench.ts';
