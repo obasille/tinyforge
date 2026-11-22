@@ -235,6 +235,11 @@ export class Editor {
     }
     // The picker's titles and covers: the current game first, then the rest.
     void this.catalog.load(undefined, this.project.getState().game);
+    // Every game's compile status, once the current game is built (so it starts first).
+    const current = this.project.getState().game;
+    void (current ? this.compiler.build(current) : Promise.resolve()).then(() => {
+      for (const game of this.files.games) void this.compiler.build(game);
+    });
   }
 
   /** Load the sounds the current game uses (its cartridge lists them). */
@@ -291,7 +296,7 @@ export class Editor {
     const { game, seed } = this.project.getState();
     if (!game) return;
     const seq = ++this.loadSeq;
-    const result = await this.compiler.build(game);
+    const result = await this.compiler.build(game, 'debug', true);
     if (seq !== this.loadSeq || game !== this.project.getState().game) return;
     if (!result.ok) {
       this.logs.add('ERROR', `${game} failed to compile:\n${result.log}`);

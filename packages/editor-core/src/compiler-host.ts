@@ -83,14 +83,19 @@ export class CompilerHost {
     private readonly maxWorkers = 1,
   ) {}
 
-  /** Debug build of a game, compiled once until its files change. */
-  build(game: string, target: CompileTarget = 'debug'): Promise<CompileResult> {
+  /**
+   * Debug build of a game, compiled once until its files change. `first`
+   * puts it ahead of the queued builds (the game the user is running).
+   */
+  build(game: string, target: CompileTarget = 'debug', first = false): Promise<CompileResult> {
     const key = `${game}:${target}`;
     let result = this.cache.get(key);
     if (!result) {
       result = this.compile(game, target);
       this.cache.set(key, result);
     }
+    const queued = this.queue.findIndex((j) => j.game === game && j.target === target);
+    if (first && queued > 0) this.queue.unshift(...this.queue.splice(queued, 1));
     return result;
   }
 
@@ -107,8 +112,10 @@ export class CompilerHost {
       const hit = affectedGames(change.path, change.kind, games, (g) => this.covers.get(g));
       for (const g of hit ?? []) affected.add(g);
     }
+    // A build still queued reads the files when it starts: it stays fresh.
+    const waiting = new Set(this.queue.map((j) => `${j.game}:${j.target}`));
     for (const key of [...this.cache.keys()]) {
-      if (affected.has(key.slice(0, key.lastIndexOf(':')))) this.cache.delete(key);
+      if (affected.has(key.slice(0, key.lastIndexOf(':'))) && !waiting.has(key)) this.cache.delete(key);
     }
     return [...affected].sort();
   }
@@ -154,12 +161,14 @@ export class CompilerHost {
       ms: b?.ms ?? null,
       assets: b?.assets ?? null,
     }));
-    const source = await this.files.readText(gameEntryPath(game));
-    this.covers.set(game, source === null ? null : coverIdOf(source));
+    const cover = this.files.readText(gameEntryPath(game)).then((source) => {
+      this.covers.set(game, source === null ? null : coverIdOf(source));
+    });
     const done = await new Promise<{ result: CompileResult; ms: number }>((resolve) => {
       this.queue.push({ id: this.nextId++, game, target, resolve: (r, t) => resolve({ result: r, ms: t }) });
       this.dispatch();
     });
+    await cover;
     const { ms } = done;
     const result = this.withSourceMap(done.result);
     this.setBuild(game, (b) => ({

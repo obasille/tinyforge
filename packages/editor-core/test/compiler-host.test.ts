@@ -157,6 +157,26 @@ describe('CompilerHost', () => {
     expect(workers.length).toBe(2);
   });
 
+  it('puts the running game first, and does not compile a queued game twice', async () => {
+    const { files, worker, compiler } = await setup();
+    for (const g of ['a', 'b']) await files.write(`games/${g}/main.ts`, newGameSource(g));
+    await settle();
+    await settle();
+    const started: string[] = [];
+    compiler.builds.subscribe(() => {
+      for (const [g, b] of Object.entries(compiler.builds.getState()))
+        if (b.status === 'building' && !started.includes(g)) started.push(g);
+    });
+    const builds = [compiler.build('pong'), compiler.build('a'), compiler.build('b')];
+    // A change while a and b wait: their queued builds will read the new files.
+    expect(compiler.invalidate([{ path: 'assets/sprites/new.png', kind: 'add' }])).toEqual(['a', 'b', 'pong']);
+    expect(compiler.build('a')).toBe(builds[1]);
+    compiler.build('b', 'debug', true);
+    await Promise.all(builds);
+    expect(started).toEqual(['pong', 'b', 'a']);
+    expect(worker.compiles).toBe(3);
+  });
+
   it('shows a compile waiting for a free Worker as queued, then building', async () => {
     const { files, compiler } = await setup();
     await files.write('games/fresh/main.ts', newGameSource('fresh'));
@@ -167,7 +187,8 @@ describe('CompilerHost', () => {
     compiler.builds.subscribe(() => seen.push(status().join(',')));
     const pong = compiler.build('pong');
     const fresh = compiler.build('fresh');
-    expect(status()).toEqual(['queued', 'queued']);
+    // pong starts at once; fresh waits for the Worker.
+    expect(status()).toEqual(['building', 'queued']);
     await pong;
     await fresh;
     expect(status()).toEqual(['ok', 'ok']);
@@ -219,7 +240,7 @@ describe('live asset scan', () => {
 });
 
 describe('Workbench', () => {
-  it('rebuilds a game built before when a sprite it uses is deleted, even with no file open', async () => {
+  it('rebuilds a game when a sprite it uses is deleted, even with no file open', async () => {
     const { files, compiler } = await setup();
     const workbench = new Workbench(files, { runFile: async (c) => void (await c.apply()) }, compiler, () => 'pong');
     files.onChange(async (c) => workbench.filesChanged(c, compiler.invalidate(c)));
