@@ -4,6 +4,7 @@ import {
   type DockviewApi,
   DockviewReact,
   type DockviewReadyEvent,
+  type IDockviewPanel,
   type IDockviewPanelProps,
   themeDark,
 } from 'dockview-react';
@@ -70,6 +71,34 @@ function openFilePanel(api: DockviewApi, path: string): void {
   });
 }
 
+const codePath = (panel: IDockviewPanel | undefined): string | null =>
+  panel?.id.startsWith('code:') ? ((panel.params as { path?: string } | undefined)?.path ?? null) : null;
+
+/**
+ * Keep `editor.activeCode` on the active code tab. Focusing another panel (the
+ * game, the console) keeps the last code tab; closing it falls back to the code
+ * tab shown in another group, or null.
+ */
+function trackActiveCode(api: DockviewApi, editor: Editor): void {
+  const shownCode = () => {
+    const active = codePath(api.activePanel);
+    if (active) return active;
+    for (const group of api.groups) {
+      const path = codePath(group.activePanel);
+      if (path) return path;
+    }
+    return null;
+  };
+  editor.activeCode.setState(shownCode());
+  api.onDidActivePanelChange(({ panel }) => {
+    const path = codePath(panel);
+    if (path) editor.activeCode.setState(path);
+  });
+  api.onDidRemovePanel((panel) => {
+    if (codePath(panel) === editor.activeCode.getState()) editor.activeCode.setState(shownCode());
+  });
+}
+
 function defaultLayout(api: DockviewApi): void {
   api.addPanel({ id: 'game', component: 'game', title: 'Game' });
   api.addPanel({
@@ -127,6 +156,7 @@ function showLibraryPanel(api: DockviewApi): void {
 export function App({ editor }: { editor: Editor }) {
   const apiRef = useRef<DockviewApi | null>(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Dockview calls onReady once; the editor is fixed for the app's life.
   const onReady = useCallback((event: DockviewReadyEvent) => {
     apiRef.current = event.api;
     let restored = false;
@@ -140,6 +170,7 @@ export function App({ editor }: { editor: Editor }) {
       event.api.clear();
     }
     if (!restored || event.api.panels.length === 0) defaultLayout(event.api);
+    trackActiveCode(event.api, editor);
     event.api.onDidLayoutChange(() => {
       try {
         localStorage.setItem(LAYOUT_KEY, JSON.stringify(event.api.toJSON()));
