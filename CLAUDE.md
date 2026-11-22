@@ -29,8 +29,8 @@ pnpm workspace. Two hosts share one engine:
   are apart in `src/ai/` (`@tinyforge/editor-core/ai`, loaded only by the AI
   panel): provider interface, the Claude adapter and an OpenAI-compatible one
   (`openai.ts`, no SDK), the code agent and its tools,
-  and the asset generators (`synth.ts` for sounds, a port of
-  `scripts/chiptune.py`; `pixels.ts` for sprites).
+  and the asset generators (`synth.ts` for sounds, the synth behind the
+  games' sounds, whose recipes are in their sidecars; `pixels.ts` for sprites).
 - `apps/editor`: React + Dockview UI, Vite, the `tinyforge` Vite plugin (serves
   and watches project files; it does not compile), and `vite/ai-proxy.ts` (dev
   server only: adds the API key from `.env` to the AI panel's requests, and

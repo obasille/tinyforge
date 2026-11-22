@@ -48,13 +48,24 @@ export const AI_GENERATOR = 'tinyforge-ai';
 const LIST_WAIT_MS = 5000;
 
 const VOICE_PROPERTIES = {
-  wave: { type: 'string', enum: ['square', 'triangle', 'saw', 'sine', 'noise'] },
+  wave: {
+    type: 'string',
+    enum: ['square', 'triangle', 'softtriangle', 'saw', 'sine', 'noise'],
+    description: 'triangle is the 16-step 8-bit one; softtriangle is smooth (a drum skin tone)',
+  },
   vol: { type: 'number', description: '0 to 1, default 0.5' },
   attack: { type: 'number', description: 'Seconds, default 0.002' },
   decay: { type: 'number', description: 'Seconds, default 0.05' },
   sustain: { type: 'number', description: 'Level 0 to 1, default 0.7 (0 with a long decay: a plucked fade)' },
   release: { type: 'number', description: 'Seconds, default 0.05' },
   duty: { type: 'number', description: 'Square duty 0.05 to 0.95, default 0.5; 0.125 and 0.25 sound thin' },
+  fadeIn: { type: 'number', description: 'Seconds of linear fade at the start, on top of the envelope (declick)' },
+  fadeOut: { type: 'number', description: 'Seconds of linear fade at the end of the note (at most its length)' },
+  noiseGroup: {
+    type: 'string',
+    description:
+      "Noise notes with the same group continue one generator, in the order written, instead of each starting afresh. Favor one group for a drum line in music: the hits vary like the games' drums",
+  },
 };
 const NOTE_SCHEMA = {
   type: 'object',
@@ -63,6 +74,11 @@ const NOTE_SCHEMA = {
     len: { type: 'number', description: 'Held length (seconds, or beats with bpm)' },
     note: { type: ['string', 'number'], description: 'Note name (C4, F#5, Bb3) or Hz; for noise, the clock in Hz' },
     to: { type: ['string', 'number'], description: 'Slide to this pitch over the note' },
+    curve: {
+      type: 'string',
+      enum: ['exp', 'drum'],
+      description: 'Slide shape: exp (default, even in pitch) or drum (falls fast, then settles: a struck skin)',
+    },
     ...VOICE_PROPERTIES,
   },
   required: ['at', 'len', 'note'],
@@ -76,7 +92,7 @@ const TRACK_SCHEMA = {
     },
     step: { type: 'number', description: 'Length of one token (seconds, or beats with bpm)' },
     at: { type: 'number', description: 'Start, default 0' },
-    hold: { type: 'number', description: 'Part of each note that sounds, 0.1 to 1, default 0.9' },
+    hold: { type: 'number', description: 'Part of each note that sounds, 0.01 to 1, default 0.9' },
     ...VOICE_PROPERTIES,
   },
   required: ['line', 'step'],
@@ -146,7 +162,7 @@ export const AGENT_TOOLS: ToolSpec[] = [
   {
     name: 'make_sound',
     description:
-      'Add a sound effect (kind "sfx") or music (kind "music") to the library, made by the chiptune synthesizer the games\' sounds come from: square (pulse, with duty), triangle (8-bit stepped), noise (LFSR; its pitch is the clock, 1000 to 12000 Hz), saw and sine. Give single notes (effects: a pitch slide with `to`, noise bursts) or tracks (music: one line of tokens per voice, like a lead, a bass and a drum line), or both; they may overlap. Times are seconds, or beats when bpm is set. At most 120 s. Music that repeats should set loop. An ID already in the library replaces that asset once the user agrees (they are asked).',
+      'Add a sound effect (kind "sfx") or music (kind "music") to the library, made by the chiptune synthesizer the games\' sounds come from: square (pulse, with duty), triangle (8-bit stepped), softtriangle, noise (LFSR; its pitch is the clock, 1000 to 22000 Hz), saw and sine. Give single notes (effects: a pitch slide with `to`, noise bursts) or tracks (music: one line of tokens per voice, like a lead, a bass and a drum line), or both; they may overlap. Times are seconds, or beats when bpm is set. At most 120 s. Music that repeats should set loop (and length, its whole length, so the last notes are cut at the loop point). The description is saved as `spec` in the sound\'s sidecar: to change a sound that has one, read it, edit the spec, and make it again with the same ID. An ID already in the library replaces that asset once the user agrees (they are asked).',
     schema: {
       properties: {
         id: { type: 'string', description: 'Letters, digits and _; at most 16' },
@@ -157,6 +173,7 @@ export const AGENT_TOOLS: ToolSpec[] = [
           description: 'Peak volume 0 to 1; default 0.35 for sfx, 0.5 for music (like the games)',
         },
         loop: { type: 'boolean', description: 'No fade-out at the end, for music that loops' },
+        length: { type: 'number', description: 'Whole length (seconds, or beats with bpm); notes are cut there' },
         notes: { type: 'array', items: NOTE_SCHEMA },
         tracks: { type: 'array', items: TRACK_SCHEMA },
         tags: TAGS_SCHEMA,
@@ -445,9 +462,9 @@ export class AgentTools {
     const id = this.assetId(input);
     const kind = input.kind;
     if (kind !== 'sfx' && kind !== 'music') throw new ToolError('kind must be "sfx" or "music"');
-    const { bpm, volume, loop, notes, tracks } = input;
+    const { bpm, volume, loop, length, notes, tracks } = input;
     const spec = Object.fromEntries(
-      Object.entries({ bpm, volume, loop, notes, tracks }).filter(([, v]) => v !== undefined),
+      Object.entries({ bpm, volume, loop, length, notes, tracks }).filter(([, v]) => v !== undefined),
     ) as SynthSpec;
     let sound: ReturnType<typeof renderSynth>;
     try {
@@ -491,7 +508,9 @@ export class AgentTools {
       const extra = [
         a.sidecar?.tags?.length ? `tags: ${a.sidecar.tags.join(', ')}` : '',
         a.usedBy.length ? `used by: ${a.usedBy.join(', ')}` : '',
-        files.exists(sidecarPath(a.path)) ? `sidecar: ${sidecarPath(a.path)}` : '',
+        files.exists(sidecarPath(a.path))
+          ? `sidecar: ${sidecarPath(a.path)}${a.kind !== 'sprites' && a.sidecar?.spec ? ' (with its synth recipe)' : ''}`
+          : '',
       ].filter(Boolean);
       const more = extra.length ? `; ${extra.join('; ')}` : '';
       if (a.kind !== 'sprites') return `${a.kind} ${a.id}: ${a.path}${more}`;

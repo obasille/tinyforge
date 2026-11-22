@@ -1,0 +1,34 @@
+{
+  "source": "TinyForge chiptune recipe",
+  "generator": "tinyforge-synth",
+  "spec": {
+    "volume": 0.45,
+    "notes": [
+      {
+        "at": 0,
+        "len": 0.09,
+        "note": 140,
+        "to": 60.939,
+        "wave": "square",
+        "duty": 0.5,
+        "vol": 1,
+        "attack": 0.002,
+        "decay": 0.088,
+        "sustain": 0,
+        "release": 0
+      },
+      {
+        "at": 0,
+        "len": 0.05,
+        "note": 9000,
+        "to": 2700,
+        "wave": "noise",
+        "vol": 0.5,
+        "attack": 0.001,
+        "decay": 0.049,
+        "sustain": 0,
+        "release": 0
+      }
+    ]
+  }
+}

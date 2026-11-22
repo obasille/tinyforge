@@ -1,0 +1,93 @@
+{
+  "source": "TinyForge chiptune recipe",
+  "generator": "tinyforge-synth",
+  "spec": {
+    "volume": 0.4,
+    "notes": [
+      {
+        "at": 0,
+        "len": 0.04,
+        "note": "C5",
+        "wave": "square",
+        "duty": 0.25,
+        "vol": 1,
+        "attack": 0.002,
+        "decay": 0.038,
+        "sustain": 0,
+        "release": 0
+      },
+      {
+        "at": 0.04,
+        "len": 0.04,
+        "note": "E5",
+        "wave": "square",
+        "duty": 0.25,
+        "vol": 1,
+        "attack": 0.002,
+        "decay": 0.038,
+        "sustain": 0,
+        "release": 0
+      },
+      {
+        "at": 0.08,
+        "len": 0.04,
+        "note": "G5",
+        "wave": "square",
+        "duty": 0.25,
+        "vol": 1,
+        "attack": 0.002,
+        "decay": 0.038,
+        "sustain": 0,
+        "release": 0
+      },
+      {
+        "at": 0.12,
+        "len": 0.04,
+        "note": "C6",
+        "wave": "square",
+        "duty": 0.25,
+        "vol": 1,
+        "attack": 0.002,
+        "decay": 0.038,
+        "sustain": 0,
+        "release": 0
+      },
+      {
+        "at": 0.16,
+        "len": 0.04,
+        "note": "E6",
+        "wave": "square",
+        "duty": 0.25,
+        "vol": 1,
+        "attack": 0.002,
+        "decay": 0.038,
+        "sustain": 0,
+        "release": 0
+      },
+      {
+        "at": 0.2,
+        "len": 0.04,
+        "note": "G6",
+        "wave": "square",
+        "duty": 0.25,
+        "vol": 1,
+        "attack": 0.002,
+        "decay": 0.038,
+        "sustain": 0,
+        "release": 0
+      },
+      {
+        "at": 0,
+        "len": 0.25,
+        "note": 12000,
+        "to": 2400,
+        "wave": "noise",
+        "vol": 0.35,
+        "attack": 0.001,
+        "decay": 0.249,
+        "sustain": 0,
+        "release": 0
+      }
+    ]
+  }
+}

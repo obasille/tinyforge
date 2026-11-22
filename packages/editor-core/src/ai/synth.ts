@@ -1,9 +1,9 @@
 // A small chiptune synthesizer, so the agent can make sounds by writing a
-// description instead of audio. It is the TypeScript port of
-// scripts/chiptune.py (the synth behind the games' sounds): pulse voices with
-// a duty cycle, a 16-step triangle and 15-bit LFSR noise like an 8-bit
-// console, plus saw and sine. The description is kept in the asset's sidecar,
-// so a sound can be made again or adjusted.
+// description instead of audio. It made the games' own sounds (each keeps its
+// description, its recipe, in its sidecar): pulse voices with a duty cycle, a
+// 16-step triangle and 15-bit LFSR noise like an 8-bit console, plus a smooth
+// triangle, saw and sine. The description is kept in the asset's sidecar, so
+// a sound can be made again or adjusted.
 //
 //   { "bpm": 120,
 //     "notes": [{ "at": 0, "len": 0.5, "note": "C5", "wave": "square", "to": "C6" }],
@@ -11,13 +11,16 @@
 //
 // Times are seconds, or beats when `bpm` is set. A track line is the scripts'
 // notation: one token per step, "." holds the previous note, "-" is a rest.
-// For noise, the pitch is the noise clock (1000 to 12000 Hz: higher is
-// hissier). Same description, same sound.
+// For noise, the pitch is the noise clock (1000 to 22000 Hz: higher is
+// hissier). Noise notes that share a `noiseGroup` continue one generator, in
+// the order they are written, as the games' drum lines do; otherwise each
+// note starts it afresh. Same description, same sound.
 
 import type { Sound } from '../wav.ts';
 
-export type Wave = 'square' | 'triangle' | 'saw' | 'sine' | 'noise';
-const WAVES: Wave[] = ['square', 'triangle', 'saw', 'sine', 'noise'];
+/** `triangle` is the 16-step 8-bit one; `softtriangle` is smooth (a drum's skin tone). */
+export type Wave = 'square' | 'triangle' | 'softtriangle' | 'saw' | 'sine' | 'noise';
+const WAVES: Wave[] = ['square', 'triangle', 'softtriangle', 'saw', 'sine', 'noise'];
 
 /** How a note sounds; a track's settings apply to each of its notes. */
 export interface Voice {
@@ -31,6 +34,11 @@ export interface Voice {
   release?: number;
   /** Square wave duty cycle, 0.05 to 0.95. Default 0.5 (0.125 and 0.25 are the thin 8-bit pulses). */
   duty?: number;
+  /** Linear fades at the ends of the note's whole length, in seconds, on top of the envelope (declicking). */
+  fadeIn?: number;
+  fadeOut?: number;
+  /** Noise notes with the same group share one generator, in the order written (a drum line). */
+  noiseGroup?: string;
 }
 
 export interface SynthNote extends Voice {
@@ -42,6 +50,8 @@ export interface SynthNote extends Voice {
   note: string | number;
   /** Slide to this pitch over the note's length. */
   to?: string | number;
+  /** How the slide moves: `exp` (default) evenly in pitch; `drum` falls fast, then settles, like a struck skin. */
+  curve?: 'exp' | 'drum';
 }
 
 export interface SynthTrack extends Voice {
@@ -61,6 +71,8 @@ export interface SynthSpec {
   volume?: number;
   /** A loop has no fade-out at its end. */
   loop?: boolean;
+  /** Total length (seconds, or beats with `bpm`): notes are cut there, as a loop's last bar. Default: the end of the last note. */
+  length?: number;
   notes?: SynthNote[];
   tracks?: SynthTrack[];
 }
@@ -84,7 +96,8 @@ export function pitchHz(pitch: string | number): number {
   // A track token can be a frequency too ("8000" for a noise drum).
   if (typeof pitch === 'string' && /^\d+(\.\d+)?$/.test(pitch)) pitch = Number(pitch);
   if (typeof pitch === 'number') {
-    if (!(pitch > 0 && pitch < 20000)) throw new Error(`Frequency out of range: ${pitch}`);
+    // Up to 30 kHz: a noise clock may run near the sample rate (hi-hats).
+    if (!(pitch > 0 && pitch <= 30000)) throw new Error(`Frequency out of range: ${pitch}`);
     return pitch;
   }
   const m = /^([A-G])([#b]?)(-?\d)$/.exec(pitch);
@@ -101,12 +114,12 @@ const num = (value: unknown, name: string, min: number, max: number, fallback?: 
   return value;
 };
 
-/** A track's line as notes, like chiptune.py's parse_line. */
+/** A track's line as notes: a token per step, "." extends the note before it. */
 function trackNotes(track: SynthTrack, where: string): SynthNote[] {
   if (typeof track?.line !== 'string') throw new Error(`${where}.line must be a string`);
   const step = num(track.step, `${where}.step`, 0.001, MAX_SECONDS);
   const at = num(track.at, `${where}.at`, 0, MAX_SECONDS, 0);
-  const hold = num(track.hold, `${where}.hold`, 0.1, 1, 0.9);
+  const hold = num(track.hold, `${where}.hold`, 0.01, 1, 0.9);
   const { line: _line, step: _step, at: _at, hold: _hold, ...voice } = track;
   const notes: Array<SynthNote & { steps: number }> = [];
   track.line
@@ -146,46 +159,70 @@ export function renderSynth(
       len: num(n.len, `${where}.len`, 0.001, MAX_SECONDS / beat) * beat,
       f0: pitchHz(n.note),
       f1: n.to === undefined ? null : pitchHz(n.to),
+      drum: n.curve === 'drum',
       vol: num(n.vol, `${where}.vol`, 0, 1, 0.5),
       attack: num(n.attack, `${where}.attack`, 0, 10, 0.002),
       decay: num(n.decay, `${where}.decay`, 0, 10, 0.05),
       sustain: num(n.sustain, `${where}.sustain`, 0, 1, 0.7),
       release: num(n.release, `${where}.release`, 0, 10, 0.05),
       duty: num(n.duty, `${where}.duty`, 0.05, 0.95, 0.5),
+      fadeIn: num(n.fadeIn, `${where}.fadeIn`, 0, 10, 0),
+      fadeOut: num(n.fadeOut, `${where}.fadeOut`, 0, 10, 0),
+      group: typeof n.noiseGroup === 'string' ? n.noiseGroup : null,
     };
   });
-  const seconds = Math.max(...notes.map((n) => n.start + n.len + n.release));
+  const seconds =
+    spec.length === undefined
+      ? Math.max(...notes.map((n) => n.start + n.len + n.release))
+      : num(spec.length, 'length', 0.001, MAX_SECONDS / beat) * beat;
   if (seconds > MAX_SECONDS) throw new Error(`The sound is ${seconds.toFixed(1)} s long; at most ${MAX_SECONDS} s`);
-  const out = new Float32Array(Math.ceil(seconds * sampleRate));
+  // Sample counts round down, like the scripts: a note of 0.07 s at 22050 Hz is 1543 samples.
+  const countOf = (n: (typeof notes)[number]) => Math.max(1, Math.floor((n.len + n.release) * sampleRate));
+  const size =
+    spec.length === undefined
+      ? Math.max(...notes.map((n) => Math.floor(n.start * sampleRate) + countOf(n)))
+      : Math.floor(seconds * sampleRate);
+  const out = new Float32Array(size);
+  // Noise: a 15-bit LFSR stepped at the note's pitch, like an NES noise channel.
+  // A group's notes continue one generator in the order they are written (notes, then tracks).
+  const groups = new Map<string, { lfsr: number; clock: number }>();
   for (const n of notes) {
     const first = Math.floor(n.start * sampleRate);
-    const count = Math.ceil((n.len + n.release) * sampleRate);
+    const count = countOf(n);
     let phase = 0;
-    // Noise: a 15-bit LFSR stepped at the note's pitch, like an NES noise channel.
-    let lfsr = 1;
-    let clock = 0;
-    for (let k = 0; k < count && first + k < out.length; k++) {
+    const noise = (n.group !== null && groups.get(n.group)) || { lfsr: 1, clock: 0 };
+    if (n.group !== null) groups.set(n.group, noise);
+    for (let k = 0; k < count; k++) {
       const t = k / sampleRate;
-      // Exponential slide over the held part, then hold the end pitch.
-      const f = n.f1 === null ? n.f0 : n.f0 * (n.f1 / n.f0) ** Math.min(1, t / n.len);
+      // A slide over the held part, then hold the end pitch: exponential, or a drum's quick fall.
+      const u = Math.min(1, t / n.len);
+      const f = n.f1 === null ? n.f0 : n.drum ? n.f1 + (n.f0 - n.f1) * (1 - u) ** 2 : n.f0 * (n.f1 / n.f0) ** u;
       phase = (phase + f / sampleRate) % 1;
       let s: number;
       if (n.wave === 'square') s = phase < n.duty ? 1 : -1;
       else if (n.wave === 'triangle') s = Math.round((Math.abs(phase * 4 - 2) - 1) * 7.5) / 7.5;
+      else if (n.wave === 'softtriangle') s = Math.abs(phase * 4 - 2) - 1;
       else if (n.wave === 'saw') s = 2 * phase - 1;
       else if (n.wave === 'sine') s = Math.sin(2 * Math.PI * phase);
       else {
-        for (clock += f / sampleRate; clock >= 1; clock--) {
-          lfsr = (lfsr >> 1) | (((lfsr ^ (lfsr >> 1)) & 1) << 14);
+        for (noise.clock += f / sampleRate; noise.clock >= 1; noise.clock--) {
+          noise.lfsr = (noise.lfsr >> 1) | (((noise.lfsr ^ (noise.lfsr >> 1)) & 1) << 14);
         }
-        s = lfsr & 1 ? 1 : -1;
+        s = noise.lfsr & 1 ? 1 : -1;
       }
       let env: number;
       if (t < n.attack) env = t / n.attack;
       else if (t < n.attack + n.decay) env = 1 - (1 - n.sustain) * ((t - n.attack) / n.decay);
       else env = n.sustain;
       if (t > n.len) env *= Math.max(0, 1 - (t - n.len) / Math.max(n.release, 1e-6));
-      out[first + k] += s * env * n.vol;
+      if (n.fadeIn || n.fadeOut) {
+        // A fade at most as long as the note: a fadeOut of the note's length ramps over all of it.
+        const fadeIn = n.fadeIn ? k / Math.min(n.fadeIn * sampleRate, count) : 1;
+        const fadeOut = n.fadeOut ? (count - k) / Math.min(n.fadeOut * sampleRate, count) : 1;
+        env *= Math.min(1, fadeIn, fadeOut);
+      }
+      // Past the sound's length (a loop's end), the note is cut.
+      if (first + k < out.length) out[first + k] += s * env * n.vol;
     }
   }
   // Normalize to the volume (rather than clip when notes add up), and fade
