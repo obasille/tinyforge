@@ -1360,6 +1360,22 @@ button.tf-files-row.tf-files-selected {
   color: var(--tf-error);
 }
 
+.tf-ai-confirm {
+  padding: 6px 8px;
+  border: 1px solid var(--tf-accent);
+  border-radius: 4px;
+}
+
+.tf-ai-confirm-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.tf-ai-confirm-answer {
+  opacity: 0.7;
+}
+
 .tf-ai-changes {
   display: flex;
   flex-direction: column;

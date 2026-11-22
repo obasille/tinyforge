@@ -262,39 +262,74 @@ describe('asset generators', () => {
     expect([...ws.data.keys()].filter((p) => p.startsWith('assets/'))).toEqual([]);
   });
 
-  it('replaces only assets it made, and moves a sheet whose frame count changed', async () => {
-    const made = {
-      kind: 'sprites',
-      id: 'coin',
-      path: 'assets/sprites/coin~2x1.png',
-      sidecar: { generator: 'tinyforge-ai' },
-    };
-    const theirs = { kind: 'sfx', id: 'beep', path: 'assets/sfx/beep.wav', sidecar: null };
+  it('asks before replacing an asset, and moves a sheet whose frame count changed', async () => {
+    const coinAsset = { kind: 'sprites', id: 'coin', path: 'assets/sprites/coin~2x1.png', usedBy: [], sidecar: null };
+    const beepAsset = { kind: 'sfx', id: 'beep', path: 'assets/sfx/beep.wav', usedBy: ['pong'], sidecar: null };
     const { ws, stack, agent, inputs } = await setup(
       [
-        { calls: [call('make_sound', beep), call('make_sprite', { ...coin, frames: [coin.frames[0]] })] },
+        {
+          calls: [
+            call('make_sound', beep),
+            call('make_sprite', { ...coin, frames: [coin.frames[0]] }),
+            // Made in this request: replaced without asking.
+            call('make_sprite', coin),
+          ],
+        },
         { text: 'ok' },
       ],
       {
         'assets/sprites/coin~2x1.png': new Uint8Array([1]),
-        'assets/sprites/coin~2x1.png.json': '{"generator":"tinyforge-ai"}',
+        'assets/sprites/coin~2x1.png.json': '{"license":"CC0"}',
         'assets/sfx/beep.wav': new Uint8Array([2]),
       },
-      [made, theirs] as Array<Partial<LibraryAsset>>,
+      [coinAsset, beepAsset] as Array<Partial<LibraryAsset>>,
     );
+    // The user keeps the sound and replaces the sprite.
+    const answers = [false, true];
+    const questions: string[] = [];
+    agent.state.subscribe(() => {
+      const open = agent.state.getState().items.find((i) => i.kind === 'confirm' && i.answer === null);
+      if (open?.kind === 'confirm' && !questions.includes(open.text)) {
+        questions.push(open.text);
+        queueMicrotask(() => agent.answer(answers.shift() ?? false));
+      }
+    });
     await agent.ask('Redo the coin');
-    expect(inputs[1].results?.map((r) => r.content)).toEqual([
-      'The library already has sfx "beep", not made by you. Pick another ID.',
-      'Made assets/sprites/coin.png: 1 frame of 3x3',
+    expect(questions).toEqual([
+      'Replace the sound "beep" (assets/sfx/beep.wav)? Used by: pong.',
+      'Replace the sprite "coin" (assets/sprites/coin~2x1.png)?',
     ]);
-    expect(ws.data.has('assets/sprites/coin~2x1.png')).toBe(false);
-    expect(ws.data.has('assets/sprites/coin~2x1.png.json')).toBe(false);
-    expect(ws.data.has('assets/sprites/coin.png')).toBe(true);
+    expect(inputs[1].results?.map((r) => r.content)).toEqual([
+      'The user chose to keep sfx "beep". Pick another ID, or ask them.',
+      'Made assets/sprites/coin.png: 1 frame of 3x3',
+      'Made assets/sprites/coin~2x1.png: 2 frames of 3x3',
+    ]);
     expect([...(ws.data.get('assets/sfx/beep.wav') ?? [])]).toEqual([2]);
+    expect(ws.data.has('assets/sprites/coin.png')).toBe(false);
+    expect(JSON.parse(ws.text('assets/sprites/coin~2x1.png.json') ?? '{}').generator).toBe('tinyforge-ai');
     stack.undo();
     await stack.idle();
     expect([...(ws.data.get('assets/sprites/coin~2x1.png') ?? [])]).toEqual([1]);
+    expect(ws.text('assets/sprites/coin~2x1.png.json')).toBe('{"license":"CC0"}');
     expect(ws.data.has('assets/sprites/coin.png')).toBe(false);
+  });
+
+  it('answers no when the request is stopped during a question', async () => {
+    const beepAsset = { kind: 'sfx', id: 'beep', path: 'assets/sfx/beep.wav', usedBy: [], sidecar: null };
+    const { ws, agent } = await setup(
+      [{ calls: [call('make_sound', beep)] }, { text: 'never' }],
+      { 'assets/sfx/beep.wav': new Uint8Array([2]) },
+      [beepAsset] as Array<Partial<LibraryAsset>>,
+    );
+    agent.state.subscribe(() => {
+      if (agent.state.getState().items.some((i) => i.kind === 'confirm' && i.answer === null)) agent.stop();
+    });
+    await agent.ask('New beep');
+    const items = agent.state.getState().items;
+    expect(items.find((i) => i.kind === 'confirm')).toMatchObject({ answer: false });
+    expect(items.some((i) => i.kind === 'error' && i.text === 'Stopped.')).toBe(true);
+    expect([...(ws.data.get('assets/sfx/beep.wav') ?? [])]).toEqual([2]);
+    expect(agent.state.getState().running).toBe(false);
   });
 });
 

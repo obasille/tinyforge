@@ -2,8 +2,8 @@
 // it writes only text files in the current game's folder, reads any project
 // file, and cannot write a file it has not read (or that changed since it read
 // it). It adds sprites and sounds to the library only through make_sprite and
-// make_sound, and replaces only assets those tools made. There is no shell
-// and no network.
+// make_sound, and replaces an existing asset only once the user says yes.
+// There is no shell and no network.
 //
 // Writes go to disk at once, so compile and hot reload see them. Everything a
 // request changed becomes one command (`commit`): one undo step.
@@ -39,7 +39,7 @@ const TEXT_FILE = /\.(ts|md|json|txt)$/i;
 const WRITABLE_FILE = /\.(ts|md)$/i;
 /** Largest file the agent reads or writes, in characters. */
 const MAX_TEXT = 200_000;
-/** The sidecar mark of an asset the agent made (and so may replace). */
+/** The sidecar mark of an asset the agent made. */
 export const AI_GENERATOR = 'tinyforge-ai';
 /** Longest wait for the file list to show the assets a request made, before compiling. */
 const LIST_WAIT_MS = 5000;
@@ -177,7 +177,11 @@ export class AgentTools {
   /** The user's request, kept in a made asset's sidecar. */
   private request = '';
 
-  constructor(private readonly ctx: AgentContext) {}
+  /** `confirm` asks the user a yes or no question (the agent pauses until they answer). */
+  constructor(
+    private readonly ctx: AgentContext,
+    private readonly confirm: (question: string) => Promise<boolean> = async () => false,
+  ) {}
 
   /** Count a file as read: its text was shown to the model another way. */
   markSeen(path: string, text: string): void {
@@ -329,9 +333,10 @@ export class AgentTools {
   }
 
   /**
-   * Write a made asset as `assets/<kind>/<file>` with its sidecar. The ID may
-   * be new, or one of an asset the agent made: that one is replaced (its old
-   * files go when the new file name differs, as for a sheet with more frames).
+   * Write a made asset as `assets/<kind>/<file>` with its sidecar. An ID
+   * already in the library is replaced once the user says yes (its old files
+   * go when the new file name differs, as for a sheet with more frames); one
+   * this request made is replaced without asking.
    */
   private async putAsset(
     kind: AssetKind,
@@ -344,10 +349,15 @@ export class AgentTools {
     const { files } = this.ctx;
     const path = `assets/${kind}/${file}`;
     const sameId = (p: string) => p.startsWith(`assets/${kind}/`) && parseAssetName(p.split('/')[2]).id === id;
-    const old = new Set(this.ctx.assets().flatMap((a) => (a.kind === kind && a.id === id ? [a] : [])));
-    for (const a of old) {
-      if (a.sidecar?.generator !== AI_GENERATOR) {
-        throw new ToolError(`The library already has ${kind} "${id}", not made by you. Pick another ID.`);
+    const old = this.ctx.assets().filter((a) => a.kind === kind && a.id === id);
+    // An asset this request already wrote or removed was settled earlier in the request.
+    const theirs = old.filter((a) => !this.after.has(a.path));
+    if (theirs.length > 0) {
+      const used = [...new Set(theirs.flatMap((a) => a.usedBy))];
+      const what = kind === 'sprites' ? 'sprite' : kind === 'sfx' ? 'sound' : 'music';
+      const question = `Replace the ${what} "${id}" (${theirs.map((a) => a.path).join(', ')})?${used.length ? ` Used by: ${used.join(', ')}.` : ''}`;
+      if (!(await this.confirm(question))) {
+        throw new ToolError(`The user chose to keep ${kind} "${id}". Pick another ID, or ask them.`);
       }
     }
     // The assets this request made may not be in the library yet.

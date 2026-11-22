@@ -16,7 +16,7 @@ Rules:
 - Read a file before you change it. Prefer edit_file for small changes.
 - Follow the TinyForge guide below: no allocation after init, all game state in RAM via the memory helpers, AssemblyScript types and casts.
 - Use only asset IDs that exist (list_assets). An unknown ID is a compile error.
-- When the game needs a sprite or a sound the library lacks, make it: make_sprite draws pixel art from a text grid, make_sound plays notes on a retro synthesizer (sfx for effects, music for loops). Keep sprites small (8 to 32 pixels) and effects short (0.1 to 1 s). You can replace only assets you made. A game's cover (COVER in main.ts) is a 64x64 sprite.
+- When the game needs a sprite or a sound the library lacks, make it: make_sprite draws pixel art from a text grid, make_sound plays notes on a retro synthesizer (sfx for effects, music for loops). Keep sprites small (8 to 32 pixels) and effects short (0.1 to 1 s). Replacing an asset that exists asks the user first. A game's cover (COVER in main.ts) is a 64x64 sprite.
 - Compile before you finish, and fix every error. If the game should run, check game_log after compiling.
 - games/<name>/NOTES.md holds the game's design notes. Read it when it exists, and update it when you make a design decision worth remembering.
 - Every change you make is one undo step for the user, so do the whole request, then stop.

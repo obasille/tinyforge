@@ -24,6 +24,8 @@ export type ChatItem =
   | { kind: 'assistant'; text: string }
   | { kind: 'step'; text: string; ok: boolean }
   | { kind: 'error'; text: string }
+  /** A yes or no question; `answer` is null until the user answers. */
+  | { kind: 'confirm'; text: string; answer: boolean | null }
   | { kind: 'changes'; files: FileChangeView[]; cost: number | null };
 
 export interface AgentState {
@@ -79,6 +81,8 @@ export class Agent {
   private pending: ToolCall[] = [];
   private first = true;
   private abort: AbortController | null = null;
+  /** Answers the open question, if there is one. */
+  private answerQuestion: ((yes: boolean) => void) | null = null;
 
   constructor(private readonly options: AgentOptions) {
     this.chat = options.provider.createChat({
@@ -86,7 +90,7 @@ export class Agent {
       system: options.system,
       tools: AGENT_TOOLS,
     });
-    this.tools = new AgentTools(options.context);
+    this.tools = new AgentTools(options.context, (question) => this.confirm(question));
   }
 
   private add(item: ChatItem): number {
@@ -189,6 +193,29 @@ export class Agent {
       // A refused tool is an answer the model can act on; anything else is a bug worth reporting as well.
       return { id: call.id, content: e instanceof ToolError ? message : `Error: ${message}`, isError: true };
     }
+  }
+
+  /** Ask the user, and wait. Stopping the request answers no. */
+  private confirm(text: string): Promise<boolean> {
+    const index = this.add({ kind: 'confirm', text, answer: null });
+    const signal = this.abort?.signal;
+    return new Promise((resolve) => {
+      const done = (yes: boolean) => {
+        this.answerQuestion = null;
+        signal?.removeEventListener('abort', no);
+        this.update(index, { kind: 'confirm', text, answer: yes });
+        resolve(yes);
+      };
+      const no = () => done(false);
+      if (signal?.aborted) return no();
+      signal?.addEventListener('abort', no);
+      this.answerQuestion = done;
+    });
+  }
+
+  /** The user's answer to the open question. */
+  answer(yes: boolean): void {
+    this.answerQuestion?.(yes);
   }
 
   /** Stop the running request. Its changes so far stay, as one undo step. */

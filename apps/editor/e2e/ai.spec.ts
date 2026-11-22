@@ -2,7 +2,7 @@
 // scripted replies: the page's requests to the AI routes are answered here,
 // so no key is needed and nothing reaches the Anthropic API.
 
-import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, type Page, test } from '@playwright/test';
@@ -299,3 +299,42 @@ test('a model from the OpenAI-compatible server in .env works the same way', asy
   expect((bodies[0].messages as Array<{ role: string }>)[0].role).toBe('system');
   expect(errors).toEqual([]);
 });
+
+test('replacing an existing asset waits for the user to say yes', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const wav = path.join(ASSETS, 'sfx', `${game}.wav`);
+  const sound = (vol: number) => ({
+    tool: 'make_sound',
+    input: { id: game, kind: 'sfx', notes: [{ at: 0, len: 0.1, note: 'C5', vol }] },
+  });
+  await fakeModel(page, [[sound(0.5)], [{ text: 'You kept it.' }], [sound(0.9)], [{ text: 'The new sound is in.' }]]);
+  await page.goto('/');
+  await createGame(page);
+  writeFileSync(wav, readFileSync(path.join(ASSETS, 'sfx', readdirFirstWav())));
+  const original = readFileSync(wav);
+  await expect
+    .poll(() => page.evaluate((g) => window.__tf?.editor.assets.state.getState().assets.some((a) => a.id === g), game))
+    .toBe(true);
+  await page.getByTestId('show-ai').click();
+  const panel = page.getByTestId('ai-panel');
+
+  await panel.getByTestId('ai-input').fill('Make a new sound');
+  await panel.getByTestId('ai-input').press('Enter');
+  await expect(panel.getByTestId('ai-confirm')).toContainText(`Replace the sound "${game}"`);
+  await panel.getByTestId('ai-confirm-no').click();
+  await expect(panel.getByTestId('ai-items')).toContainText('You kept it.');
+  expect(readFileSync(wav).equals(original)).toBe(true);
+
+  await panel.getByTestId('ai-input').fill('Replace it');
+  await panel.getByTestId('ai-input').press('Enter');
+  await panel.getByTestId('ai-confirm-yes').last().click();
+  await expect(panel.getByTestId('ai-items')).toContainText('The new sound is in.');
+  expect(readFileSync(wav).equals(original)).toBe(false);
+  expect(errors).toEqual([]);
+});
+
+/** Any sound in the library, to copy as a stand-in for an imported one. */
+function readdirFirstWav(): string {
+  return readdirSync(path.join(ASSETS, 'sfx')).find((f) => f.endsWith('.wav') && !f.startsWith('e2e')) ?? '';
+}
