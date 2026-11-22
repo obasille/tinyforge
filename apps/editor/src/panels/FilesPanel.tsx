@@ -1,13 +1,15 @@
 // The file tree, in three sections: Code (the games' sources), Assets (the
 // asset library) and Engine (the read-only engine files). The file of the
-// active code tab is highlighted and revealed. Click a text file to open it. Create, rename and delete are undoable
+// active code tab is highlighted and revealed. Click a text file to open it.
+// Create, rename and delete are undoable
 // (Ctrl+Z outside a text field). Names are typed in place, never in a dialog.
 
 import { buildTree, isTextFile, type TreeNode } from '@tinyforge/editor-core';
 import { assetKindOf, GAME_NAME, isWritablePath } from '@tinyforge/engine/tooling/project-layout';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useEditor } from '../EditorContext.ts';
 import { useStore } from '../hooks.ts';
+import { useRevealFile } from './reveal-file.ts';
 
 type Edit =
   | { kind: 'newGame' }
@@ -24,12 +26,6 @@ const SECTIONS: { path: string; label: string }[] = [
   { path: 'engine', label: 'Engine' },
 ];
 
-/** The folders that hold a path: `games/pong/main.ts` is in `games` and `games/pong`. */
-const ancestorsOf = (path: string) => {
-  const parts = path.split('/');
-  return parts.slice(1).map((_, i) => parts.slice(0, i + 1).join('/'));
-};
-
 /** Folders that hold the project's structure: they cannot be renamed or deleted. */
 const isFixedFolder = (node: TreeNode) =>
   node.kind === 'folder' && (!node.path.includes('/') || /^assets\/[^/]+$/.test(node.path));
@@ -43,25 +39,8 @@ export function FilesPanel() {
   const [edit, setEdit] = useState<Edit | null>(null);
   const [error, setError] = useState<string | null>(null);
   const activeCode = useStore(editor.activeCode);
-  const treeRef = useRef<HTMLUListElement>(null);
-
-  // The active code tab's file: select it and open the folders above it.
-  useEffect(() => {
-    if (!activeCode) return;
-    setSelected(activeCode);
-    setOpen((s) => {
-      const missing = ancestorsOf(activeCode).filter((f) => !s.has(f));
-      return missing.length ? new Set([...s, ...missing]) : s;
-    });
-  }, [activeCode]);
-
-  // Then scroll it into view, once its row is rendered (the file list can arrive later).
-  const activeShown = !!activeCode && state.files.some((f) => f.path === activeCode);
-  useEffect(() => {
-    if (!activeCode || !activeShown) return;
-    const row = treeRef.current?.querySelector(`[data-testid="file-${CSS.escape(activeCode)}"]`);
-    row?.scrollIntoView({ block: 'nearest' });
-  }, [activeCode, activeShown]);
+  // The active code tab's file: selected, its folders opened, scrolled into view.
+  const treeRef = useRevealFile(activeCode, state.files, setSelected, setOpen);
 
   const selectedNode = useMemo(() => {
     const find = (nodes: TreeNode[]): TreeNode | null => {
@@ -137,29 +116,6 @@ export function FilesPanel() {
     />
   );
 
-  /** A folder's contents (and the name being typed for a new file or game in it). */
-  const renderChildren = (node: TreeNode, depth: number) => (
-    <ul>
-      {edit?.kind === 'newFile' && edit.folder === node.path ? (
-        <li>
-          <div className="tf-files-row" style={{ paddingLeft: 6 + depth * 12 }}>
-            <span className="tf-files-icon">+</span>
-            {nameInput('', 'file name, like level.ts')}
-          </div>
-        </li>
-      ) : null}
-      {node.path === 'games' && edit?.kind === 'newGame' ? (
-        <li>
-          <div className="tf-files-row" style={{ paddingLeft: 6 + depth * 12 }}>
-            <span className="tf-files-icon">+</span>
-            {nameInput('', 'game name, like spaceRace')}
-          </div>
-        </li>
-      ) : null}
-      {node.children.map((c) => renderNode(c, depth))}
-    </ul>
-  );
-
   const renderNode = (node: TreeNode, depth: number) => {
     const isOpen = open.has(node.path);
     const renaming = edit?.kind === 'rename' && edit.node.path === node.path;
@@ -195,7 +151,27 @@ export function FilesPanel() {
             {node.readonly && node.kind === 'file' ? <span className="tf-files-lock">read-only</span> : null}
           </button>
         )}
-        {node.kind === 'folder' && isOpen ? renderChildren(node, depth + 1) : null}
+        {node.kind === 'folder' && isOpen ? (
+          <ul>
+            {edit?.kind === 'newFile' && edit.folder === node.path ? (
+              <li>
+                <div className="tf-files-row" style={{ paddingLeft: 6 + (depth + 1) * 12 }}>
+                  <span className="tf-files-icon">+</span>
+                  {nameInput('', 'file name, like level.ts')}
+                </div>
+              </li>
+            ) : null}
+            {node.path === 'games' && edit?.kind === 'newGame' ? (
+              <li>
+                <div className="tf-files-row" style={{ paddingLeft: 6 + (depth + 1) * 12 }}>
+                  <span className="tf-files-icon">+</span>
+                  {nameInput('', 'game name, like spaceRace')}
+                </div>
+              </li>
+            ) : null}
+            {node.children.map((c) => renderNode(c, depth + 1))}
+          </ul>
+        ) : null}
       </li>
     );
   };
@@ -221,7 +197,19 @@ export function FilesPanel() {
           <span className="tf-files-name">{label}</span>
           {node.readonly ? <span className="tf-files-lock">read-only</span> : null}
         </button>
-        {isOpen ? renderChildren(node, 0) : null}
+        {isOpen ? (
+          <ul>
+            {node.path === 'games' && edit?.kind === 'newGame' ? (
+              <li>
+                <div className="tf-files-row" style={{ paddingLeft: 6 }}>
+                  <span className="tf-files-icon">+</span>
+                  {nameInput('', 'game name, like spaceRace')}
+                </div>
+              </li>
+            ) : null}
+            {node.children.map((c) => renderNode(c, 0))}
+          </ul>
+        ) : null}
       </li>
     );
   };
