@@ -3,7 +3,7 @@ import { GamePicker } from './GamePicker.tsx';
 import { useStore } from './hooks.ts';
 import { UndoHistory } from './UndoHistory.tsx';
 
-export function Toolbar({ onResetLayout }: { onResetLayout: () => void }) {
+export function Toolbar({ onResetLayout, onShowAi }: { onResetLayout: () => void; onShowAi: () => void }) {
   const editor = useEditor();
   const stack = useStore(editor.commands);
   const session = useStore(editor.host.session);
@@ -59,6 +59,9 @@ export function Toolbar({ onResetLayout }: { onResetLayout: () => void }) {
       <span className={`tf-status tf-status-${session.status}`} data-testid="run-status">
         {session.status}
       </span>
+      <button type="button" data-testid="show-ai" onClick={onShowAi} title="Ask the code agent for a change">
+        AI
+      </button>
       <button type="button" onClick={onResetLayout}>
         Reset layout
       </button>

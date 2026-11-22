@@ -22,9 +22,12 @@ pnpm workspace. Two hosts share one engine:
   (`game-host.ts`), the code editor and live asset scan, the asset library and import
   (`asset-library.ts`, `asset-import.ts`), the sprite editor and sound player
   (`sprite-editor.ts`, `sprite-canvas.ts`, `sound-editor.ts`, `sound-view.ts`,
-  with plain-TS `png.ts` and `wav.ts`), viewport, memory view.
+  with plain-TS `png.ts` and `wav.ts`), viewport, memory view. The AI tools
+  are apart in `src/ai/` (`@tinyforge/editor-core/ai`, loaded only by the AI
+  panel): provider interface and Claude adapter, the code agent and its tools.
 - `apps/editor`: React + Dockview UI, Vite, the `tinyforge` Vite plugin (serves
-  and watches project files; it does not compile).
+  and watches project files; it does not compile), and `vite/ai-proxy.ts` (dev
+  server only: adds the API key from `.env` to the AI panel's requests).
 - `apps/classic`: the original host, deployed to the site root. Keep it working,
   with minimal changes and no code shared with the editor packages. What it
   does not do is listed in `apps/classic/README.md`.

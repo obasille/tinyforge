@@ -1040,6 +1040,20 @@ Then open the URL Vite prints (http://localhost:5173/).
   file, `<file>.json` (`coin~8x1.png.json`). It is optional, and other keys
   (such as `prompt` for a generated asset) are kept. Renaming or deleting an
   asset in the editor takes its sidecar along.
+- **AI code agent (dev server only):** the AI button opens a chat with
+  Claude about the current game. It reads the game, the SDK and the asset
+  list, edits files in the game's folder only, compiles until the game
+  builds, and checks the running game's log. Each request is one undo step,
+  and the panel lists every file it changed with a diff. Model, effort and
+  "show cost" are set in the panel and saved in the browser. Setup: put
+  `ANTHROPIC_API_KEY=...` in a `.env` file at the repository root (it is
+  git-ignored) and restart `pnpm dev`; `TF_AI_MODEL` sets the default model.
+  The key stays in the dev server: the page sends requests to
+  `/__tf/ai/anthropic`, which adds it. The AI routes answer only the editor
+  on localhost and are off when the server is started with `--host`. A
+  static build has no AI. The agent's guide is `AGENTS.md`, and each game can
+  keep design notes in `games/<name>/NOTES.md` that the agent reads and
+  updates.
 - **Debugging:** debug builds carry their source map, so Chrome DevTools can
   set breakpoints in the AssemblyScript source.
 - **Panels:** Game, Run (pause, single step, restart, save/load state, seed),
