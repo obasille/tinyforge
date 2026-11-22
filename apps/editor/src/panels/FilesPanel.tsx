@@ -1,12 +1,21 @@
 // The file tree, in three sections: Code (the games' sources), Assets (the
 // asset library) and Engine (the read-only engine files). The file of the
 // active code tab is highlighted and revealed. Click a text file to open it.
-// Create, rename and delete are undoable
+// Create, rename, delete and import are undoable
 // (Ctrl+Z outside a text field). Names are typed in place, never in a dialog.
+// Export saves the selected (or current) game as a zip; import adds one.
 
-import { buildTree, isTextFile, type TreeNode } from '@tinyforge/editor-core';
-import { assetKindOf, GAME_NAME, isWritablePath } from '@tinyforge/engine/tooling/project-layout';
-import { useMemo, useState } from 'react';
+import {
+  buildTree,
+  exportGameZip,
+  gameImportCommand,
+  isTextFile,
+  planGameImport,
+  type TreeNode,
+} from '@tinyforge/editor-core';
+import type { ImportPlan } from '@tinyforge/engine/tooling/game-zip';
+import { assetKindOf, GAME_NAME, gameOf, isWritablePath } from '@tinyforge/engine/tooling/project-layout';
+import { useMemo, useRef, useState } from 'react';
 import { useEditor } from '../EditorContext.ts';
 import { useStore } from '../hooks.ts';
 import { useRevealFile } from './reveal-file.ts';
@@ -38,6 +47,10 @@ export function FilesPanel() {
   const [selected, setSelected] = useState<string | null>(null);
   const [edit, setEdit] = useState<Edit | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [plan, setPlan] = useState<ImportPlan | null>(null);
+  const zipInput = useRef<HTMLInputElement>(null);
+  const currentGame = useStore(editor.project).game;
+  const exportTarget = (selected && gameOf(selected)) || currentGame;
   const activeCode = useStore(editor.activeCode);
   // The active code tab's file: selected, its folders opened, scrolled into view.
   const treeRef = useRevealFile(activeCode, state.files, setSelected, setOpen);
@@ -59,6 +72,49 @@ export function FilesPanel() {
     action.then(
       () => setEdit(null),
       (e: unknown) => setError(e instanceof Error ? e.message : String(e)),
+    );
+  };
+
+  const exportGame = (game: string) => {
+    setError(null);
+    exportGameZip(editor.files, game, editor.assets.state.getState().assets).then(
+      (zip) => {
+        const url = URL.createObjectURL(new Blob([zip as Uint8Array<ArrayBuffer>], { type: 'application/zip' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${game}.zip`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      },
+      (e: unknown) => setError(e instanceof Error ? e.message : String(e)),
+    );
+  };
+
+  const readZip = (file: File) => {
+    setError(null);
+    setPlan(null);
+    file
+      .arrayBuffer()
+      .then((buf) => planGameImport(editor.files, new Uint8Array(buf)))
+      .then(
+        (p) => {
+          if (p.gameExists) setError(`The project already has a game named ${p.game}. Rename or delete it first.`);
+          else if (p.changed.length > 0) setPlan(p);
+          else finishImport(p, false);
+        },
+        (e: unknown) => setError(`${file.name}: ${e instanceof Error ? e.message : String(e)}`),
+      );
+  };
+
+  const finishImport = (p: ImportPlan, replace: boolean) => {
+    setPlan(null);
+    run(
+      gameImportCommand(editor.files, p, replace)
+        .then((command) => editor.commands.runFile(command))
+        .then(() => {
+          setOpen((s) => new Set([...s, 'games', `games/${p.game}`]));
+          editor.workbench.openFile(`games/${p.game}/main.ts`);
+        }),
     );
   };
 
@@ -249,7 +305,55 @@ export function FilesPanel() {
         >
           Delete
         </button>
+        <button
+          type="button"
+          data-testid="files-export"
+          disabled={!exportTarget}
+          title={
+            exportTarget ? `Save ${exportTarget} as a zip: its folder and the assets it uses` : 'Pick a game first'
+          }
+          onClick={() => exportTarget && exportGame(exportTarget)}
+        >
+          Export
+        </button>
+        <button
+          type="button"
+          data-testid="files-import"
+          disabled={!state.writable}
+          title="Add a game from a zip made by Export"
+          onClick={() => zipInput.current?.click()}
+        >
+          Import
+        </button>
+        <input
+          ref={zipInput}
+          type="file"
+          accept=".zip,application/zip"
+          hidden
+          data-testid="files-import-input"
+          onChange={(e) => {
+            const file = e.currentTarget.files?.[0];
+            e.currentTarget.value = '';
+            if (file) readZip(file);
+          }}
+        />
       </div>
+      {plan ? (
+        <div className="tf-files-confirm" data-testid="files-import-confirm">
+          {`${plan.changed.length} asset${plan.changed.length > 1 ? 's differ' : ' differs'} from the project's: ${plan.changed
+            .map((f) => f.path.split('/').pop())
+            .join(', ')}.`}
+          <button type="button" onClick={() => finishImport(plan, true)}>
+            Replace them
+          </button>
+          <button type="button" onClick={() => finishImport(plan, false)}>
+            Keep mine
+          </button>
+          <button type="button" onClick={() => setPlan(null)}>
+            Cancel
+          </button>
+        </div>
+      ) : null}
       {edit?.kind === 'delete' ? (
         <div className="tf-files-confirm" data-testid="files-confirm">
           Delete {edit.node.kind === 'folder' ? `the folder ${edit.node.path}` : edit.node.path}? Ctrl+Z undoes it.
