@@ -129,7 +129,9 @@ test('creates a sprite, draws, adds a frame and saves', async ({ page }) => {
 
   await panel.getByTestId('sprite-add-frame').click();
   await expect(panel.getByTestId('sprite-frame-1')).toBeVisible();
-  await panel.press('Control+s');
+  // Ctrl+S saves the active panel even with the keyboard focus outside it.
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await page.keyboard.press('Control+s');
   await expect.poll(() => ours(SPRITES)).toEqual([`${id}~2x1.png`]);
   const png = readPng(path.join(SPRITES, `${id}~2x1.png`));
   expect([png.width, png.height]).toEqual([16, 8]);
@@ -164,7 +166,7 @@ test('selects, trims and saves a sound', async ({ page }) => {
   await expect(panel.getByTestId('sound-status')).toContainText('selection');
   await panel.getByTestId('sound-trim').click();
   await expect(panel.getByTestId('sound-status')).toContainText(/0\.[45]\d\d s · 8000 Hz/);
-  await panel.getByTestId('sound-save').click();
+  await page.keyboard.press('Control+s');
   // Half the samples are left (the file may be mid-write: -1).
   await expect
     .poll(() => {

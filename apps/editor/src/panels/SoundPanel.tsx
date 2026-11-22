@@ -6,7 +6,7 @@ import { formatTime, SoundEditor, Waveform, WebSoundOutput } from '@tinyforge/ed
 import type { IDockviewPanelProps } from 'dockview-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useEditor } from '../EditorContext.ts';
-import { useStore } from '../hooks.ts';
+import { useSaveShortcut, useStore } from '../hooks.ts';
 
 export interface SoundPanelParams {
   path: string;
@@ -48,6 +48,12 @@ export function SoundPanel({ api, params }: IDockviewPanelProps<SoundPanelParams
     };
   }, [editor, initial]);
 
+  useSaveShortcut(api, () => {
+    if (!sound || !editor.files.state.getState().writable) return;
+    const { dirty, saving } = sound.state.getState();
+    if (dirty && !saving) void sound.save();
+  });
+
   return sound ? <SoundEditorView sound={sound} setTitle={setTitle} /> : null;
 }
 
@@ -71,10 +77,7 @@ function SoundEditorView({ sound, setTitle }: { sound: SoundEditor; setTitle: (t
     if ((e.target as HTMLElement).closest('input, select, textarea')) return;
     const ctrl = e.ctrlKey || e.metaKey;
     const key = e.key.toLowerCase();
-    if (ctrl && key === 's') {
-      e.preventDefault();
-      if (writable) void sound.save();
-    } else if (ctrl && (key === 'z' || key === 'y')) {
+    if (ctrl && (key === 'z' || key === 'y')) {
       e.preventDefault();
       const redo = key === 'y' || e.shiftKey;
       if (!(redo ? sound.redo() : sound.undo())) editor.runShortcut(redo ? 'redo' : 'undo');
