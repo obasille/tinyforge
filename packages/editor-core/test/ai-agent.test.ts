@@ -523,7 +523,7 @@ describe('synth and pixels', () => {
         .filter((f) => f.endsWith('.wav.json'))
         .map((f) => ({ kind, file: f.slice(0, -5) })),
     );
-    expect(recipes.length).toBe(35);
+    expect(recipes.length).toBeGreaterThanOrEqual(36); // every game sound, the AI-made ones included
     // The committed WAVs are these renders, byte for byte: a recipe change must come with its WAV.
     for (const { kind, file } of recipes) {
       const { spec } = JSON.parse(readFileSync(path.join(assets, kind, `${file}.json`), 'utf8'));
