@@ -15,6 +15,8 @@ import {
   getU8,
   SCREEN_HEIGHT,
   log,
+  playMusic,
+  stopMusic,
   playSfx,
   RAM_START,
   randomRange,
@@ -292,7 +294,10 @@ export function init(): void {
 export function update(): void {
   const state = vars.state;
 
+  if (state == GameState.GAME_OVER) stopMusic();
+
   if (state == GameState.START_SCREEN && buttonPressed(Button.START)) {
+    playMusic("invaders_theme", 0.5);
     vars.state = GameState.PLAYING as u8;
     return;
   }
