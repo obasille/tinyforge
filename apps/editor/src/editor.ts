@@ -117,7 +117,13 @@ export class Editor {
     this.catalog = new GameCatalog(files.games, (game) => this.readGameInfo(game));
     this.compiler = new CompilerHost(files, () => new CompileWorker({ name: 'tinyforge-compiler' }));
     this.commands = new CommandStack(this.project, (message) => this.logs.add('ERROR', message));
-    this.workbench = new Workbench(files, this.commands, this.compiler, () => this.project.getState().game);
+    this.workbench = new Workbench(
+      files,
+      this.commands,
+      this.compiler,
+      () => this.project.getState().game,
+      (game) => this.runGame(game),
+    );
     this.assets = new AssetLibrary(files);
     this.workbench.usedAssets.subscribe(() =>
       this.assets.setLiveUses(this.project.getState().game, this.workbench.usedAssets.getState()),
@@ -215,16 +221,20 @@ export class Editor {
   }
 
   /**
-   * The current game was deleted (or renamed): run another one, or none. Not
-   * an undo step: undoing the delete brings the files back, and the user picks
-   * the game again.
+   * The current game is gone. The editor's own Delete and Rename already
+   * switched games, inside their undo step (Workbench); this covers a change
+   * made by another program, which has no undo: run the renamed game, or
+   * another one, or none.
    */
   private gameRemoved(games: string[], changes: FileChange[]): void {
-    // A renamed game folder: follow it.
     const renamed = games.find((g) => changes.some((c) => c.kind === 'add' && c.path === gameEntryPath(g)));
-    const next = renamed ?? (games.includes('pong') ? 'pong' : (games[0] ?? null));
-    if (!next) this.host.kill({ reload: false });
-    this.project.setState((p) => ({ ...p, game: next }));
+    this.runGame(renamed ?? (games.includes('pong') ? 'pong' : (games[0] ?? null)));
+  }
+
+  /** Run a game (null: none) without an undo step; selectGame() is the undoable choice. */
+  private runGame(game: string | null): void {
+    if (!game) this.host.kill({ reload: false });
+    this.project.setState((p) => ({ ...p, game }));
   }
 
   setVolume(volume: number): void {
