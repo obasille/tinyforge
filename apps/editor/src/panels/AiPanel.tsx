@@ -251,7 +251,7 @@ function Conversation({ agent }: { agent: Agent }) {
         ) : null}
         {state.items.map((item, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: items are only appended or updated in place
-          <Item key={i} item={item} showCost={showCost} />
+          <Item key={i} item={item} showCost={showCost} agent={agent} />
         ))}
       </div>
       <div className="tf-ai-input">
@@ -284,7 +284,7 @@ function Conversation({ agent }: { agent: Agent }) {
   );
 }
 
-function Item({ item, showCost }: { item: ChatItem; showCost: boolean }) {
+function Item({ item, showCost, agent }: { item: ChatItem; showCost: boolean; agent: Agent }) {
   switch (item.kind) {
     case 'user':
       return <div className="tf-ai-user">{item.text}</div>;
@@ -296,6 +296,24 @@ function Item({ item, showCost }: { item: ChatItem; showCost: boolean }) {
       return (
         <div className="tf-ai-error" role="alert">
           {item.text}
+        </div>
+      );
+    case 'confirm':
+      return (
+        <div className="tf-ai-confirm" data-testid="ai-confirm">
+          {item.text}
+          {item.answer === null ? (
+            <span className="tf-ai-confirm-actions">
+              <button type="button" data-testid="ai-confirm-yes" onClick={() => agent.answer(true)}>
+                Replace
+              </button>
+              <button type="button" data-testid="ai-confirm-no" onClick={() => agent.answer(false)}>
+                Keep
+              </button>
+            </span>
+          ) : (
+            <span className="tf-ai-confirm-answer">{item.answer ? ' Replaced.' : ' Kept.'}</span>
+          )}
         </div>
       );
     case 'changes':

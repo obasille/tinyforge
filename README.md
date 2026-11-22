@@ -1057,8 +1057,9 @@ Then open the URL Vite prints (http://localhost:5173/).
   text grid of palette characters, and sound effects or music played on a
   small retro synthesizer (square, triangle, saw, sine and noise notes with
   an envelope and pitch slides). Their sidecar keeps the request and the
-  description (`spec`), and marks them `"generator": "tinyforge-ai"`: the
-  agent replaces only assets with that mark, never imported ones.
+  description (`spec`), and marks them `"generator": "tinyforge-ai"`. Before
+  it replaces an asset that already exists (imported or made earlier), the
+  agent pauses and the panel asks: Replace or Keep (Stop counts as Keep).
   Instead of Claude (or as well), the agent can use any OpenAI-compatible
   server, such as a local Ollama: set `TF_AI_OPENAI_URL`,
   `TF_AI_OPENAI_MODELS` and, if it needs one, `TF_AI_OPENAI_KEY` in `.env`
