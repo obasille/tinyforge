@@ -828,6 +828,20 @@ pnpm build:debug
 pnpm build:host
 ```
 
+**Export and import a game as a zip:**
+
+```
+pnpm tf export gameName [--out dir]   # dir/gameName.zip
+pnpm tf import gameName.zip [--replace]
+```
+
+The zip holds the game's folder and the library assets it uses, with their
+sidecars, at their project paths (`games/gameName/...`, `assets/sfx/...`) and
+nothing else. Export compiles the game to find its assets, so it must compile;
+the editor's Export works on any game. Import refuses a game that already
+exists, skips assets that are already the same, and keeps the project's copy
+of an asset that differs unless `--replace` is given.
+
 ### Watch (build on save)
 
 **Everything at once (host + games):**
@@ -1069,6 +1083,13 @@ Then open the URL Vite prints (http://localhost:5173/).
   any other is refused, with the reason shown in the AI panel. Its models appear in the panel's model list; it has
   no effort setting and no cost estimate. Small local models follow the
   rules less well than Claude, and need a context of 32k tokens or more.
+- **Export and import:** the Files panel's Export saves the selected game (or
+  the current one) as a zip of its folder and the assets it uses, with their
+  sidecars: the same zip as `pnpm tf export`. Import adds a game from such a
+  zip, as one undo step; when some of its assets differ from the project's,
+  it asks whether to replace them or keep yours. A game that already exists
+  is refused, and so is a zip with anything else in it (other folders, paths
+  outside the project).
 - **Debugging:** debug builds carry their source map, so Chrome DevTools can
   set breakpoints in the AssemblyScript source.
 - **Panels:** Game, Run (pause, single step, restart, save/load state, seed),

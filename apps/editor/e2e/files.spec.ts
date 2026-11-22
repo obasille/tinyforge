@@ -257,3 +257,31 @@ test('files can be created, renamed and deleted from the tree, with undo', async
   await expect.poll(() => page.evaluate((g) => window.__tf?.files.games.includes(g), game)).toBe(false);
   expect(errors).toEqual([]);
 });
+
+test('a game exports as a zip and imports back as one undo step', async ({ page }) => {
+  const errors = trackErrors(page);
+  await page.goto('/');
+  await createGame(page);
+  await page.getByTestId(`file-${mainPath()}`).click();
+  const download = page.waitForEvent('download');
+  await page.getByTestId('files-export').click();
+  const zip = await download;
+  expect(zip.suggestedFilename()).toBe(`${game}.zip`);
+  const zipFile = path.join(test.info().outputDir, `${game}.zip`);
+  await zip.saveAs(zipFile);
+
+  // Remove the game, then bring it back from the zip.
+  rmSync(path.join(GAMES, game), { recursive: true, force: true });
+  await expect.poll(() => page.evaluate((g) => window.__tf?.editor.games.includes(g), game)).toBe(false);
+  await page.getByTestId('files-import-input').setInputFiles(zipFile);
+  await expect.poll(() => existsSync(path.join(GAMES, game, 'main.ts'))).toBe(true);
+  await expect(page.getByRole('button', { name: `Undo Import game '${game}'` })).toBeVisible();
+
+  // Importing it again is refused: the game exists.
+  await page.getByTestId('files-import-input').setInputFiles(zipFile);
+  await expect(page.getByTestId('files').getByRole('alert')).toContainText(`already has a game named ${game}`);
+
+  await page.getByRole('button', { name: `Undo Import game '${game}'` }).click();
+  await expect.poll(() => existsSync(path.join(GAMES, game, 'main.ts'))).toBe(false);
+  expect(errors).toEqual([]);
+});
