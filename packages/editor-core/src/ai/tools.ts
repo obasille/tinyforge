@@ -103,7 +103,7 @@ export const AGENT_TOOLS: ToolSpec[] = [
   {
     name: 'make_sprite',
     description:
-      'Add a sprite to the library by drawing it as a text grid: one palette character per pixel, "." transparent. Several frames make a horizontal sheet. At most 64x64 pixels and 16 frames. Use an ID that is new, or one you made before (that replaces it).',
+      'Add a sprite to the library by drawing it as a text grid: one palette character per pixel, "." transparent. Several frames make a horizontal sheet. At most 64x64 pixels and 16 frames. An ID already in the library replaces that asset once the user agrees (they are asked).',
     schema: {
       properties: {
         id: { type: 'string', description: 'Letters, digits and _; at most 16' },
@@ -125,7 +125,7 @@ export const AGENT_TOOLS: ToolSpec[] = [
   {
     name: 'make_sound',
     description:
-      'Add a sound effect (kind "sfx") or music (kind "music") to the library, made by a small retro synthesizer from a list of notes. Notes may overlap (chords, a bass line). Times are seconds, or beats when bpm is set. At most 120 s. Use an ID that is new, or one you made before (that replaces it).',
+      'Add a sound effect (kind "sfx") or music (kind "music") to the library, made by a small retro synthesizer from a list of notes. Notes may overlap (chords, a bass line). Times are seconds, or beats when bpm is set. At most 120 s. An ID already in the library replaces that asset once the user agrees (they are asked).',
     schema: {
       properties: {
         id: { type: 'string', description: 'Letters, digits and _; at most 16' },
