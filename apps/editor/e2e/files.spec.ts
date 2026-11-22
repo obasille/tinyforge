@@ -285,3 +285,37 @@ test('a game exports as a zip and imports back as one undo step', async ({ page 
   await expect.poll(() => existsSync(path.join(GAMES, game, 'main.ts'))).toBe(false);
   expect(errors).toEqual([]);
 });
+
+test('a game exports as a cartridge whose assets the library imports', async ({ page }) => {
+  const errors = trackErrors(page);
+  await page.goto('/');
+  await expect(page.getByTestId('run-status')).toHaveText('running');
+  await page.getByTestId('file-games/pong').click();
+  await page.getByTestId('file-games/pong/main.ts').click();
+  const download = page.waitForEvent('download');
+  await page.getByTestId('files-export-cartridge').click();
+  const cartridge = await download;
+  expect(cartridge.suggestedFilename()).toBe('pong.wasm');
+  const wasmFile = path.join(test.info().outputDir, 'pong.wasm');
+  await cartridge.saveAs(wasmFile);
+  // Still a cartridge the engine accepts, with its sounds inside.
+  const module = await WebAssembly.compile(readFileSync(wasmFile));
+  expect(WebAssembly.Module.customSections(module, 'tinyforge.assets')).toHaveLength(1);
+
+  await page.locator('.dv-tab', { hasText: 'Library' }).click();
+  await page.getByTestId('library-file-input').setInputFiles(wasmFile);
+  await expect(page.getByTestId('draft-pong_hit_p1.wav')).toBeVisible();
+  await expect(page.getByTestId('draft-pong_theme.wav')).toBeVisible();
+
+  // A game that uses no assets has none to import.
+  await createGame(page);
+  await page.getByTestId(`file-${mainPath()}`).click();
+  const plain = page.waitForEvent('download');
+  await page.getByTestId('files-export-cartridge').click();
+  const plainFile = path.join(test.info().outputDir, `${game}.wasm`);
+  await (await plain).saveAs(plainFile);
+  await page.locator('.dv-tab', { hasText: 'Library' }).click();
+  await page.getByTestId('library-file-input').setInputFiles(plainFile);
+  await expect(page.getByTestId('library')).toContainText('has no embedded assets');
+  expect(errors).toEqual([]);
+});

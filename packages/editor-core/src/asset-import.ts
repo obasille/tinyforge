@@ -6,6 +6,7 @@
 // Plain TS: the library panel renders the drafts and the sheet preview.
 
 import { ASSET_PATTERNS, type AssetKind } from '@tinyforge/engine/tooling/asset-scan';
+import { cartridgeAssets } from '@tinyforge/engine/tooling/cartridge-assets';
 import { idProblem, type LibraryAsset, MAX_ID_LENGTH, type Sidecar, sidecarPath } from './asset-library.ts';
 import { commandLabel, type FileCommand } from './commands.ts';
 import { type FileOp, fileBatch } from './file-commands.ts';
@@ -72,6 +73,18 @@ export function draftImport(name: string, bytes: Uint8Array): ImportDraft {
     license: '',
     source: '',
   };
+}
+
+/**
+ * Drafts for a dropped file: one, or one per asset embedded in a cartridge
+ * (.wasm exported with its assets). Throws for a cartridge without assets.
+ */
+export function draftsForFile(name: string, bytes: Uint8Array): ImportDraft[] {
+  if (!/\.wasm$/i.test(name)) return [draftImport(name, bytes)];
+  const assets = cartridgeAssets(bytes);
+  if (!assets?.length)
+    throw new Error(`${name} has no embedded assets (export the game as a cartridge to include them)`);
+  return assets.map((a) => ({ ...draftImport(a.file, a.bytes), kind: a.kind, source: name }));
 }
 
 /**

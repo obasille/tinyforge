@@ -842,6 +842,19 @@ the editor's Export works on any game. Import refuses a game that already
 exists, skips assets that are already the same, and keeps the project's copy
 of an asset that differs unless `--replace` is given.
 
+**Export a playable cartridge:**
+
+```
+pnpm tf cartridge gameName [--out dir]   # dir/gameName.wasm
+```
+
+A release build with the library files the game uses embedded in a
+`tinyforge.assets` custom section, added at the end so the code and the
+metadata are unchanged. Sidecars are left out. Sounds are WAV, so a game with
+music can weigh a megabyte or more (Pong is about 1.4 MB, most of it its
+theme). No host plays these cartridges yet: the editor's Library imports
+their assets, and a player that reads them comes with the static site.
+
 ### Watch (build on save)
 
 **Everything at once (host + games):**
@@ -1089,7 +1102,9 @@ Then open the URL Vite prints (http://localhost:5173/).
   zip, as one undo step; when some of its assets differ from the project's,
   it asks whether to replace them or keep yours. A game that already exists
   is refused, and so is a zip with anything else in it (other folders, paths
-  outside the project).
+  outside the project). Cartridge saves the game as a playable `.wasm` with
+  the assets it uses inside (as `pnpm tf cartridge`); dropping such a
+  cartridge into the Library's Import lists its assets as drafts.
 - **Debugging:** debug builds carry their source map, so Chrome DevTools can
   set breakpoints in the AssemblyScript source.
 - **Panels:** Game, Run (pause, single step, restart, save/load state, seed),
