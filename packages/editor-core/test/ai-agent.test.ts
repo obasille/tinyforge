@@ -4,7 +4,7 @@ import { lineDiff } from '../src/ai/diff.ts';
 import { renderPixels } from '../src/ai/pixels.ts';
 import { readSdkApi, sdkApi } from '../src/ai/prompt.ts';
 import type { AiProvider, Chat, ChatInput, ChatTurn, ToolCall } from '../src/ai/provider.ts';
-import { pitchHz, renderSynth } from '../src/ai/synth.ts';
+import { pitchHz, renderSynth, type SynthNote } from '../src/ai/synth.ts';
 import type { LibraryAsset } from '../src/asset-library.ts';
 import { CommandStack } from '../src/commands.ts';
 import { decodePng } from '../src/png.ts';
@@ -247,7 +247,7 @@ describe('asset generators', () => {
     expect([...(image?.rgba.subarray(4, 8) ?? [])]).toEqual([255, 208, 0, 255]);
     expect([...(image?.rgba.subarray(0, 4) ?? [])]).toEqual([0, 0, 0, 0]);
     const sound = decodeWav(ws.data.get('assets/sfx/beep.wav') as Uint8Array);
-    expect(sound?.sampleRate).toBe(22050);
+    expect(sound?.sampleRate).toBe(44100);
     const sidecar = JSON.parse(ws.text('assets/sfx/beep.wav.json') ?? '{}');
     expect(sidecar).toMatchObject({ generator: 'tinyforge-ai', prompt: 'Add a coin', spec: { notes: beep.notes } });
     const changes = agent.state.getState().items.find((i) => i.kind === 'changes');
@@ -386,18 +386,41 @@ describe('synth and pixels', () => {
       bpm: 120,
       notes: [
         { at: 0, len: 1, note: 'C4', wave: 'triangle' as const },
-        { at: 0, len: 1, note: 'E4', wave: 'noise' as const, vol: 1 },
+        { at: 0, len: 1, note: 2000, wave: 'noise' as const, vol: 1 },
       ],
     };
     const a = renderSynth(spec);
-    // One beat at 120 bpm plus the default release.
-    expect(a.channels[0].length).toBe(Math.ceil(0.55 * 22050));
+    // One beat at 120 bpm plus the default release, at the effects rate.
+    expect(a.sampleRate).toBe(44100);
+    expect(a.channels[0].length).toBe(Math.ceil(0.55 * 44100));
     expect(renderSynth(spec).channels[0]).toEqual(a.channels[0]);
-    expect(Math.max(...a.channels[0].map(Math.abs))).toBeCloseTo(0.8, 2);
+    // Normalized to the games' effect loudness, and faded out at the end.
+    expect(Math.max(...a.channels[0].map(Math.abs))).toBeCloseTo(0.35, 3);
+    expect(a.channels[0].at(-1)).toBeCloseTo(0, 3);
     expect(() => renderSynth({ notes: [{ at: 0, len: 1, note: 'H4' }] })).toThrow('Not a note');
     expect(() => renderSynth({ notes: [{ at: 0, len: 1, note: 'C4', wave: 'pulse' as never }] })).toThrow('wave');
     expect(() => renderSynth({ notes: [{ at: 119, len: 2, note: 'C4' }] })).toThrow('at most 120 s');
     expect(() => renderSynth({ notes: [] })).toThrow('at least one note');
+  });
+
+  it('matches chiptune.py: LFSR noise, a 16-step triangle, and track lines', () => {
+    const one = (note: SynthNote) =>
+      renderSynth({ notes: [{ attack: 0, sustain: 1, release: 0, vol: 1, ...note }], loop: true }).channels[0];
+    // chiptune.py's Noise() clocked at 4000 Hz: the same bits.
+    const noise = one({ at: 0, len: 0.01, note: 4000, wave: 'noise' });
+    const bits = [...noise.slice(0, 200)].map((v) => (v > 0 ? '1' : '0')).join('');
+    expect(bits).toBe(`${'1'.repeat(11)}${'0'.repeat(154)}${'1'.repeat(11)}${'0'.repeat(24)}`);
+    const levels = new Set([...one({ at: 0, len: 0.01, note: 'A4', wave: 'triangle' })].map((v) => v.toFixed(4)));
+    expect(levels.size).toBeLessThanOrEqual(16);
+    // "C4 . E4 - G4": C4 held two steps, a rest, G4; like parse_line.
+    const lead = renderSynth(
+      { tracks: [{ line: 'C4 . E4 - G4', step: 0.1, hold: 1, release: 0, attack: 0, sustain: 1 }], loop: true },
+      { sampleRate: 1000, volume: 1 },
+    ).channels[0];
+    expect(lead.length).toBe(500);
+    expect([...lead.slice(300, 400)].every((v) => v === 0)).toBe(true);
+    expect([...lead.slice(0, 200)].some((v) => v !== 0)).toBe(true);
+    expect(() => renderSynth({ tracks: [{ line: 'C4 X4', step: 0.1 }] })).toThrow('Not a note: "X4"');
   });
 
   it('draws a grid and refuses a bad one', () => {
