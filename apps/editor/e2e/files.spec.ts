@@ -225,6 +225,14 @@ test('files can be created, renamed and deleted from the tree, with undo', async
 
   await page.getByTestId(`file-games/${game}`).click(); // select the folder (it stays open)
   await expect(page.getByTestId(`file-games/${game}/main.ts`)).toHaveCount(0);
+  // Export follows the selection: this game's folder, not the code root.
+  await expect(page.getByTestId('files-export')).toHaveAttribute('title', new RegExp(`^Save ${game} as a zip`));
+  await page.getByTestId('file-games').click();
+  await expect(page.getByTestId('files-export')).toBeDisabled();
+  await expect(page.getByTestId('files-export-cartridge')).toBeDisabled();
+  await page.getByTestId('file-games').click();
+  await page.getByTestId('file-games/pong').click();
+  await expect(page.getByTestId('files-export')).toHaveAttribute('title', /^Save pong as a zip/);
   await page.getByTestId(`file-games/${game}`).click();
   await page.getByRole('button', { name: 'New file' }).click();
   await page.getByTestId('files-name').fill('level.ts');
@@ -249,12 +257,26 @@ test('files can be created, renamed and deleted from the tree, with undo', async
   await page.keyboard.press('Control+KeyZ');
   await expect.poll(() => existsSync(path.join(dir, 'levels.ts'))).toBe(true);
 
-  // Deleting the game folder removes the game from the picker.
+  // Deleting the game folder, while it runs, removes the game from the picker.
+  await page.evaluate((g) => window.__tf?.editor.selectGame(g), game);
+  await expect.poll(() => page.evaluate(() => window.__tf?.session.getState().game)).toBe(game);
   await page.getByTestId(`file-games/${game}`).click();
   await page.getByRole('button', { name: 'Delete', exact: true }).first().click();
   await page.getByTestId('files-confirm').getByRole('button', { name: 'Delete' }).click();
   await expect.poll(() => existsSync(dir)).toBe(false);
   await expect.poll(() => page.evaluate((g) => window.__tf?.files.games.includes(g), game)).toBe(false);
+  // It was running: another game runs instead, and Ctrl+Z brings back both the game and the choice.
+  await expect.poll(() => page.evaluate(() => window.__tf?.project.getState().game)).toBe('pong');
+  await expect(page.getByTestId('run-status')).toHaveText('running');
+  await page.getByTestId('viewport').focus();
+  await page.keyboard.press('Control+KeyZ');
+  await expect.poll(() => existsSync(path.join(dir, 'main.ts'))).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.__tf?.project.getState().game)).toBe(game);
+  await expect.poll(() => page.evaluate(() => window.__tf?.session.getState().game)).toBe(game);
+  // Redo deletes it again and runs pong again.
+  await page.keyboard.press('Control+Shift+KeyZ');
+  await expect.poll(() => existsSync(dir)).toBe(false);
+  await expect.poll(() => page.evaluate(() => window.__tf?.project.getState().game)).toBe('pong');
   expect(errors).toEqual([]);
 });
 

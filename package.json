@@ -14,6 +14,7 @@
     "build:games": "node scripts/build-games.js",
     "build:debug": "node scripts/build-games.js debug",
     "build:editor": "pnpm --filter @tinyforge/editor build",
+    "editor:static": "pnpm run build:editor && pnpm --filter @tinyforge/editor preview",
     "tf": "node scripts/tf.js",
     "check:alloc": "node scripts/check-alloc.js",
     "test": "pnpm -r --if-present test",

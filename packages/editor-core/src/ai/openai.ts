@@ -63,21 +63,25 @@ class OpenAiChat implements Chat {
     }));
   }
 
-  async send(input: ChatInput, { signal, onText }: SendOptions = {}): Promise<ChatTurn> {
+  async send(input: ChatInput, { signal, onText, onThinking }: SendOptions = {}): Promise<ChatTurn> {
     const start = this.messages.length;
     for (const r of input.results ?? []) {
       this.messages.push({ role: 'tool', tool_call_id: r.id, content: r.isError ? `Error: ${r.content}` : r.content });
     }
     if (input.text) this.messages.push({ role: 'user', content: input.text });
     try {
-      return await this.request(signal, onText);
+      return await this.request(signal, onText, onThinking);
     } catch (e) {
       this.messages.length = start;
       throw e;
     }
   }
 
-  private async request(signal: AbortSignal | undefined, onText: ((d: string) => void) | undefined) {
+  private async request(
+    signal: AbortSignal | undefined,
+    onText: ((d: string) => void) | undefined,
+    onThinking: ((d: string) => void) | undefined,
+  ) {
     const res = await this.fetchFn(this.url, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'X-TinyForge': '1' },
@@ -109,6 +113,9 @@ class OpenAiChat implements Chat {
         const event = JSON.parse(data);
         if (event.error) throw new Error(event.error.message ?? JSON.stringify(event.error));
         const choice = event.choices?.[0];
+        // Reasoning models on Ollama and others send their thinking apart (the field's name varies).
+        const reasoning = choice?.delta?.reasoning_content ?? choice?.delta?.reasoning;
+        if (typeof reasoning === 'string' && reasoning) onThinking?.(reasoning);
         if (choice?.delta?.content) {
           text += choice.delta.content;
           onText?.(choice.delta.content);

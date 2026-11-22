@@ -52,7 +52,10 @@ export function FilesPanel() {
   const [plan, setPlan] = useState<ImportPlan | null>(null);
   const zipInput = useRef<HTMLInputElement>(null);
   const currentGame = useStore(editor.project).game;
-  const exportTarget = (selected && gameOf(selected)) || currentGame;
+  // Export follows the selection, like Delete: a game's folder or any file in it. Nothing
+  // selected yet: the current game.
+  const selectedGame = selected === null ? currentGame : gameOf(`${selected}/-`);
+  const exportTarget = selectedGame && editor.files.games.includes(selectedGame) ? selectedGame : null;
   const activeCode = useStore(editor.activeCode);
   // The active code tab's file: selected, its folders opened, scrolled into view.
   const treeRef = useRevealFile(activeCode, state.files, setSelected, setOpen);
@@ -99,7 +102,7 @@ export function FilesPanel() {
     );
   const exportGameCartridge = (game: string) =>
     download(
-      exportCartridge(editor.files, () => editor.compiler.build(game, 'release')),
+      exportCartridge(editor.files, game, () => editor.compiler.build(game, 'release')),
       `${game}.wasm`,
       'application/wasm',
     );
@@ -324,7 +327,9 @@ export function FilesPanel() {
           data-testid="files-export"
           disabled={!exportTarget}
           title={
-            exportTarget ? `Save ${exportTarget} as a zip: its folder and the assets it uses` : 'Pick a game first'
+            exportTarget
+              ? `Save ${exportTarget} as a zip: its folder and the assets it uses`
+              : 'Select a game or one of its files'
           }
           onClick={() => exportTarget && exportGame(exportTarget)}
         >
@@ -337,7 +342,7 @@ export function FilesPanel() {
           title={
             exportTarget
               ? `Save ${exportTarget} as a playable cartridge (.wasm) with the assets it uses inside`
-              : 'Pick a game first'
+              : 'Select a game or one of its files'
           }
           onClick={() => exportTarget && exportGameCartridge(exportTarget)}
         >

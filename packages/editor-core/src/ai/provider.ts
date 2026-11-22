@@ -55,6 +55,8 @@ export interface SendOptions {
   signal?: AbortSignal;
   /** Text as it arrives. */
   onText?: (delta: string) => void;
+  /** The model's thinking (a summary, for Claude) as it arrives, when the service sends it. */
+  onThinking?: (delta: string) => void;
 }
 
 export interface Chat {
@@ -111,7 +113,10 @@ export const AI_BASE = '/__tf/ai';
 export async function fetchAiStatus(fetchFn: typeof fetch = fetch): Promise<AiStatus | null> {
   try {
     const res = await fetchFn(`${AI_BASE}/status`, { headers: { 'X-TinyForge': '1' } });
-    return res.ok ? ((await res.json()) as AiStatus) : null;
+    if (res.ok) return (await res.json()) as AiStatus;
+    // Refused by the dev server (opened from another address, say): show its reason.
+    if (res.status === 403) return { providers: [], reason: (await res.text()).slice(0, 200) };
+    return null;
   } catch {
     return null;
   }

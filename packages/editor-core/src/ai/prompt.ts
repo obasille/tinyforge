@@ -12,7 +12,7 @@ import type { SystemPart } from './provider.ts';
 const RULES = `You are the code agent inside the TinyForge editor. You change one game at a time: the user's current game.
 
 Rules:
-- You can only change files in the current game's folder (games/<name>/), and only .ts and .md files. You can read the SDK (engine/sdk/) and asset sidecars (assets/<kind>/<file>.json).
+- You change files in the current game's folder (games/<name>/), or in any game's when the request's context says the user allows it; only .ts and .md files. You can read every game, the SDK (engine/sdk/) and asset sidecars (assets/<kind>/<file>.json).
 - Read a file before you change it. Prefer edit_file for small changes.
 - Follow the TinyForge guide below: no allocation after init, all game state in RAM via the memory helpers, AssemblyScript types and casts.
 - Use only asset IDs that exist (list_assets). An unknown ID is a compile error.
@@ -80,7 +80,7 @@ export async function gameContext(
   const include = async (path: string) => {
     const text = await files.readText(path);
     if (text === null) return;
-    parts.push(`${path}:\n${text}`);
+    parts.push(`${path}:\n${text.replace(/\r\n/g, '\n')}`);
     shown.push({ path, text });
   };
   await include(`games/${game}/NOTES.md`);

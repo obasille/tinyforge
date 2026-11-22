@@ -78,7 +78,11 @@ describe('AI proxy', () => {
 
   it('refuses other hosts, other origins, and requests without the header', async () => {
     const port = await start({});
-    expect((await call(port, '/__tf/ai/status', { headers: { host: 'evil.example:80' } })).status).toBe(403);
+    const other = await call(port, '/__tf/ai/status', { headers: { host: '192.168.1.5:5173' } });
+    expect([other.status, other.text]).toEqual([403, 'AI works only on this computer: open http://localhost:5173']);
+    expect((await call(port, '/__tf/ai/status', { headers: { host: 'evil.example:<b>' } })).text).toBe(
+      'AI works only on this computer: open http://localhost',
+    );
     expect((await call(port, '/__tf/ai/status', { headers: { origin: 'http://localhost:3000' } })).status).toBe(403);
     expect((await call(port, '/__tf/ai/status', { headers: { 'x-tinyforge': '' } })).status).toBe(403);
     expect((await call(port, '/__tf/ai/status', { headers: { origin: `http://localhost:${port}` } })).status).toBe(200);

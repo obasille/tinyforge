@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { AssetLibrary } from '../src/asset-library.ts';
 import { CommandStack } from '../src/commands.ts';
 import { decodePng, encodePng } from '../src/png.ts';
@@ -148,16 +148,13 @@ describe('SpriteEditor', () => {
     expect(() => sprite.resize(0, 2)).toThrow(/1 to 1024/);
     // Edited: a change on disk is a conflict.
     ws.external('assets/sprites/box.png', await sheetPng(5, 5, 1));
-    await settle();
-    await settle();
-    expect(sprite.state.getState().conflict).toBe('changed');
+    // Reading the changed PNG is asynchronous (decompression): wait for it rather than for a fixed number of ticks.
+    await vi.waitFor(() => expect(sprite.state.getState().conflict).toBe('changed'));
     await sprite.reloadFromDisk();
     expect(sprite.state.getState()).toMatchObject({ frameWidth: 5, dirty: false, conflict: null });
     // Clean: it reloads.
     ws.external('assets/sprites/box.png', await sheetPng(6, 6, 1));
-    await settle();
-    await settle();
-    expect(sprite.state.getState().frameWidth).toBe(6);
+    await vi.waitFor(() => expect(sprite.state.getState().frameWidth).toBe(6));
     sprite.dispose();
   });
 

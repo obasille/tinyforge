@@ -5,6 +5,7 @@
 import { ASSET_KINDS, type AssetList } from '@tinyforge/engine/tooling/asset-scan';
 import { cartridgeAssetPaths, embedAssets } from '@tinyforge/engine/tooling/cartridge-assets';
 import type { CompileResult } from '@tinyforge/engine/tooling/compiler';
+import { coverIdOf } from '@tinyforge/engine/tooling/game-meta';
 import { type ImportPlan, planImport, readGameZip, zipGame } from '@tinyforge/engine/tooling/game-zip';
 import { assetKindOf } from '@tinyforge/engine/tooling/project-layout';
 import type { LibraryAsset } from './asset-library.ts';
@@ -37,14 +38,17 @@ export function exportGameZip(files: ProjectFiles, game: string, assets: readonl
  */
 export async function exportCartridge(
   files: ProjectFiles,
+  game: string,
   build: () => Promise<CompileResult>,
 ): Promise<Uint8Array<ArrayBuffer>> {
   const result = await build();
   if (!result.ok) throw new Error('The game does not compile: fix it before exporting a cartridge');
+  const cover = coverIdOf((await files.readText(`games/${game}/main.ts`)) ?? '');
   const embedded = [];
   for (const path of cartridgeAssetPaths(
     files.files.map((f) => f.path),
     result.meta.assets,
+    cover,
   )) {
     const bytes = await files.readBytes(path);
     const kind = assetKindOf(path);

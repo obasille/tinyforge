@@ -81,6 +81,10 @@ pnpm test:e2e      # Playwright smoke tests (starts its own Vite server)
 pnpm build:classic # classic host still builds
 ```
 
+Command line: `pnpm tf help` (export or import a game as a zip, export a
+cartridge with its assets); `pnpm editor:static` builds and serves the
+read-only static editor.
+
 To check the UI by hand: `pnpm dev`, open the page, and use `window.__tf`
 (editor, project, session, snapshot) instead of clicking where you can. Take a
 screenshot of the result.

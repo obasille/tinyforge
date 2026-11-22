@@ -10,7 +10,15 @@ import type {
   BetaToolUnion,
 } from '@anthropic-ai/sdk/resources/beta/messages/messages';
 import { CLAUDE_MODELS } from './models.ts';
-import { AI_BASE, type AiProvider, type Chat, type ChatInput, type ChatOptions, type ChatTurn } from './provider.ts';
+import {
+  AI_BASE,
+  type AiProvider,
+  type Chat,
+  type ChatInput,
+  type ChatOptions,
+  type ChatTurn,
+  type SendOptions,
+} from './provider.ts';
 
 /** US dollars per million tokens: input, output, cache read. Cache writes cost 1.25× input. */
 const PRICES: Record<string, [number, number, number]> = {
@@ -60,7 +68,7 @@ class ClaudeChat implements Chat {
     }));
   }
 
-  async send(input: ChatInput, { signal, onText }: { signal?: AbortSignal; onText?: (d: string) => void } = {}) {
+  async send(input: ChatInput, { signal, onText, onThinking }: SendOptions = {}) {
     const content: Array<BetaToolResultBlockParam | { type: 'text'; text: string }> = (input.results ?? []).map(
       (r) => ({ type: 'tool_result', tool_use_id: r.id, content: r.content, is_error: r.isError === true }),
     );
@@ -74,7 +82,8 @@ class ClaudeChat implements Chat {
         {
           model,
           max_tokens: 32000,
-          thinking: { type: 'adaptive' },
+          // Summarized: the panel shows it, collapsed. It adds no request and no step.
+          thinking: { type: 'adaptive', display: 'summarized' },
           output_config: { effort },
           // If the model declines, the API retries on a suitable other model in the same call.
           betas: ['server-side-fallback-2026-07-01'],
@@ -92,6 +101,7 @@ class ClaudeChat implements Chat {
         { signal },
       );
       if (onText) stream.on('text', onText);
+      if (onThinking) stream.on('thinking', (delta) => onThinking(delta));
       message = await stream.finalMessage();
     } catch (e) {
       this.messages.pop();
