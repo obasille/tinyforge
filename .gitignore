@@ -10,3 +10,6 @@ playwright-report/
 # Junction/symlink to ../../assets made by scripts/link-classic-assets.cmd
 /apps/classic/assets
 __pycache__/
+
+# Personal Claude Code settings (the shared ones are in .claude/settings.json)
+.claude/settings.local.json

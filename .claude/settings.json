@@ -1,0 +1,5 @@
+{
+  "permissions": {
+    "allow": ["Bash(pnpm upload:editor)", "Bash(pnpm upload:editor -- --with-maps)"]
+  }
+}
