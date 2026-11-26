@@ -18,6 +18,9 @@ export default defineConfig(({ command }) => ({
     // Type errors in the browser overlay while developing (not during tests).
     command === 'serve' && !process.env.TF_NO_CHECKER ? checker({ typescript: true }) : null,
   ],
+  // Relative URLs in the build, so it works from any folder (the site serves
+  // it under /tf/). Files are already fetched relative to document.baseURI.
+  base: command === 'build' ? './' : '/',
   // The shared assets are served by the tinyforge plugin, not from public/.
   publicDir: false,
   server: {
