@@ -177,7 +177,8 @@ test('a game stuck in an infinite loop can be stopped without freezing the edito
   }, HANGING_CARTRIDGE);
   await expect(page.getByTestId('run-status')).toHaveText('hung', { timeout: 10_000 });
   // The editor itself is still responsive: its controls react.
-  await page.getByRole('button', { name: 'Reset layout' }).click();
+  await page.getByTestId('app-menu').click();
+  await page.getByTestId('reset-layout').click();
   await page.getByRole('button', { name: 'Stop and reload game' }).click();
   await expect(page.getByTestId('run-status')).toHaveText('running');
   await expect.poll(async () => (await session(page))?.game).toBe('pong');
@@ -375,4 +376,22 @@ test('each game loads only its own sprites and sounds, and a changed sprite relo
   expect((await session(page))?.stats?.ticks ?? 0).toBeGreaterThanOrEqual(ticks);
   await expect(page.getByTestId('run-status')).toHaveText('running');
   expect(errors).toEqual([]);
+});
+
+test.describe('on a touch screen', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 844, height: 390 } });
+
+  test('the default layout has three columns and no pixel readout', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByTestId('run-status')).toHaveText('running');
+    expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
+    // Files and Library share the left group, Console, Run and Memory the right one.
+    const groups = await page.evaluate(() =>
+      [...document.querySelectorAll('.dv-groupview')].map((g) =>
+        [...g.querySelectorAll('.dv-tab')].map((t) => t.textContent?.trim()),
+      ),
+    );
+    expect(groups).toEqual([['Files', 'Library'], ['Game'], ['Console', 'Run', 'Memory']]);
+    await expect(page.getByTestId('pixel-color')).toBeHidden();
+  });
 });

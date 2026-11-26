@@ -123,6 +123,7 @@ test('the code agent edits the game, compiles, and one undo reverts the request'
   await createGame(page);
   const original = readFileSync(mainFile(), 'utf8');
 
+  await page.getByTestId('app-menu').click();
   await page.getByTestId('show-ai').click();
   const panel = page.getByTestId('ai-panel');
   await expect(panel.getByTestId('ai-model')).toHaveValue('anthropic:claude-opus-5-5');
@@ -160,6 +161,7 @@ test('without a key the panel says how to set it up', async ({ page }) => {
     route.fulfill({ json: { providers: [], reason: 'Add ANTHROPIC_API_KEY to .env and restart the dev server.' } }),
   );
   await page.goto('/');
+  await page.getByTestId('app-menu').click();
   await page.getByTestId('show-ai').click();
   await expect(page.getByTestId('ai-notice')).toContainText('ANTHROPIC_API_KEY');
   // The real route answers the editor, and refuses requests without the editor's header.
@@ -208,6 +210,7 @@ test('the agent makes a sprite and a sound the game can use, and undo removes th
   ]);
   await page.goto('/');
   await createGame(page);
+  await page.getByTestId('app-menu').click();
   await page.getByTestId('show-ai').click();
   const panel = page.getByTestId('ai-panel');
   await panel.getByTestId('ai-input').fill('Add a sprite and a sound');
@@ -284,6 +287,7 @@ test('a model from the OpenAI-compatible server in .env works the same way', asy
   });
   await page.goto('/');
   await createGame(page);
+  await page.getByTestId('app-menu').click();
   await page.getByTestId('show-ai').click();
   const panel = page.getByTestId('ai-panel');
   await panel.getByTestId('ai-model').selectOption('openai:qwen3:8b');
@@ -316,6 +320,7 @@ test('replacing an existing asset waits for the user to say yes', async ({ page 
   await expect
     .poll(() => page.evaluate((g) => window.__tf?.editor.assets.state.getState().assets.some((a) => a.id === g), game))
     .toBe(true);
+  await page.getByTestId('app-menu').click();
   await page.getByTestId('show-ai').click();
   const panel = page.getByTestId('ai-panel');
 

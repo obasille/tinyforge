@@ -1,3 +1,4 @@
+import { AppMenu } from './AppMenu.tsx';
 import { useEditor } from './EditorContext.ts';
 import { GamePicker } from './GamePicker.tsx';
 import { useStore } from './hooks.ts';
@@ -59,12 +60,12 @@ export function Toolbar({ onResetLayout, onShowAi }: { onResetLayout: () => void
       <span className={`tf-status tf-status-${session.status}`} data-testid="run-status">
         {session.status}
       </span>
-      <button type="button" data-testid="show-ai" onClick={onShowAi} title="Ask the code agent for a change">
-        AI
-      </button>
-      <button type="button" onClick={onResetLayout}>
-        Reset layout
-      </button>
+      <AppMenu
+        items={[
+          { label: 'AI', testId: 'show-ai', title: 'Ask the code agent for a change', onSelect: onShowAi },
+          { label: 'Reset layout', testId: 'reset-layout', onSelect: onResetLayout },
+        ]}
+      />
     </header>
   );
 }
