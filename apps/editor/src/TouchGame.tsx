@@ -2,6 +2,7 @@ import { mountVirtualControls, type VirtualControls } from '@tinyforge/editor-co
 import { useEffect, useRef } from 'react';
 import { AppMenu, type AppMenuItem } from './AppMenu.tsx';
 import { useEditor } from './EditorContext.ts';
+import { hasTouchScreen } from './layout-mode.ts';
 
 /**
  * The game in the touch layout, with the on-screen controls.
@@ -45,8 +46,10 @@ export function TouchGame({ layout, menu }: { layout: 'landscape' | 'portrait'; 
   return (
     <div ref={root} className={`tf-touch-game tf-touch-game-${layout}`} data-testid="touch-game">
       <div ref={screen} className="tf-touch-screen" data-testid="touch-screen" />
-      {layout === 'landscape' && (
-        // Landscape has no top bar: the menu (layout switch) sits by Pause and Restart.
+      {layout === 'landscape' && !hasTouchScreen() && (
+        // A desktop set to the touch layout is always landscape, with no top
+        // bar: the menu (back to the desktop layout) sits by Pause and Restart.
+        // A phone has none: turning it to portrait shows the top bar.
         <div className="tf-touch-menu">
           <AppMenu items={menu} up />
         </div>

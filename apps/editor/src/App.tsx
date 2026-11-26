@@ -13,6 +13,7 @@ import { EditorContext } from './EditorContext.ts';
 import type { Editor } from './editor.ts';
 import { useStore } from './hooks.ts';
 import { usesTouchLayout } from './layout-mode.ts';
+import { useMobileSheet } from './MobileSheet.tsx';
 import { CodePanel } from './panels/CodePanel.tsx';
 import { ConsolePanel } from './panels/ConsolePanel.tsx';
 import { FilesPanel } from './panels/FilesPanel.tsx';
@@ -226,6 +227,8 @@ export function App({ editor }: { editor: Editor }) {
     query.addEventListener('change', onChange);
     return () => query.removeEventListener('change', onChange);
   }, []);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const sheet = useMobileSheet(touch && !landscape, rootRef);
   const touchRef = useRef(touch);
   // While a layout is being replaced, its intermediate states are not saved.
   const loadingRef = useRef(false);
@@ -325,11 +328,30 @@ export function App({ editor }: { editor: Editor }) {
 
   return (
     <EditorContext.Provider value={editor}>
-      <div className={touch ? `tf-app tf-touch ${landscape ? 'tf-landscape' : 'tf-portrait'}` : 'tf-app'}>
+      <div ref={rootRef} className={touch ? `tf-app tf-touch ${landscape ? 'tf-landscape' : 'tf-portrait'}` : 'tf-app'}>
         <Toolbar onResetLayout={resetLayout} onShowAi={showAi} touch={touch} />
         {touch && !landscape && <TouchGame key="portrait" layout="portrait" menu={menu} />}
-        <div className="tf-dock">
-          <DockviewReact components={components} onReady={onReady} theme={themeDark} />
+        {/* In portrait (touch), the panels are in a bottom sheet; elsewhere this wrapper only fills the space. */}
+        <div
+          className="tf-sheet"
+          data-state={sheet.style ? sheet.state : undefined}
+          style={sheet.style}
+          data-testid="sheet"
+        >
+          {sheet.style && (
+            <button
+              type="button"
+              className="tf-sheet-handle"
+              data-testid="sheet-handle"
+              aria-label="Resize the panels"
+              {...sheet.handleProps}
+            >
+              <span />
+            </button>
+          )}
+          <div className="tf-dock">
+            <DockviewReact components={components} onReady={onReady} theme={themeDark} />
+          </div>
         </div>
         {touch && landscape && <TouchGame key="landscape" layout="landscape" menu={menu} />}
       </div>

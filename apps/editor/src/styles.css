@@ -271,9 +271,54 @@ button:disabled {
   color: var(--tf-error);
 }
 
+.tf-sheet {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .tf-dock {
   flex: 1;
   min-height: 0;
+}
+
+/* Portrait (touch): the panels in a bottom sheet over the page's bottom edge. */
+.tf-portrait {
+  position: relative;
+}
+
+.tf-portrait .tf-sheet {
+  position: absolute;
+  right: 0;
+  left: 0;
+  z-index: 10;
+  background: var(--tf-bg);
+  border-top: 1px solid #3a3a48;
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 -6px 18px rgb(0 0 0 / 45%);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.tf-sheet-handle {
+  display: flex;
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: none;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.tf-sheet-handle span {
+  width: 44px;
+  height: 5px;
+  background: #6a6a80;
+  border-radius: 3px;
 }
 
 .tf-game-panel {

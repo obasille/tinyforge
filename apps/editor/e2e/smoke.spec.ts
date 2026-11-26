@@ -438,6 +438,8 @@ test.describe('on a touch screen in landscape', () => {
     await page.getByTestId('play-pause').click();
     await expect.poll(async () => (await session(page))?.status).toBe('running');
     await expect(page.getByTestId('play-exit')).toHaveCount(0);
+    // No menu button on a phone in landscape: turning it to portrait shows the top bar.
+    await expect(page.locator('.tf-touch-menu')).toHaveCount(0);
 
     // Turning the phone keeps the same game running.
     await page.setViewportSize({ width: 390, height: 844 });
@@ -471,6 +473,47 @@ test.describe('on a touch screen in portrait', () => {
     expect(await heldButtons(page)).toBe(1 << 4);
     await touchAt(page, rightColumn.x + 20, rightColumn.y + rightColumn.height - 5, 21, 'pointerup');
     expect(await heldButtons(page)).toBe(0);
+  });
+});
+
+test.describe('the bottom sheet in portrait', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+
+  test('sits under the game, expands over it on a tap, collapses when dragged down, and remembers', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await expect(page.getByTestId('run-status')).toHaveText('running');
+    const sheet = page.getByTestId('sheet');
+    const handle = page.getByTestId('sheet-handle');
+    const box = async (locator: ReturnType<typeof page.locator>) => {
+      const b = await locator.boundingBox();
+      if (!b) throw new Error('not shown');
+      return b;
+    };
+    await expect(sheet).toHaveAttribute('data-state', 'half');
+    const game = await box(page.getByTestId('touch-game'));
+    expect(Math.abs((await box(sheet)).y - (game.y + game.height))).toBeLessThan(2);
+
+    // A tap expands it over the game, up to the top bar.
+    await handle.click();
+    await expect(sheet).toHaveAttribute('data-state', 'expanded');
+    const toolbar = await box(page.locator('.tf-toolbar'));
+    await expect.poll(async () => Math.round((await box(sheet)).y)).toBe(Math.round(toolbar.y + toolbar.height));
+
+    // Dragged down to the bottom: only the handle and the tabs remain.
+    const h = await box(handle);
+    await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(h.x + h.width / 2, 830, { steps: 8 });
+    await page.mouse.up();
+    await expect(sheet).toHaveAttribute('data-state', 'collapsed');
+    await expect.poll(async () => Math.round((await box(sheet)).height)).toBe(64);
+    expect((await session(page))?.status).toBe('running');
+
+    await page.reload();
+    await expect(page.getByTestId('run-status')).toHaveText('running');
+    await expect(page.getByTestId('sheet')).toHaveAttribute('data-state', 'collapsed');
   });
 });
 
