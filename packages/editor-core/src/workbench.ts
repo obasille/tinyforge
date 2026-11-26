@@ -29,6 +29,8 @@ export class Workbench {
   private readonly liveUses = new Map<string, AssetUse[]>();
   private readonly openListeners = new Set<(path: string) => void>();
   private library: AssetLibrary;
+  /** Where to put the cursor in the next code editor opened for a path. */
+  private goToOnOpen: { path: string; line: number; column: number } | null = null;
 
   constructor(
     private readonly files: ProjectFiles,
@@ -50,9 +52,19 @@ export class Workbench {
     });
   }
 
-  /** Ask the UI to show a file: a code panel, or the sprite editor or sound player for an asset. */
-  openFile(path: string): void {
+  /**
+   * Ask the UI to show a file: a code panel (optionally at a 1-based line and
+   * column), or the sprite editor or sound player for an asset.
+   */
+  openFile(path: string, at?: { line: number; column?: number }): void {
+    this.goToOnOpen = at ? { path, line: at.line, column: at.column ?? 1 } : null;
     for (const listener of [...this.openListeners]) listener(path);
+    // Already open: the panel was only brought to front.
+    const open = this.editorsFor(path)[0];
+    if (at && open) {
+      open.goTo(at.line, at.column);
+      this.goToOnOpen = null;
+    }
   }
 
   onOpenFile(listener: (path: string) => void): () => void {
@@ -81,6 +93,14 @@ export class Workbench {
         this.updateUsed();
       },
     });
+    const at = this.goToOnOpen;
+    if (at?.path === path) {
+      editor.goTo(at.line, at.column);
+      // Kept until the panel has mounted: React may mount it twice in a row (StrictMode).
+      queueMicrotask(() => {
+        if (this.goToOnOpen === at) this.goToOnOpen = null;
+      });
+    }
     // Compile errors for a game that is not running: build it once for its diagnostics.
     const game = /^games\/([^/]+)\//.exec(path)?.[1];
     if (game && this.files.games.includes(game) && !this.compiler.builds.getState()[game]) {
@@ -238,15 +258,14 @@ export class Workbench {
 
   /**
    * Files changed: open editors reload or ask; the library may have changed.
-   * `affected` are the games whose builds the changes made stale; the ones
-   * with open files (other than the running game, which reloads anyway) are
-   * rebuilt so their editors show fresh compile errors.
+   * `affected` are the games whose builds the changes made stale; they are
+   * rebuilt (except the running game, which reloads anyway), so every game's
+   * compile status and errors stay true.
    */
   filesChanged(changes: FileChange[], affected: string[] = []): void {
     const running = this.currentGame();
     for (const game of affected) {
-      if (game !== running && this.files.games.includes(game) && this.hasOpenFiles(game))
-        void this.compiler.build(game);
+      if (game !== running && this.files.games.includes(game)) void this.compiler.build(game);
     }
     this.library = libraryFromFiles(this.files.assetFiles);
     for (const change of changes) {
@@ -256,10 +275,6 @@ export class Workbench {
       for (const set of this.editors.values()) for (const e of set) e.refreshDiagnostics();
     }
     this.updateUsed();
-  }
-
-  private hasOpenFiles(game: string): boolean {
-    return [...this.editors.keys()].some((p) => p.startsWith(`games/${game}/`));
   }
 
   /** The current game changed. */

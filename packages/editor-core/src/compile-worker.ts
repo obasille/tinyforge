@@ -31,7 +31,7 @@ const files = {
   },
 };
 
-// One compile at a time: the compiler holds a lot of memory while it runs.
+// One compile at a time (the host sends one per Worker; it runs more Workers to compile in parallel).
 let queue: Promise<void> = Promise.resolve();
 
 scope.onmessage = (event: MessageEvent<ToCompiler>) => {

@@ -65,13 +65,25 @@ beforeAll(async () => {
   }
 });
 
-async function setup() {
+async function setup(maxWorkers = 1) {
   const ws = new MemoryWorkspace(disk);
   const files = new ProjectFiles(ws);
   await files.start();
-  const worker = inProcessWorker();
-  const compiler = new CompilerHost(files, () => worker);
-  return { ws, files, worker, compiler };
+  const workers: ReturnType<typeof inProcessWorker>[] = [];
+  const compiler = new CompilerHost(
+    files,
+    () => {
+      workers.push(inProcessWorker());
+      return workers[workers.length - 1];
+    },
+    maxWorkers,
+  );
+  const worker = {
+    get compiles() {
+      return workers.reduce((n, w) => n + w.compiles, 0);
+    },
+  };
+  return { ws, files, worker, workers, compiler };
 }
 
 const settle = () => new Promise((r) => setTimeout(r, 0));
@@ -120,6 +132,70 @@ describe('CompilerHost', () => {
     expect(compiler.invalidate([{ path: 'assets/sprites/heart.png', kind: 'change' }])).toEqual([]);
     expect(compiler.invalidate([{ path: 'assets/sprites/new.png', kind: 'add' }])).toEqual(['pong']);
   });
+
+  it('compiles games in parallel, one Worker each', async () => {
+    const { files, workers, compiler } = await setup(2);
+    await files.write('games/fresh/main.ts', newGameSource('fresh'));
+    await settle();
+    await settle();
+    const seen: string[] = [];
+    compiler.builds.subscribe(() => {
+      const b = compiler.builds.getState();
+      seen.push(`${b.pong?.status},${b.fresh?.status}`);
+    });
+    const pong = compiler.build('pong');
+    const fresh = compiler.build('fresh');
+    expect((await pong).ok && (await fresh).ok).toBe(true);
+    expect(workers.map((w) => w.compiles)).toEqual([1, 1]);
+    expect(seen).toContain('building,building');
+    // A later build reuses a Worker.
+    await files.write('games/fresh/main.ts', `${newGameSource('fresh')}\n`);
+    await settle();
+    await settle();
+    compiler.invalidate([{ path: 'games/fresh/main.ts', kind: 'change' }]);
+    expect((await compiler.build('fresh')).ok).toBe(true);
+    expect(workers.length).toBe(2);
+  });
+
+  it('puts the running game first, and does not compile a queued game twice', async () => {
+    const { files, worker, compiler } = await setup();
+    for (const g of ['a', 'b']) await files.write(`games/${g}/main.ts`, newGameSource(g));
+    await settle();
+    await settle();
+    const started: string[] = [];
+    compiler.builds.subscribe(() => {
+      for (const [g, b] of Object.entries(compiler.builds.getState()))
+        if (b.status === 'building' && !started.includes(g)) started.push(g);
+    });
+    const builds = [compiler.build('pong'), compiler.build('a'), compiler.build('b')];
+    // A change while a and b wait: their queued builds will read the new files.
+    expect(compiler.invalidate([{ path: 'assets/sprites/new.png', kind: 'add' }])).toEqual(['a', 'b', 'pong']);
+    expect(compiler.build('a')).toBe(builds[1]);
+    compiler.build('b', 'debug', true);
+    await Promise.all(builds);
+    expect(started).toEqual(['pong', 'b', 'a']);
+    expect(worker.compiles).toBe(3);
+  });
+
+  it('shows a compile waiting for a free Worker as queued, then building', async () => {
+    const { files, compiler } = await setup();
+    await files.write('games/fresh/main.ts', newGameSource('fresh'));
+    await settle();
+    await settle();
+    const status = () => [compiler.builds.getState().pong?.status, compiler.builds.getState().fresh?.status];
+    const seen: string[] = [];
+    compiler.builds.subscribe(() => seen.push(status().join(',')));
+    const pong = compiler.build('pong');
+    const fresh = compiler.build('fresh');
+    // pong starts at once; fresh waits for the Worker.
+    expect(status()).toEqual(['building', 'queued']);
+    await pong;
+    await fresh;
+    expect(status()).toEqual(['ok', 'ok']);
+    // pong was sent first: fresh waits until pong is done.
+    expect(seen).toContain('building,queued');
+    expect(seen.indexOf('ok,building')).toBeGreaterThan(seen.indexOf('building,queued'));
+  });
 });
 
 describe('new game template', () => {
@@ -164,6 +240,21 @@ describe('live asset scan', () => {
 });
 
 describe('Workbench', () => {
+  it('rebuilds a game when a sprite it uses is deleted, even with no file open', async () => {
+    const { files, compiler } = await setup();
+    const workbench = new Workbench(files, { runFile: async (c) => void (await c.apply()) }, compiler, () => 'pong');
+    files.onChange(async (c) => workbench.filesChanged(c, compiler.invalidate(c)));
+    const source = newGameSource('fresh')
+      .replace('import {', 'import { drawSprite, s,')
+      .replace('clearFramebuffer(c(0x141828));', 'clearFramebuffer(c(0x141828));\n  drawSprite(s("heart"), 0, 0);');
+    await files.write('games/fresh/main.ts', source);
+    await settle();
+    await settle();
+    expect((await compiler.build('fresh')).ok).toBe(true);
+    await files.delete('assets/sprites/heart.png');
+    await expect.poll(() => compiler.builds.getState().fresh?.status).toBe('failed');
+  });
+
   it("reports the assets the current game's last build uses", async () => {
     const { files, compiler } = await setup();
     const runs: unknown[] = [];

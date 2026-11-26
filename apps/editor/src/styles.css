@@ -999,6 +999,47 @@ button.tf-files-row.tf-files-selected {
   color: var(--tf-warn);
 }
 
+/* Compile status of a game, in the Files list and the game picker. */
+.tf-build {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: normal;
+  color: var(--tf-muted);
+}
+
+.tf-build-building {
+  color: var(--tf-warn);
+}
+
+.tf-build-failed {
+  color: var(--tf-error);
+}
+
+.tf-picker-title .tf-build,
+.tf-picker-button .tf-build {
+  margin-left: 6px;
+}
+
+.tf-compile-error {
+  max-width: 90%;
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--tf-error);
+  font-family: var(--tf-mono);
+  font-size: 12px;
+}
+
+/* file(line,column) in a console message: opens the code editor there. */
+.tf-log-link {
+  padding: 0;
+  font: inherit;
+  color: var(--tf-accent);
+  text-decoration: underline;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
 /* Library: new sprite and budget */
 .tf-lib-new {
   display: flex;

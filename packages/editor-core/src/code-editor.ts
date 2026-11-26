@@ -68,6 +68,8 @@ export class CodeEditor {
   /** The text on disk, as last loaded or saved. */
   private disk: string | null = null;
   private disposed = false;
+  /** A goTo() made while the file was loading. */
+  private pendingGoTo: { line: number; column: number } | null = null;
 
   constructor(
     readonly path: string,
@@ -106,6 +108,19 @@ export class CodeEditor {
     this.view?.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
   }
 
+  /** Put the cursor at a 1-based line and column, scroll to it and focus (after loading if needed). */
+  goTo(line: number, column = 1): void {
+    const view = this.view;
+    if (!view) {
+      this.pendingGoTo = { line, column };
+      return;
+    }
+    const { from, to } = view.state.doc.line(Math.min(Math.max(line, 1), view.state.doc.lines));
+    const anchor = Math.min(from + column - 1, to);
+    view.dispatch({ selection: { anchor }, effects: EditorView.scrollIntoView(anchor, { y: 'center' }) });
+    view.focus();
+  }
+
   private async open(): Promise<void> {
     try {
       const text = await this.host.read(this.path);
@@ -115,6 +130,7 @@ export class CodeEditor {
       this.view = new EditorView({ parent: this.parent, state: this.createState(text) });
       this.update({ loading: false });
       this.reportUses();
+      if (this.pendingGoTo) this.goTo(this.pendingGoTo.line, this.pendingGoTo.column);
     } catch (e) {
       this.update({ loading: false, error: e instanceof Error ? e.message : String(e) });
     }

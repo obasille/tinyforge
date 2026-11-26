@@ -115,7 +115,9 @@ export class Editor {
     this.library = files.library;
     this.project = createStore(loadProject(files.games));
     this.catalog = new GameCatalog(files.games, (game) => this.readGameInfo(game));
-    this.compiler = new CompilerHost(files, () => new CompileWorker({ name: 'tinyforge-compiler' }));
+    // Parallel compiles, one Worker each: half the cores, at most 4 (each holds a compiler in memory).
+    const compileWorkers = Math.max(1, Math.min(4, Math.floor((navigator.hardwareConcurrency || 2) / 2)));
+    this.compiler = new CompilerHost(files, () => new CompileWorker({ name: 'tinyforge-compiler' }), compileWorkers);
     this.commands = new CommandStack(this.project, (message) => this.logs.add('ERROR', message));
     this.workbench = new Workbench(
       files,
@@ -259,6 +261,11 @@ export class Editor {
     }
     // The picker's titles and covers: the current game first, then the rest.
     void this.catalog.load(undefined, this.project.getState().game);
+    // Every game's compile status, once the current game is built (so it starts first).
+    const current = this.project.getState().game;
+    void (current ? this.compiler.build(current) : Promise.resolve()).then(() => {
+      for (const game of this.files.games) void this.compiler.build(game);
+    });
   }
 
   /** Load the sounds the current game uses (its cartridge lists them). */
@@ -316,10 +323,16 @@ export class Editor {
     const { game, seed } = this.project.getState();
     if (!game) return;
     const seq = ++this.loadSeq;
-    const result = await this.compiler.build(game);
+    const result = await this.compiler.build(game, 'debug', true);
     if (seq !== this.loadSeq || game !== this.project.getState().game) return;
     if (!result.ok) {
       this.logs.add('ERROR', `${game} failed to compile:\n${result.log}`);
+      // Another game still running would look like this one: stop it. The
+      // Game tab shows the errors. (A broken edit keeps the game's last build.)
+      if (this.host.session.getState().game !== game) {
+        this.audio.stopMusic();
+        this.host.kill({ reload: false });
+      }
       return;
     }
     const ms = this.compiler.builds.getState()[game]?.ms;

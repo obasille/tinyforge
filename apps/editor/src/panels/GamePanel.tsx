@@ -9,6 +9,11 @@ export function GamePanel() {
   const ref = useRef<HTMLDivElement>(null);
   const readout = useRef<HTMLDivElement>(null);
   const session = useStore(editor.host.session);
+  const { game } = useStore(editor.project);
+  const build = useStore(editor.compiler.builds)[game ?? ''];
+  const errors = build?.status === 'failed' ? build.diagnostics.filter((d) => d.severity === 'error') : [];
+  // The game's last good build is still running when an edit broke it.
+  const stale = session.game === game;
 
   useEffect(() => {
     const el = ref.current;
@@ -29,6 +34,33 @@ export function GamePanel() {
     <div className="tf-game-panel">
       <div ref={ref} className="tf-viewport-host" data-testid="viewport" />
       <div ref={readout} className="tf-pixel-readout" />
+      {build?.status === 'failed' && (
+        <div className={`tf-overlay${stale ? ' tf-overlay-soft' : ''}`} role="alert" data-testid="compile-error">
+          <p>
+            {game} does not compile
+            {errors.length > 0 ? ` (${errors.length} error${errors.length === 1 ? '' : 's'})` : ''}
+            {stale ? ', running its last good build.' : '.'} See the console.
+          </p>
+          {!stale && errors[0] && (
+            <pre className="tf-compile-error">
+              {errors[0].path ? (
+                <button
+                  type="button"
+                  className="tf-log-link"
+                  onClick={() => {
+                    const { path, line, column } = errors[0];
+                    if (path) editor.workbench.openFile(path, { line, column });
+                  }}
+                >
+                  {errors[0].path}:{errors[0].line}
+                </button>
+              ) : null}
+              {errors[0].path ? ': ' : ''}
+              {errors[0].message}
+            </pre>
+          )}
+        </div>
+      )}
       {session.status === 'hung' && (
         <div className="tf-overlay" role="alert">
           <p>The game is not responding (an infinite loop in update() or draw()?).</p>
