@@ -395,3 +395,89 @@ test.describe('on a touch screen', () => {
     await expect(page.getByTestId('pixel-color')).toBeHidden();
   });
 });
+
+test.describe('play mode on a touch screen', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 844, height: 390 } });
+
+  test('opens full screen with the controls, which press game buttons, and goes back without a restart', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await expect(page.getByTestId('run-status')).toHaveText('running');
+    const generation = (await session(page))?.generation;
+    await page.getByTestId('play').click();
+    await expect(page.getByTestId('play-view')).toBeVisible();
+    await expect(page.getByTestId('virtual-controls')).toBeVisible();
+    // The game fills the height at 4:3.
+    const canvas = await page.getByTestId('play-screen').getByTestId('game-canvas').boundingBox();
+    expect(Math.round(canvas?.height ?? 0)).toBe(390);
+    expect(Math.round(canvas?.width ?? 0)).toBe(520);
+
+    // Hold the left of the D-pad and A at once (two fingers).
+    const buttons = () => page.evaluate(() => window.__tf?.editor.input.current.buttons ?? -1);
+    const pad = await page.locator('.tf-vc-dpad').boundingBox();
+    const face = await page.locator('.tf-vc-face').boundingBox();
+    if (!pad || !face) throw new Error('no controls');
+    const press = (x: number, y: number, id: number, type: string) =>
+      page.evaluate(
+        ([x, y, id, type]) => {
+          const target = document.elementFromPoint(x as number, y as number);
+          target?.dispatchEvent(
+            new PointerEvent(type as string, {
+              bubbles: true,
+              pointerId: id as number,
+              pointerType: 'touch',
+              clientX: x as number,
+              clientY: y as number,
+            }),
+          );
+        },
+        [x, y, id, type] as const,
+      );
+    const left = [pad.x + 5, pad.y + pad.height / 2] as const;
+    const a = [face.x + face.width / 2, face.y + face.height - 5] as const;
+    await press(left[0], left[1], 11, 'pointerdown');
+    await press(a[0], a[1], 12, 'pointerdown');
+    expect(await buttons()).toBe((1 << 2) | (1 << 4));
+    await expect(page.locator('.tf-vc-dpad [data-pressed]')).toHaveText('◀');
+    await press(left[0], left[1], 11, 'pointerup');
+    expect(await buttons()).toBe(1 << 4);
+    await press(a[0], a[1], 12, 'pointercancel');
+    expect(await buttons()).toBe(0);
+
+    await page.getByTestId('play-exit').click();
+    await expect(page.getByTestId('play-view')).toHaveCount(0);
+    await expect(page.getByTestId('viewport').getByTestId('game-canvas')).toBeVisible();
+    expect((await session(page))?.generation).toBe(generation);
+    expect((await session(page))?.status).toBe('running');
+  });
+});
+
+test('the menu switches to the touch layout and back, keeping the game running', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('run-status')).toHaveText('running');
+  const generation = (await session(page))?.generation;
+  const groups = () =>
+    page.evaluate(() =>
+      [...document.querySelectorAll('.dv-groupview')].map((g) =>
+        [...g.querySelectorAll('.dv-tab')].map((t) => t.textContent?.trim()),
+      ),
+    );
+  await page.getByTestId('app-menu').click();
+  await page.getByTestId('use-touch-layout').click();
+  await expect.poll(groups).toEqual([['Files', 'Library'], ['Game'], ['Console', 'Run', 'Memory']]);
+  await expect(page.getByTestId('play')).toBeVisible();
+  // The choice survives a reload.
+  await page.reload();
+  await expect(page.getByTestId('run-status')).toHaveText('running');
+  await expect(page.getByTestId('play')).toBeVisible();
+  await page.getByTestId('app-menu').click();
+  await page.getByTestId('use-desktop-layout').click();
+  await expect(page.getByTestId('play')).toHaveCount(0);
+  await expect.poll(async () => (await groups()).length).toBe(5);
+  await page.getByTestId('app-menu').click();
+  await page.getByTestId('auto-layout').click();
+  await expect(page.getByTestId('auto-layout')).toHaveCount(0);
+  expect((await session(page))?.status).toBe('running');
+  expect((await session(page))?.generation).toBe(generation);
+});

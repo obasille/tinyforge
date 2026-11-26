@@ -11,6 +11,8 @@ export class Viewport {
   private canvas: HTMLCanvasElement | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private readonly cleanup: Array<() => void> = [];
+  /** Scale by any factor (touch screens), not only whole numbers. */
+  private fractional = false;
 
   constructor(
     private readonly input: InputTracker,
@@ -53,7 +55,20 @@ export class Viewport {
     on('keyup', (e) => {
       if (this.input.key(e.code, false)) e.preventDefault();
     });
-    on('blur', () => this.input.clear());
+    // Losing focus releases the keyboard only: on a touch screen, pressing an
+    // on-screen control outside the view blurs it while the finger still holds.
+    on('blur', () => this.input.clearKeys());
+    // A hidden page gets no key or pointer releases: release everything.
+    const onHidden = () => {
+      if (document.visibilityState === 'hidden') this.input.clear();
+    };
+    const onPageHide = () => this.input.clear();
+    document.addEventListener('visibilitychange', onHidden);
+    window.addEventListener('pagehide', onPageHide);
+    this.cleanup.push(() => {
+      document.removeEventListener('visibilitychange', onHidden);
+      window.removeEventListener('pagehide', onPageHide);
+    });
 
     // The triggers are the Ctrl keys, and a player who holds one while
     // pressing W would hit Ctrl+W, which closes the tab and cannot be
@@ -80,6 +95,12 @@ export class Viewport {
       this.pointer(e);
       this.input.mouseButton(e.button, false);
     });
+    // A touch the browser takes over (a scroll, a system gesture) ends
+    // without a pointerup: release its button and leave the screen.
+    on('pointercancel', (e) => {
+      this.input.mouseButton(e.button === -1 ? 0 : e.button, false);
+      this.input.pointer(-1, -1);
+    });
     on('contextmenu', (e) => e.preventDefault());
 
     this.resizeObserver = new ResizeObserver(() => this.fit());
@@ -95,6 +116,12 @@ export class Viewport {
     this.container = null;
   }
 
+  /** Allow fractional scales (touch screens), so the game fills the space. */
+  setFractional(on: boolean): void {
+    this.fractional = on;
+    this.fit();
+  }
+
   focus(): void {
     this.container?.focus();
   }
@@ -105,12 +132,12 @@ export class Viewport {
     this.input.pointer(x, y);
   }
 
-  /** Largest integer scale that fits; fractional only below 1×. */
+  /** Largest integer scale that fits (any scale when fractional); fractional below 1×. */
   private fit(): void {
     if (!this.container || !this.canvas) return;
     const { clientWidth: w, clientHeight: h } = this.container;
     const fit = Math.min(w / SCREEN_WIDTH, h / SCREEN_HEIGHT);
-    const scale = fit >= 1 ? Math.floor(fit) : Math.max(fit, 0.25);
+    const scale = fit >= 1 && !this.fractional ? Math.floor(fit) : Math.max(fit, 0.25);
     this.canvas.style.width = `${SCREEN_WIDTH * scale}px`;
     this.canvas.style.height = `${SCREEN_HEIGHT * scale}px`;
   }

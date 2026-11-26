@@ -1,15 +1,43 @@
-import { AppMenu } from './AppMenu.tsx';
+import { AppMenu, type AppMenuItem } from './AppMenu.tsx';
 import { useEditor } from './EditorContext.ts';
 import { GamePicker } from './GamePicker.tsx';
 import { useStore } from './hooks.ts';
 import { UndoHistory } from './UndoHistory.tsx';
 
-export function Toolbar({ onResetLayout, onShowAi }: { onResetLayout: () => void; onShowAi: () => void }) {
+export function Toolbar({
+  onResetLayout,
+  onShowAi,
+  touch,
+}: {
+  onResetLayout: () => void;
+  onShowAi: () => void;
+  touch: boolean;
+}) {
   const editor = useEditor();
   const stack = useStore(editor.commands);
   const session = useStore(editor.host.session);
   const sound = useStore(editor.audioSettings);
   const silent = sound.muted || sound.volume === 0;
+  const mode = useStore(editor.layoutMode);
+  const items: AppMenuItem[] = [
+    { label: 'AI', testId: 'show-ai', title: 'Ask the code agent for a change', onSelect: onShowAi },
+    { label: 'Reset layout', testId: 'reset-layout', onSelect: onResetLayout },
+    touch
+      ? {
+          label: 'Use desktop layout',
+          testId: 'use-desktop-layout',
+          onSelect: () => editor.layoutMode.setState('desktop'),
+        }
+      : { label: 'Use touch layout', testId: 'use-touch-layout', onSelect: () => editor.layoutMode.setState('touch') },
+  ];
+  if (mode !== 'auto') {
+    items.push({
+      label: 'Automatic layout',
+      testId: 'auto-layout',
+      title: 'Touch layout on touch screens, desktop layout elsewhere',
+      onSelect: () => editor.layoutMode.setState('auto'),
+    });
+  }
 
   return (
     <header className="tf-toolbar">
@@ -60,12 +88,17 @@ export function Toolbar({ onResetLayout, onShowAi }: { onResetLayout: () => void
       <span className={`tf-status tf-status-${session.status}`} data-testid="run-status">
         {session.status}
       </span>
-      <AppMenu
-        items={[
-          { label: 'AI', testId: 'show-ai', title: 'Ask the code agent for a change', onSelect: onShowAi },
-          { label: 'Reset layout', testId: 'reset-layout', onSelect: onResetLayout },
-        ]}
-      />
+      {touch && (
+        <button
+          type="button"
+          data-testid="play"
+          title="Play full screen with on-screen controls"
+          onClick={() => editor.playing.setState(true)}
+        >
+          ▶ Play
+        </button>
+      )}
+      <AppMenu items={items} />
     </header>
   );
 }

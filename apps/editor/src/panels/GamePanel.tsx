@@ -9,6 +9,8 @@ export function GamePanel() {
   const ref = useRef<HTMLDivElement>(null);
   const readout = useRef<HTMLDivElement>(null);
   const session = useStore(editor.host.session);
+  // The play view borrows the game view while it is open.
+  const playing = useStore(editor.playing);
   const { game } = useStore(editor.project);
   const build = useStore(editor.compiler.builds)[game ?? ''];
   const errors = build?.status === 'failed' ? build.diagnostics.filter((d) => d.severity === 'error') : [];
@@ -17,12 +19,12 @@ export function GamePanel() {
 
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    if (!el || playing) return;
     editor.viewport.attach(el);
     // Keys go to the game from the start, without a click first.
     editor.viewport.focus();
     return () => editor.viewport.detach();
-  }, [editor]);
+  }, [editor, playing]);
 
   useEffect(() => {
     const el = readout.current;

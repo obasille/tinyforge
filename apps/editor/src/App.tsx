@@ -11,6 +11,9 @@ import {
 import { type FunctionComponent, lazy, Suspense, useCallback, useEffect, useRef } from 'react';
 import { EditorContext } from './EditorContext.ts';
 import type { Editor } from './editor.ts';
+import { useStore } from './hooks.ts';
+import { usesTouchLayout } from './layout-mode.ts';
+import { PlayView } from './PlayView.tsx';
 import { CodePanel } from './panels/CodePanel.tsx';
 import { ConsolePanel } from './panels/ConsolePanel.tsx';
 import { FilesPanel } from './panels/FilesPanel.tsx';
@@ -26,11 +29,11 @@ import { Toolbar } from './Toolbar.tsx';
 const LAYOUT_KEY = 'tinyforge.editor.layout.v3';
 
 /**
- * Touch screens (phones, tablets) get a simpler default layout, saved under
- * its own key so a layout saved before this change does not hide it.
+ * The touch layout (phones, tablets, or chosen in the menu) has its own
+ * default and is saved under its own key, so each layout keeps its own
+ * arrangement and a layout saved before does not hide it.
  */
-const isTouch = (): boolean => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
-const layoutKey = (): string => (isTouch() ? `${LAYOUT_KEY}.touch` : LAYOUT_KEY);
+const layoutKey = (touch: boolean): string => (touch ? `${LAYOUT_KEY}.touch` : LAYOUT_KEY);
 
 // The AI panel and its code load only when the panel is first shown.
 const AiPanel = lazy(() => import('./panels/AiPanel.tsx'));
@@ -115,8 +118,8 @@ function trackActiveCode(api: DockviewApi, editor: Editor): void {
   });
 }
 
-function defaultLayout(api: DockviewApi): void {
-  if (isTouch()) touchLayout(api);
+function defaultLayout(api: DockviewApi, touch: boolean): void {
+  if (touch) touchLayout(api);
   else desktopLayout(api);
 }
 
@@ -231,30 +234,58 @@ function showAiPanel(api: DockviewApi): void {
 
 export function App({ editor }: { editor: Editor }) {
   const apiRef = useRef<DockviewApi | null>(null);
+  const mode = useStore(editor.layoutMode);
+  const touch = usesTouchLayout(mode);
+  const playing = useStore(editor.playing);
+  const touchRef = useRef(touch);
+  // While a layout is being replaced, its intermediate states are not saved.
+  const loadingRef = useRef(false);
+
+  /** Show the saved layout for the current mode, or its default. */
+  const loadLayout = useCallback((api: DockviewApi) => {
+    loadingRef.current = true;
+    try {
+      let restored = false;
+      api.clear();
+      try {
+        const saved = localStorage.getItem(layoutKey(touchRef.current));
+        if (saved) {
+          api.fromJSON(JSON.parse(saved));
+          restored = true;
+        }
+      } catch {
+        api.clear();
+      }
+      if (!restored || api.panels.length === 0) defaultLayout(api, touchRef.current);
+    } finally {
+      loadingRef.current = false;
+    }
+  }, []);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: Dockview calls onReady once; the editor is fixed for the app's life.
   const onReady = useCallback((event: DockviewReadyEvent) => {
     apiRef.current = event.api;
-    let restored = false;
-    try {
-      const saved = localStorage.getItem(layoutKey());
-      if (saved) {
-        event.api.fromJSON(JSON.parse(saved));
-        restored = true;
-      }
-    } catch {
-      event.api.clear();
-    }
-    if (!restored || event.api.panels.length === 0) defaultLayout(event.api);
+    loadLayout(event.api);
     trackActiveCode(event.api, editor);
     event.api.onDidLayoutChange(() => {
+      if (loadingRef.current) return;
       try {
-        localStorage.setItem(layoutKey(), JSON.stringify(event.api.toJSON()));
+        localStorage.setItem(layoutKey(touchRef.current), JSON.stringify(event.api.toJSON()));
       } catch {
         // Layout persistence is a convenience; ignore storage errors.
       }
     });
   }, []);
+
+  // Switching between the desktop and the touch layout (menu): each keeps
+  // its own saved arrangement. The game keeps running throughout.
+  useEffect(() => {
+    editor.viewport.setFractional(touch);
+    if (touchRef.current === touch) return;
+    touchRef.current = touch;
+    if (!touch) editor.playing.setState(false);
+    if (apiRef.current) loadLayout(apiRef.current);
+  }, [editor, touch, loadLayout]);
 
   useEffect(
     () =>
@@ -280,7 +311,7 @@ export function App({ editor }: { editor: Editor }) {
     const api = apiRef.current;
     if (!api) return;
     api.clear();
-    defaultLayout(api);
+    defaultLayout(api, touchRef.current);
   }, []);
 
   // Editor shortcuts (see SHORTCUTS). Capture phase, so they work while the
@@ -304,11 +335,12 @@ export function App({ editor }: { editor: Editor }) {
 
   return (
     <EditorContext.Provider value={editor}>
-      <div className="tf-app">
-        <Toolbar onResetLayout={resetLayout} onShowAi={showAi} />
+      <div className={touch ? 'tf-app tf-touch' : 'tf-app'}>
+        <Toolbar onResetLayout={resetLayout} onShowAi={showAi} touch={touch} />
         <div className="tf-dock">
           <DockviewReact components={components} onReady={onReady} theme={themeDark} />
         </div>
+        {touch && playing && <PlayView touch={touch} />}
       </div>
     </EditorContext.Provider>
   );
