@@ -4,6 +4,7 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { promises as fs } from 'fs';
+import { setTimeout as sleep } from 'timers/promises';
 import ftp from 'basic-ftp';
 import dotenv from 'dotenv';
 
@@ -92,7 +93,7 @@ async function withRetry(label, action) {
       console.warn(
         `  ${label}: ${redact(error.message)}; reconnecting (retry ${attempt + 1}/${MAX_RETRIES})`,
       );
-      await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
+      await sleep(1000 * (attempt + 1));
       await connect();
     }
   }

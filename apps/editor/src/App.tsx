@@ -25,6 +25,13 @@ import { Toolbar } from './Toolbar.tsx';
 
 const LAYOUT_KEY = 'tinyforge.editor.layout.v3';
 
+/**
+ * Touch screens (phones, tablets) get a simpler default layout, saved under
+ * its own key so a layout saved before this change does not hide it.
+ */
+const isTouch = (): boolean => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+const layoutKey = (): string => (isTouch() ? `${LAYOUT_KEY}.touch` : LAYOUT_KEY);
+
 // The AI panel and its code load only when the panel is first shown.
 const AiPanel = lazy(() => import('./panels/AiPanel.tsx'));
 const LazyAiPanel = () => (
@@ -109,6 +116,50 @@ function trackActiveCode(api: DockviewApi, editor: Editor): void {
 }
 
 function defaultLayout(api: DockviewApi): void {
+  if (isTouch()) touchLayout(api);
+  else desktopLayout(api);
+}
+
+/** Three columns: Files and Library, the game, then Console, Run and Memory as tabs. */
+function touchLayout(api: DockviewApi): void {
+  api.addPanel({ id: 'game', component: 'game', title: 'Game' });
+  api.addPanel({
+    id: 'files',
+    component: 'files',
+    title: 'Files',
+    position: { referencePanel: 'game', direction: 'left' },
+    initialWidth: 220,
+  });
+  api.addPanel({
+    id: 'library',
+    component: 'library',
+    title: 'Library',
+    position: { referencePanel: 'files', direction: 'within' },
+  });
+  api.addPanel({
+    id: 'console',
+    component: 'console',
+    title: 'Console',
+    position: { referencePanel: 'game', direction: 'right' },
+    initialWidth: 260,
+  });
+  api.addPanel({
+    id: 'run',
+    component: 'run',
+    title: 'Run',
+    position: { referencePanel: 'console', direction: 'within' },
+  });
+  api.addPanel({
+    id: 'memory',
+    component: 'memory',
+    title: 'Memory',
+    position: { referencePanel: 'console', direction: 'within' },
+  });
+  api.getPanel('files')?.api.setActive();
+  api.getPanel('console')?.api.setActive();
+}
+
+function desktopLayout(api: DockviewApi): void {
   api.addPanel({ id: 'game', component: 'game', title: 'Game' });
   api.addPanel({
     id: 'files',
@@ -186,7 +237,7 @@ export function App({ editor }: { editor: Editor }) {
     apiRef.current = event.api;
     let restored = false;
     try {
-      const saved = localStorage.getItem(LAYOUT_KEY);
+      const saved = localStorage.getItem(layoutKey());
       if (saved) {
         event.api.fromJSON(JSON.parse(saved));
         restored = true;
@@ -198,7 +249,7 @@ export function App({ editor }: { editor: Editor }) {
     trackActiveCode(event.api, editor);
     event.api.onDidLayoutChange(() => {
       try {
-        localStorage.setItem(LAYOUT_KEY, JSON.stringify(event.api.toJSON()));
+        localStorage.setItem(layoutKey(), JSON.stringify(event.api.toJSON()));
       } catch {
         // Layout persistence is a convenience; ignore storage errors.
       }

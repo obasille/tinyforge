@@ -1525,3 +1525,46 @@ div.tf-ai-file,
   color: var(--tf-muted);
   font-family: var(--tf-mono);
 }
+
+/* Top bar menu (AI, Reset layout). */
+.tf-menu {
+  position: relative;
+  display: flex;
+}
+
+.tf-menu-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  min-width: 160px;
+  padding: 4px;
+  background: var(--tf-panel);
+  border: 1px solid #3a3a48;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 50%);
+}
+
+.tf-menu-item {
+  padding: 6px 10px;
+  text-align: left;
+  white-space: nowrap;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+}
+
+.tf-menu-item:hover,
+.tf-menu-item:focus-visible {
+  background: #34344a;
+  outline: none;
+}
+
+/* Touch screens: no hover, so no pixel colour readout under the game. */
+@media (pointer: coarse) {
+  .tf-pixel-readout {
+    display: none;
+  }
+}
