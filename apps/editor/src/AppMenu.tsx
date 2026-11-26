@@ -8,7 +8,8 @@ export interface AppMenuItem {
 }
 
 /** The top bar's menu button: less frequent actions (AI, Reset layout). */
-export function AppMenu({ items }: { items: AppMenuItem[] }) {
+/** `up`: the list opens above the button (a button at the bottom of the screen). */
+export function AppMenu({ items, up = false }: { items: AppMenuItem[]; up?: boolean }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -56,7 +57,13 @@ export function AppMenu({ items }: { items: AppMenuItem[] }) {
         ☰
       </button>
       {open && (
-        <div className="tf-menu-list" role="menu" aria-label="Menu" ref={listRef} onKeyDown={onKey}>
+        <div
+          className={up ? 'tf-menu-list tf-menu-up' : 'tf-menu-list'}
+          role="menu"
+          aria-label="Menu"
+          ref={listRef}
+          onKeyDown={onKey}
+        >
           {items.map((item) => (
             <button
               key={item.label}

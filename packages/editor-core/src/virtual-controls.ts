@@ -47,13 +47,49 @@ const el = (tag: string, className: string, text = ''): HTMLElement => {
   return node;
 };
 
-/** Show the controls inside `container`. Returns a function that removes them and releases every button they hold. */
-export function mountVirtualControls(container: HTMLElement, input: InputTracker): () => void {
-  const root = el('div', 'tf-vc');
-  root.dataset.testid = 'virtual-controls';
-  const left = el('div', 'tf-vc-col tf-vc-col-left');
-  const right = el('div', 'tf-vc-col tf-vc-col-right');
-  root.append(left, right);
+/** The button of a vertical column of `bits` (top to bottom) at height y of h. */
+export function columnBit(bits: readonly number[], y: number, h: number): number {
+  const i = Math.floor((y / h) * bits.length);
+  return bits[Math.max(0, Math.min(bits.length - 1, i))] ?? 0;
+}
+
+export interface VirtualControlsOptions {
+  /**
+   * landscape: two columns over the sides of the game (LT, D-pad, Pause and
+   * Restart on the left; RT, the A/B/X/Y diamond and Start on the right).
+   * portrait: one narrow column on each side of the game (the D-pad, then
+   * Y/X/B/A) and a row above it (LT, Pause, Restart, Start, RT).
+   */
+  layout: 'landscape' | 'portrait';
+  onPause(): void;
+  onRestart(): void;
+  /** Label of the pause button (Pause or Resume). */
+  paused?: boolean;
+}
+
+export interface VirtualControls {
+  /** Show whether the game is paused on the pause button. */
+  setPaused(paused: boolean): void;
+  /** Remove the controls and release every button they hold. */
+  dispose(): void;
+}
+
+/**
+ * Show the controls inside `container`, as direct children with the classes
+ * tf-vc-* (the page's CSS places them). Each finger is tracked by its pointer
+ * id; a finger can slide from one button to the next within a group.
+ */
+export function mountVirtualControls(
+  container: HTMLElement,
+  input: InputTracker,
+  options: VirtualControlsOptions,
+): VirtualControls {
+  const added: HTMLElement[] = [];
+  const add = (node: HTMLElement) => {
+    added.push(node);
+    container.append(node);
+    return node;
+  };
 
   /** Elements that light up, by the bit they stand for. */
   const lights: Array<[number, HTMLElement]> = [];
@@ -62,35 +98,6 @@ export function mountVirtualControls(container: HTMLElement, input: InputTracker
     lights.push([bit, node]);
     return node;
   };
-
-  const trigger = (bit: number, label: string) => light(bit, el('div', 'tf-vc-btn tf-vc-trigger', label));
-  const lt = trigger(Button.lt, 'LT');
-  const rt = trigger(Button.rt, 'RT');
-
-  const dpad = el('div', 'tf-vc-pad tf-vc-dpad');
-  for (const [cls, bit, label] of [
-    ['up', Button.up, '▲'],
-    ['left', Button.left, '◀'],
-    ['right', Button.right, '▶'],
-    ['down', Button.down, '▼'],
-  ] as const) {
-    dpad.append(light(bit, el('div', `tf-vc-btn tf-vc-${cls}`, label)));
-  }
-
-  const face = el('div', 'tf-vc-pad tf-vc-face');
-  for (const [cls, bit, label] of [
-    ['up', Button.y, 'Y'],
-    ['left', Button.x, 'X'],
-    ['right', Button.b, 'B'],
-    ['down', Button.a, 'A'],
-  ] as const) {
-    face.append(light(bit, el('div', `tf-vc-btn tf-vc-round tf-vc-${cls}`, label)));
-  }
-
-  const start = light(Button.start, el('div', 'tf-vc-btn tf-vc-start', 'START'));
-  // An empty slot under the D-pad keeps the two columns aligned.
-  left.append(lt, dpad, el('div', 'tf-vc-spacer'));
-  right.append(rt, face, start);
 
   /** What each finger holds. */
   const fingers = new Map<number, number>();
@@ -123,23 +130,99 @@ export function mountVirtualControls(container: HTMLElement, input: InputTracker
       set(e.pointerId, at(e));
     });
     node.addEventListener('pointermove', (e) => {
-      if (fingers.has(e.pointerId) || node.hasPointerCapture?.(e.pointerId)) set(e.pointerId, at(e));
+      if (fingers.has(e.pointerId)) set(e.pointerId, at(e));
     });
     for (const type of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) {
       node.addEventListener(type, (e) => set(e.pointerId, 0));
     }
+    node.addEventListener('contextmenu', (e) => e.preventDefault());
+    return node;
   };
-  control(lt, () => Button.lt);
-  control(rt, () => Button.rt);
-  control(start, () => Button.start);
-  control(dpad, dpadBits);
-  control(face, faceBit);
+
+  const button = (bit: number, className: string, label: string) =>
+    control(light(bit, el('div', `tf-vc-btn ${className}`, label)), () => bit);
+
+  /** Pause and Restart: actions for the editor, not game buttons. */
+  const action = (className: string, label: string, testId: string, run: () => void) => {
+    const node = el('button', `tf-vc-btn tf-vc-action ${className}`, label);
+    node.setAttribute('type', 'button');
+    node.dataset.testid = testId;
+    node.addEventListener('click', run);
+    return node;
+  };
+  const pause = action('tf-vc-pause', '', 'play-pause', options.onPause);
+  const restart = action('tf-vc-restart', '↻', 'play-restart', options.onRestart);
+  restart.title = 'Restart';
+  const setPaused = (paused: boolean) => {
+    pause.textContent = paused ? '▶' : '❚❚';
+    pause.title = paused ? 'Resume' : 'Pause';
+  };
+  setPaused(options.paused ?? false);
+
+  const lt = button(Button.lt, 'tf-vc-trigger', 'LT');
+  const rt = button(Button.rt, 'tf-vc-trigger', 'RT');
+  const start = button(Button.start, 'tf-vc-start', 'START');
+
+  const pad = (className: string, keys: ReadonlyArray<readonly [string, number, string]>) => {
+    const node = el('div', `tf-vc-pad ${className}`);
+    for (const [cls, bit, label] of keys) node.append(light(bit, el('div', `tf-vc-btn tf-vc-${cls}`, label)));
+    return node;
+  };
+  const dpadKeys = [
+    ['up', Button.up, '▲'],
+    ['left', Button.left, '◀'],
+    ['right', Button.right, '▶'],
+    ['down', Button.down, '▼'],
+  ] as const;
+  const faceKeys = [
+    ['up tf-vc-round', Button.y, 'Y'],
+    ['left tf-vc-round', Button.x, 'X'],
+    ['right tf-vc-round', Button.b, 'B'],
+    ['down tf-vc-round', Button.a, 'A'],
+  ] as const;
+
+  const root = el('div', `tf-vc tf-vc-${options.layout}`);
+  root.dataset.testid = 'virtual-controls';
+  if (options.layout === 'landscape') {
+    const left = el('div', 'tf-vc-col tf-vc-col-left');
+    const right = el('div', 'tf-vc-col tf-vc-col-right');
+    const actions = el('div', 'tf-vc-actions');
+    actions.append(pause, restart);
+    left.append(lt, control(pad('tf-vc-dpad', dpadKeys), dpadBits), actions);
+    right.append(rt, control(pad('tf-vc-face', faceKeys), faceBit), start);
+    root.append(left, right);
+    add(root);
+  } else {
+    const top = el('div', 'tf-vc-top');
+    const middle = el('div', 'tf-vc-top-middle');
+    middle.append(pause, restart, start);
+    top.append(lt, middle, rt);
+    const column = (className: string, keys: ReadonlyArray<readonly [string, number, string]>) => {
+      const node = el('div', `tf-vc-column ${className}`);
+      for (const [, bit, label] of keys) node.append(light(bit, el('div', 'tf-vc-btn', label)));
+      const bits = keys.map(([, bit]) => bit);
+      return control(node, (_x, y, _w, h) => columnBit(bits, y, h));
+    };
+    root.append(
+      top,
+      column('tf-vc-column-left', dpadKeys),
+      column('tf-vc-column-right', [
+        [' tf-vc-round', Button.y, 'Y'],
+        [' tf-vc-round', Button.x, 'X'],
+        [' tf-vc-round', Button.b, 'B'],
+        [' tf-vc-round', Button.a, 'A'],
+      ]),
+    );
+    add(root);
+  }
   root.addEventListener('contextmenu', (e) => e.preventDefault());
 
-  container.append(root);
-  return () => {
-    root.remove();
-    fingers.clear();
-    input.clearTouch();
+  return {
+    setPaused,
+    dispose() {
+      for (const node of added) node.remove();
+      fingers.clear();
+      input.clearTouch();
+    },
   };
 }

@@ -84,8 +84,6 @@ export class Editor {
   readonly hasSavedState = createStore(false);
   /** Desktop or touch layout (see layout-mode.ts). */
   readonly layoutMode = createLayoutMode();
-  /** The full-screen play view (touch layout) is shown. */
-  readonly playing = createStore(false);
   /** Color of the game pixel under the mouse, or null when not over the game. */
   readonly pixel = createStore<PixelInfo | null>(null);
   /** The color just copied with F4, shown briefly under the game; null otherwise. */

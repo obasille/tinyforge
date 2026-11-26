@@ -1,6 +1,6 @@
 import { Button } from '@tinyforge/runtime';
 import { describe, expect, it } from 'vitest';
-import { dpadBits, faceBit } from '../src/virtual-controls.ts';
+import { columnBit, dpadBits, faceBit } from '../src/virtual-controls.ts';
 
 describe('dpadBits', () => {
   const at = (x: number, y: number) => dpadBits(x, y, 100, 100);
@@ -26,5 +26,16 @@ describe('faceBit', () => {
     expect(at(10, 50)).toBe(Button.x);
     expect(at(90, 50)).toBe(Button.b);
     expect(at(50, 90)).toBe(Button.a);
+  });
+});
+
+describe('columnBit', () => {
+  it('splits a column into equal parts, top to bottom', () => {
+    const bits = [Button.up, Button.left, Button.right, Button.down];
+    expect(columnBit(bits, 5, 200)).toBe(Button.up);
+    expect(columnBit(bits, 60, 200)).toBe(Button.left);
+    expect(columnBit(bits, 110, 200)).toBe(Button.right);
+    expect(columnBit(bits, 199, 200)).toBe(Button.down);
+    expect(columnBit(bits, 250, 200)).toBe(Button.down);
   });
 });

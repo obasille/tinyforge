@@ -8,12 +8,11 @@ import {
   type IDockviewPanelProps,
   themeDark,
 } from 'dockview-react';
-import { type FunctionComponent, lazy, Suspense, useCallback, useEffect, useRef } from 'react';
+import { type FunctionComponent, lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { EditorContext } from './EditorContext.ts';
 import type { Editor } from './editor.ts';
 import { useStore } from './hooks.ts';
 import { usesTouchLayout } from './layout-mode.ts';
-import { PlayView } from './PlayView.tsx';
 import { CodePanel } from './panels/CodePanel.tsx';
 import { ConsolePanel } from './panels/ConsolePanel.tsx';
 import { FilesPanel } from './panels/FilesPanel.tsx';
@@ -24,7 +23,8 @@ import { withBoundary } from './panels/PanelBoundary.tsx';
 import { RunPanel } from './panels/RunPanel.tsx';
 import { SoundPanel } from './panels/SoundPanel.tsx';
 import { SpritePanel } from './panels/SpritePanel.tsx';
-import { Toolbar } from './Toolbar.tsx';
+import { Toolbar, useMenuItems } from './Toolbar.tsx';
+import { TouchGame } from './TouchGame.tsx';
 
 const LAYOUT_KEY = 'tinyforge.editor.layout.v3';
 
@@ -33,7 +33,10 @@ const LAYOUT_KEY = 'tinyforge.editor.layout.v3';
  * default and is saved under its own key, so each layout keeps its own
  * arrangement and a layout saved before does not hide it.
  */
-const layoutKey = (touch: boolean): string => (touch ? `${LAYOUT_KEY}.touch` : LAYOUT_KEY);
+const layoutKey = (touch: boolean): string => (touch ? `${LAYOUT_KEY}.touch2` : LAYOUT_KEY);
+
+const LANDSCAPE = '(orientation: landscape)';
+const isLandscape = (): boolean => typeof matchMedia === 'function' && matchMedia(LANDSCAPE).matches;
 
 // The AI panel and its code load only when the panel is first shown.
 const AiPanel = lazy(() => import('./panels/AiPanel.tsx'));
@@ -65,7 +68,7 @@ function panelKind(path: string): 'code' | 'sprite' | 'sound' {
 }
 
 /** Show a file: focus its panel, or open one next to the other editor panels (left of the game). */
-function openFilePanel(api: DockviewApi, path: string): void {
+function openFilePanel(api: DockviewApi, path: string, touch = false): void {
   const component = panelKind(path);
   // A save can rename an asset file; its panel keeps its ID and follows the new path.
   const existing =
@@ -75,7 +78,8 @@ function openFilePanel(api: DockviewApi, path: string): void {
     existing.api.setActive();
     return;
   }
-  const sibling = api.panels.find((p) => EDITOR_PANELS.test(p.id));
+  // The touch layout keeps every panel in one group of tabs.
+  const sibling = touch ? api.panels[0] : api.panels.find((p) => EDITOR_PANELS.test(p.id));
   const anchor = api.getPanel('game') ?? api.panels[0];
   api.addPanel({
     id: `${component}:${path}`,
@@ -123,43 +127,21 @@ function defaultLayout(api: DockviewApi, touch: boolean): void {
   else desktopLayout(api);
 }
 
-/** Three columns: Files and Library, the game, then Console, Run and Memory as tabs. */
+/**
+ * The touch layout's panels: one group of tabs, one panel at a time, below
+ * the game (portrait). The game itself is outside the panels (TouchGame).
+ */
 function touchLayout(api: DockviewApi): void {
-  api.addPanel({ id: 'game', component: 'game', title: 'Game' });
-  api.addPanel({
-    id: 'files',
-    component: 'files',
-    title: 'Files',
-    position: { referencePanel: 'game', direction: 'left' },
-    initialWidth: 220,
-  });
-  api.addPanel({
-    id: 'library',
-    component: 'library',
-    title: 'Library',
-    position: { referencePanel: 'files', direction: 'within' },
-  });
-  api.addPanel({
-    id: 'console',
-    component: 'console',
-    title: 'Console',
-    position: { referencePanel: 'game', direction: 'right' },
-    initialWidth: 260,
-  });
-  api.addPanel({
-    id: 'run',
-    component: 'run',
-    title: 'Run',
-    position: { referencePanel: 'console', direction: 'within' },
-  });
-  api.addPanel({
-    id: 'memory',
-    component: 'memory',
-    title: 'Memory',
-    position: { referencePanel: 'console', direction: 'within' },
-  });
+  api.addPanel({ id: 'files', component: 'files', title: 'Files' });
+  for (const [id, title] of [
+    ['library', 'Library'],
+    ['console', 'Console'],
+    ['run', 'Run'],
+    ['memory', 'Memory'],
+  ] as const) {
+    api.addPanel({ id, component: id, title, position: { referencePanel: 'files', direction: 'within' } });
+  }
   api.getPanel('files')?.api.setActive();
-  api.getPanel('console')?.api.setActive();
 }
 
 function desktopLayout(api: DockviewApi): void {
@@ -236,7 +218,14 @@ export function App({ editor }: { editor: Editor }) {
   const apiRef = useRef<DockviewApi | null>(null);
   const mode = useStore(editor.layoutMode);
   const touch = usesTouchLayout(mode);
-  const playing = useStore(editor.playing);
+  const [landscape, setLandscape] = useState(isLandscape);
+  useEffect(() => {
+    if (typeof matchMedia !== 'function') return;
+    const query = matchMedia(LANDSCAPE);
+    const onChange = () => setLandscape(query.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
   const touchRef = useRef(touch);
   // While a layout is being replaced, its intermediate states are not saved.
   const loadingRef = useRef(false);
@@ -283,14 +272,13 @@ export function App({ editor }: { editor: Editor }) {
     editor.viewport.setFractional(touch);
     if (touchRef.current === touch) return;
     touchRef.current = touch;
-    if (!touch) editor.playing.setState(false);
     if (apiRef.current) loadLayout(apiRef.current);
   }, [editor, touch, loadLayout]);
 
   useEffect(
     () =>
       editor.workbench.onOpenFile((path) => {
-        if (apiRef.current) openFilePanel(apiRef.current, path);
+        if (apiRef.current) openFilePanel(apiRef.current, path, touchRef.current);
       }),
     [editor],
   );
@@ -314,6 +302,8 @@ export function App({ editor }: { editor: Editor }) {
     defaultLayout(api, touchRef.current);
   }, []);
 
+  const menu = useMenuItems(editor, resetLayout, showAi, touch);
+
   // Editor shortcuts (see SHORTCUTS). Capture phase, so they work while the
   // game view has focus; undo/redo stay out of text fields.
   useEffect(() => {
@@ -335,12 +325,13 @@ export function App({ editor }: { editor: Editor }) {
 
   return (
     <EditorContext.Provider value={editor}>
-      <div className={touch ? 'tf-app tf-touch' : 'tf-app'}>
+      <div className={touch ? `tf-app tf-touch ${landscape ? 'tf-landscape' : 'tf-portrait'}` : 'tf-app'}>
         <Toolbar onResetLayout={resetLayout} onShowAi={showAi} touch={touch} />
+        {touch && !landscape && <TouchGame key="portrait" layout="portrait" menu={menu} />}
         <div className="tf-dock">
           <DockviewReact components={components} onReady={onReady} theme={themeDark} />
         </div>
-        {touch && playing && <PlayView touch={touch} />}
+        {touch && landscape && <TouchGame key="landscape" layout="landscape" menu={menu} />}
       </div>
     </EditorContext.Provider>
   );

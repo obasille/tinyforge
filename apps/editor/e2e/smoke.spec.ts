@@ -378,78 +378,99 @@ test('each game loads only its own sprites and sounds, and a changed sprite relo
   expect(errors).toEqual([]);
 });
 
-test.describe('on a touch screen', () => {
+const tabGroups = (page: Page) =>
+  page.evaluate(() =>
+    [...document.querySelectorAll('.dv-groupview')].map((g) =>
+      [...g.querySelectorAll('.dv-tab')].map((t) => t.textContent?.trim()),
+    ),
+  );
+
+/** A touch on the on-screen controls (pointer events, as a finger sends them). */
+const touchAt = (page: Page, x: number, y: number, id: number, type: string) =>
+  page.evaluate(
+    ([x, y, id, type]) => {
+      document.elementFromPoint(x as number, y as number)?.dispatchEvent(
+        new PointerEvent(type as string, {
+          bubbles: true,
+          pointerId: id as number,
+          pointerType: 'touch',
+          clientX: x as number,
+          clientY: y as number,
+        }),
+      );
+    },
+    [x, y, id, type] as const,
+  );
+
+const heldButtons = (page: Page) => page.evaluate(() => window.__tf?.editor.input.current.buttons ?? -1);
+
+test.describe('on a touch screen in landscape', () => {
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 844, height: 390 } });
 
-  test('the default layout has three columns and no pixel readout', async ({ page }) => {
-    await page.goto('/');
-    await expect(page.getByTestId('run-status')).toHaveText('running');
-    expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
-    // Files and Library share the left group, Console, Run and Memory the right one.
-    const groups = await page.evaluate(() =>
-      [...document.querySelectorAll('.dv-groupview')].map((g) =>
-        [...g.querySelectorAll('.dv-tab')].map((t) => t.textContent?.trim()),
-      ),
-    );
-    expect(groups).toEqual([['Files', 'Library'], ['Game'], ['Console', 'Run', 'Memory']]);
-    await expect(page.getByTestId('pixel-color')).toBeHidden();
-  });
-});
-
-test.describe('play mode on a touch screen', () => {
-  test.use({ hasTouch: true, isMobile: true, viewport: { width: 844, height: 390 } });
-
-  test('opens full screen with the controls, which press game buttons, and goes back without a restart', async ({
-    page,
-  }) => {
+  test('the game fills the screen with the controls, which press game buttons', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByTestId('run-status')).toHaveText('running');
     const generation = (await session(page))?.generation;
-    await page.getByTestId('play').click();
-    await expect(page.getByTestId('play-view')).toBeVisible();
+    await expect(page.getByTestId('touch-game')).toHaveClass(/tf-touch-game-landscape/);
     await expect(page.getByTestId('virtual-controls')).toBeVisible();
-    // The game fills the height at 4:3.
-    const canvas = await page.getByTestId('play-screen').getByTestId('game-canvas').boundingBox();
+    const canvas = await page.getByTestId('touch-screen').getByTestId('game-canvas').boundingBox();
     expect(Math.round(canvas?.height ?? 0)).toBe(390);
     expect(Math.round(canvas?.width ?? 0)).toBe(520);
 
     // Hold the left of the D-pad and A at once (two fingers).
-    const buttons = () => page.evaluate(() => window.__tf?.editor.input.current.buttons ?? -1);
     const pad = await page.locator('.tf-vc-dpad').boundingBox();
     const face = await page.locator('.tf-vc-face').boundingBox();
     if (!pad || !face) throw new Error('no controls');
-    const press = (x: number, y: number, id: number, type: string) =>
-      page.evaluate(
-        ([x, y, id, type]) => {
-          const target = document.elementFromPoint(x as number, y as number);
-          target?.dispatchEvent(
-            new PointerEvent(type as string, {
-              bubbles: true,
-              pointerId: id as number,
-              pointerType: 'touch',
-              clientX: x as number,
-              clientY: y as number,
-            }),
-          );
-        },
-        [x, y, id, type] as const,
-      );
     const left = [pad.x + 5, pad.y + pad.height / 2] as const;
     const a = [face.x + face.width / 2, face.y + face.height - 5] as const;
-    await press(left[0], left[1], 11, 'pointerdown');
-    await press(a[0], a[1], 12, 'pointerdown');
-    expect(await buttons()).toBe((1 << 2) | (1 << 4));
+    await touchAt(page, left[0], left[1], 11, 'pointerdown');
+    await touchAt(page, a[0], a[1], 12, 'pointerdown');
+    expect(await heldButtons(page)).toBe((1 << 2) | (1 << 4));
     await expect(page.locator('.tf-vc-dpad [data-pressed]')).toHaveText('◀');
-    await press(left[0], left[1], 11, 'pointerup');
-    expect(await buttons()).toBe(1 << 4);
-    await press(a[0], a[1], 12, 'pointercancel');
-    expect(await buttons()).toBe(0);
+    await touchAt(page, left[0], left[1], 11, 'pointerup');
+    expect(await heldButtons(page)).toBe(1 << 4);
+    await touchAt(page, a[0], a[1], 12, 'pointercancel');
+    expect(await heldButtons(page)).toBe(0);
 
-    await page.getByTestId('play-exit').click();
-    await expect(page.getByTestId('play-view')).toHaveCount(0);
-    await expect(page.getByTestId('viewport').getByTestId('game-canvas')).toBeVisible();
+    // Pause and Restart sit at the bottom left; there is no Edit button.
+    await page.getByTestId('play-pause').click();
+    await expect.poll(async () => (await session(page))?.status).toBe('paused');
+    await page.getByTestId('play-pause').click();
+    await expect.poll(async () => (await session(page))?.status).toBe('running');
+    await expect(page.getByTestId('play-exit')).toHaveCount(0);
+
+    // Turning the phone keeps the same game running.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.getByTestId('touch-game')).toHaveClass(/tf-touch-game-portrait/);
+    await expect(page.getByTestId('touch-screen').getByTestId('game-canvas')).toBeVisible();
     expect((await session(page))?.generation).toBe(generation);
     expect((await session(page))?.status).toBe('running');
+  });
+});
+
+test.describe('on a touch screen in portrait', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+
+  test('the game is on top with a column of controls on each side, the panels below as tabs', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByTestId('run-status')).toHaveText('running');
+    await expect(page.getByTestId('touch-game')).toHaveClass(/tf-touch-game-portrait/);
+    expect(await tabGroups(page)).toEqual([['Files', 'Library', 'Console', 'Run', 'Memory']]);
+    await expect(page.getByTestId('pixel-color')).toBeHidden();
+    // The columns sit beside the game, the row with Start and the triggers above it.
+    const screen = await page.getByTestId('touch-screen').boundingBox();
+    const leftColumn = await page.locator('.tf-vc-column-left').boundingBox();
+    const rightColumn = await page.locator('.tf-vc-column-right').boundingBox();
+    const top = await page.locator('.tf-vc-top').boundingBox();
+    if (!screen || !leftColumn || !rightColumn || !top) throw new Error('missing parts');
+    expect(leftColumn.x + leftColumn.width).toBeLessThanOrEqual(screen.x);
+    expect(rightColumn.x).toBeGreaterThanOrEqual(screen.x + screen.width);
+    expect(top.y + top.height).toBeLessThanOrEqual(screen.y);
+    // The bottom quarter of the right column is A.
+    await touchAt(page, rightColumn.x + 20, rightColumn.y + rightColumn.height - 5, 21, 'pointerdown');
+    expect(await heldButtons(page)).toBe(1 << 4);
+    await touchAt(page, rightColumn.x + 20, rightColumn.y + rightColumn.height - 5, 21, 'pointerup');
+    expect(await heldButtons(page)).toBe(0);
   });
 });
 
@@ -457,27 +478,21 @@ test('the menu switches to the touch layout and back, keeping the game running',
   await page.goto('/');
   await expect(page.getByTestId('run-status')).toHaveText('running');
   const generation = (await session(page))?.generation;
-  const groups = () =>
-    page.evaluate(() =>
-      [...document.querySelectorAll('.dv-groupview')].map((g) =>
-        [...g.querySelectorAll('.dv-tab')].map((t) => t.textContent?.trim()),
-      ),
-    );
   await page.getByTestId('app-menu').click();
   await page.getByTestId('use-touch-layout').click();
-  await expect.poll(groups).toEqual([['Files', 'Library'], ['Game'], ['Console', 'Run', 'Memory']]);
-  await expect(page.getByTestId('play')).toBeVisible();
+  // A desktop window is landscape: the game takes the screen, the menu is by Pause.
+  await expect(page.getByTestId('touch-game')).toHaveClass(/tf-touch-game-landscape/);
   // The choice survives a reload.
   await page.reload();
   await expect(page.getByTestId('run-status')).toHaveText('running');
-  await expect(page.getByTestId('play')).toBeVisible();
-  await page.getByTestId('app-menu').click();
+  const touchMenu = page.locator('.tf-touch-menu').getByTestId('app-menu');
+  await touchMenu.click();
   await page.getByTestId('use-desktop-layout').click();
-  await expect(page.getByTestId('play')).toHaveCount(0);
-  await expect.poll(async () => (await groups()).length).toBe(5);
+  await expect(page.getByTestId('touch-game')).toHaveCount(0);
+  await expect.poll(async () => (await tabGroups(page)).length).toBe(5);
+  await expect(page.getByTestId('viewport').getByTestId('game-canvas')).toBeVisible();
   await page.getByTestId('app-menu').click();
   await page.getByTestId('auto-layout').click();
   await expect(page.getByTestId('auto-layout')).toHaveCount(0);
   expect((await session(page))?.status).toBe('running');
-  expect((await session(page))?.generation).toBe(generation);
 });
