@@ -27,6 +27,7 @@
     "watch:host": "tsc -p apps/classic/src/tsconfig.json --watch --preserveWatchOutput",
     "watch:games": "node scripts/watch-games.js",
     "upload": "node scripts/upload.js",
+    "upload:editor": "node scripts/upload-editor.js",
     "serve": "node scripts/serve-classic.js 8080",
     "postbuild": "node scripts/upload.js --if-configured",
     "postbuild:host": "node scripts/upload.js --if-configured",
