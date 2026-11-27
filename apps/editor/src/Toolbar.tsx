@@ -1,3 +1,4 @@
+import { GitHubWorkspace } from '@tinyforge/editor-core';
 import { AppMenu, type AppMenuItem } from './AppMenu.tsx';
 import { useEditor } from './EditorContext.ts';
 import type { Editor } from './editor.ts';
@@ -75,11 +76,46 @@ export function Toolbar({
           onPointerUp={() => editor.viewport.focus()}
         />
       </span>
+      {editor.files.workspace instanceof GitHubWorkspace ? (
+        <SaveState workspace={editor.files.workspace} touch={touch} />
+      ) : null}
       <span className={`tf-status tf-status-${session.status}`} data-testid="run-status" title={session.status}>
         {session.status}
       </span>
       <AppMenu items={items} />
     </header>
+  );
+}
+
+const SAVE_LABELS = {
+  saved: 'Saved',
+  pending: 'Unsaved',
+  saving: 'Saving…',
+  failed: 'Save failed',
+  conflict: 'Conflict',
+} as const;
+
+/** The deployed editor's GitHub saves: their state, and Save (or Reload after a conflict). */
+function SaveState({ workspace, touch }: { workspace: GitHubWorkspace; touch: boolean }) {
+  const save = useStore(workspace.save);
+  const title =
+    save.error ??
+    (save.pending.length > 0
+      ? `Not on GitHub yet: ${save.pending.join(', ')}`
+      : 'Every change is committed to the web branch');
+  return (
+    <span className={`tf-save tf-save-${save.status}`} data-testid="save-state" title={title}>
+      {touch && save.status === 'saved' ? '✓' : SAVE_LABELS[save.status]}
+      {save.status === 'conflict' ? (
+        <button type="button" data-testid="save-reload" onClick={() => location.reload()}>
+          Reload
+        </button>
+      ) : save.status === 'pending' || save.status === 'failed' ? (
+        <button type="button" data-testid="save-now" onClick={() => void workspace.flush()}>
+          {save.status === 'failed' ? 'Retry' : 'Save'}
+        </button>
+      ) : null}
+    </span>
   );
 }
 

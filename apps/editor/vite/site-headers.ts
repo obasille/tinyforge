@@ -24,10 +24,11 @@ const PROXY_SOURCE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 
  * - img-src / media-src blob: data:: sprite previews, covers and sounds.
  * - worker-src blob:: Workers are same-origin files today; blob: keeps a
  *   bundler-inlined Worker working.
- * - connect-src 'self' data:: the static build only reads its own __tf/ files.
- *   data: is for the compiler, which loads a small WebAssembly helper from a
- *   data: URL with fetch(). The AI and GitHub origins are added only when
- *   hosted mode (plan step 5) needs them.
+ * - connect-src 'self' data: blob:: only the site itself. The AI proxy
+ *   (__tf/ai/) talks to Anthropic and GitHub for the page, so their origins
+ *   are not here. data: is for the compiler, which loads a small WebAssembly
+ *   helper from a data: URL with fetch(); blob: is for files changed but not
+ *   yet committed to GitHub, which the game Worker fetches by URL.
  * - frame-ancestors 'none': no framing (clickjacking). Header only, so this
  *   policy is never sent as a meta tag.
  */
@@ -38,7 +39,7 @@ export const CONTENT_SECURITY_POLICY = [
   "img-src 'self' data: blob:",
   "media-src 'self' data: blob:",
   "font-src 'self' data:",
-  "connect-src 'self' data:",
+  "connect-src 'self' data: blob:",
   "worker-src 'self' blob:",
   "object-src 'none'",
   "base-uri 'self'",
@@ -84,9 +85,12 @@ ${headers}
 
 # The page and the project files (__tf/) keep their names across deploys:
 # always revalidate (a 304 when unchanged). assets/.htaccess overrides this.
-<IfModule mod_headers.c>
-  Header set Cache-Control "no-cache"
-</IfModule>
+# The proxy (__tf/ai/) sets its own.
+<If "%{REQUEST_URI} !~ m#^/__tf/ai/#">
+  <IfModule mod_headers.c>
+    Header set Cache-Control "no-cache"
+  </IfModule>
+</If>
 `;
 }
 
@@ -114,7 +118,7 @@ export function aiProxyHtaccess(): string {
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /__tf/ai/
-  RewriteRule ^(status|login|logout|anthropic/v1/messages)$ index.php [L]
+  RewriteRule ^(status|login|logout|anthropic/v1/messages|github/tree|github/commit|github/blob/[0-9a-f]{40})$ index.php [L]
 </IfModule>
 # Streamed replies must not wait for compression: a compressor sends its
 # output in blocks, so the text would arrive in chunks.

@@ -9,8 +9,15 @@
 // limit; ANTHROPIC_API_KEY when it is missing) and the EDITOR_FTP_* settings
 // of pnpm upload:editor. EDITOR_SITE_URL is the site to check afterwards
 // (https://tf.basille.net by default).
+//
+// Saving from the site to GitHub (optional): EDITOR_GITHUB_TOKEN, a
+// fine-grained token for this repository only, with Contents read and write
+// and an expiry date. The site commits to the `web` branch
+// (EDITOR_GITHUB_BRANCH), made from `master` (EDITOR_GITHUB_BASE) the first
+// time. EDITOR_GITHUB_REPO is owner/name, by default this clone's origin.
 import { createInterface } from 'readline/promises';
 import { Buffer } from 'buffer';
+import { execFileSync } from 'child_process';
 import { Readable } from 'stream';
 import ftp from 'basic-ftp';
 import dotenv from 'dotenv';
@@ -34,7 +41,11 @@ if (!key.startsWith('sk-ant-')) {
   process.exit(1);
 }
 if (!process.env.EDITOR_AI_ANTHROPIC_KEY) {
-  console.warn('Using ANTHROPIC_API_KEY. A separate EDITOR_AI_ANTHROPIC_KEY with a monthly limit is safer.');
+  // The site's key is usable by anyone with the password: a key of its own
+  // can have its own spending limit and be revoked without touching dev.
+  console.log(
+    'The site will use your ANTHROPIC_API_KEY. Optional: set EDITOR_AI_ANTHROPIC_KEY to a key used only by the site, with its own spending limit, so you can revoke it without touching your dev key.',
+  );
 }
 
 // Typed in the clear, once: it stays in this terminal's scrollback, so clear
@@ -47,7 +58,40 @@ if (password.length < MIN_PASSWORD) {
   process.exit(1);
 }
 
-const config = aiConfigPhp({ anthropicKey: key, password });
+/** owner/name of this clone's origin remote, or ''. */
+function originRepo() {
+  try {
+    const url = execFileSync('git', ['remote', 'get-url', 'origin']).toString().trim();
+    return /github\.com[:/]([^/]+\/[^/]+?)(\.git)?$/.exec(url)?.[1] ?? '';
+  } catch {
+    return '';
+  }
+}
+
+const githubToken = (process.env.EDITOR_GITHUB_TOKEN || '').trim();
+const github = githubToken
+  ? {
+      github_token: githubToken,
+      github_repo: (process.env.EDITOR_GITHUB_REPO || originRepo()).trim(),
+      github_branch: (process.env.EDITOR_GITHUB_BRANCH || 'web').trim(),
+      github_base: (process.env.EDITOR_GITHUB_BASE || 'master').trim(),
+    }
+  : {};
+if (githubToken) {
+  if (githubToken.startsWith('ghp_')) {
+    console.error('EDITOR_GITHUB_TOKEN is a classic token: use a fine-grained one for this repository only.');
+    process.exit(1);
+  }
+  if (!/^[\w.-]+\/[\w.-]+$/.test(github.github_repo)) {
+    console.error('Set EDITOR_GITHUB_REPO (owner/name) in .env.');
+    process.exit(1);
+  }
+  console.log(`Saving from the site: ${github.github_repo}, branch ${github.github_branch}.`);
+} else {
+  console.log('No EDITOR_GITHUB_TOKEN in .env: the site can use the AI but not save.');
+}
+
+const config = aiConfigPhp({ anthropicKey: key, password, extra: github });
 // If PHP and the rewrite rule both failed, Apache would still refuse this folder.
 const htaccess = '# Written by pnpm ai:setup. Never served.\nRequire all denied\n';
 

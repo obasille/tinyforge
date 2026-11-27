@@ -9,6 +9,15 @@
 //   POST /__tf/ai/login                  { password }: sets the session cookie
 //   POST /__tf/ai/logout                 clears it
 //   POST /__tf/ai/anthropic/v1/messages  forwarded to the Anthropic API with the key, streamed
+//   GET  /__tf/ai/github/tree            the project's files on the web branch (made from
+//                                        the base branch the first time): { head, files }
+//   GET  /__tf/ai/github/blob/<sha>      a file's bytes, by Git blob SHA (never changes)
+//   POST /__tf/ai/github/commit          { base, message, changes: [{ path, content? }] }: one
+//                                        commit on the web branch; 409 when it moved
+//
+// The GitHub token stays here too. Only writable project paths (games/<name>/,
+// assets/<kind>/) can be committed, only to the web branch, and never with
+// force: a branch that moved since `base` is a conflict, not an overwrite.
 //
 // Every request needs HTTPS, the X-TinyForge header (another site cannot add
 // it without a CORS preflight, which is never granted) and, when the browser
@@ -41,6 +50,17 @@ const MAX_BODY = 32 * 1024 * 1024;
 const FLUSH_BYTES = 8192;
 const FLUSH_MS = 200;
 const SETUP = 'AI is not set up on this server. Run pnpm ai:setup on your computer.';
+const GITHUB_API = 'https://api.github.com';
+/** Where project paths live in the repository (packages/engine/tooling/compile-game.ts). */
+const REPO_DIRS = [
+    'games/' => 'packages/engine/assembly/games/',
+    'engine/sdk/' => 'packages/engine/assembly/sdk/',
+    'engine/memory-map.ts' => 'packages/engine/memory-map.ts',
+    'assets/sprites/' => 'assets/sprites/',
+    'assets/sfx/' => 'assets/sfx/',
+    'assets/music/' => 'assets/music/',
+];
+const MAX_COMMIT_FILES = 200;
 
 final class HttpError extends Exception
 {
@@ -99,11 +119,11 @@ function header_value(string $name): ?string
 }
 
 /** HTTPS, the X-TinyForge header, and this site's Origin. */
-function check_request(array $config): void
+function check_request(array $config, bool $needHeader = true): void
 {
     $https = ($_SERVER['HTTPS'] ?? '') === 'on' || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https';
     if (!$https && empty($config['allow_http'])) throw new HttpError(403, 'HTTPS only');
-    if (header_value('X-TinyForge') !== '1') throw new HttpError(403, 'Missing x-tinyforge header');
+    if ($needHeader && header_value('X-TinyForge') !== '1') throw new HttpError(403, 'Missing x-tinyforge header');
     $origin = header_value('Origin');
     $host = (string) ($_SERVER['HTTP_HOST'] ?? '');
     if ($origin !== null && $origin !== "https://$host" && !(!empty($config['allow_http']) && $origin === "http://$host")) {
@@ -285,6 +305,213 @@ function forward(array $config, string $body): void
     curl_close($ch);
 }
 
+// ---- GitHub: the project on the web branch ----
+
+function github_ready(array $config): bool
+{
+    return !empty($config['github_token']) && !empty($config['github_repo'])
+        && preg_match('#^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$#', (string) $config['github_repo']) === 1;
+}
+
+function github_branch(array $config): string
+{
+    return (string) ($config['github_branch'] ?? 'web');
+}
+
+/** A GitHub API call. Returns [status, decoded body]; raw bytes when $raw. */
+function github(array $config, string $method, string $path, ?array $body = null, bool $raw = false): array
+{
+    $ch = curl_init(((string) ($config['github_api'] ?? GITHUB_API)) . $path);
+    $headers = [
+        'Authorization: Bearer ' . $config['github_token'],
+        'Accept: ' . ($raw ? 'application/vnd.github.raw' : 'application/vnd.github+json'),
+        'X-GitHub-Api-Version: 2022-11-28',
+        'User-Agent: TinyForge-editor',
+    ];
+    if ($body !== null) $headers[] = 'Content-Type: application/json';
+    curl_setopt_array($ch, [
+        CURLOPT_CUSTOMREQUEST => $method,
+        CURLOPT_HTTPHEADER => $headers,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 15,
+        CURLOPT_TIMEOUT => 120,
+    ]);
+    if ($body !== null) curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
+    $out = curl_exec($ch);
+    $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+    if ($out === false) throw new HttpError(502, 'Could not reach GitHub');
+    if ($raw) return [$status, $out];
+    return [$status, json_decode((string) $out, true)];
+}
+
+/** GitHub refused: say why in a few words, never echo the response. */
+function github_fail(int $status, string $what): HttpError
+{
+    if ($status === 401) return new HttpError(502, "GitHub refused the token ($what). Run pnpm ai:setup with a valid one.");
+    if ($status === 403 || $status === 429) return new HttpError(503, "GitHub limit reached or access denied ($what). Try again later.");
+    if ($status === 404) return new HttpError(502, "GitHub: not found ($what). Check the repository and the token's access.");
+    return new HttpError(502, "GitHub error $status ($what)");
+}
+
+/** The web branch's head commit, made from the base branch if it does not exist. */
+function github_head(array $config): string
+{
+    $repo = $config['github_repo'];
+    $branch = rawurlencode(github_branch($config));
+    [$status, $ref] = github($config, 'GET', "/repos/$repo/git/ref/heads/$branch");
+    if ($status === 200) return (string) $ref['object']['sha'];
+    if ($status !== 404) throw github_fail($status, 'read the branch');
+    $base = rawurlencode((string) ($config['github_base'] ?? 'master'));
+    [$status, $baseRef] = github($config, 'GET', "/repos/$repo/git/ref/heads/$base");
+    if ($status !== 200) throw github_fail($status, 'read the base branch');
+    $sha = (string) $baseRef['object']['sha'];
+    [$status] = github($config, 'POST', "/repos/$repo/git/refs", ['ref' => 'refs/heads/' . github_branch($config), 'sha' => $sha]);
+    if ($status !== 201 && $status !== 422) throw github_fail($status, 'create the branch');
+    return $status === 201 ? $sha : github_head($config);
+}
+
+/** The project path of a repository path, or null. */
+function project_path(string $repoPath): ?string
+{
+    foreach (REPO_DIRS as $project => $repo) {
+        if ($repoPath === $repo && !str_ends_with($repo, '/')) return $project;
+        if (str_ends_with($repo, '/') && str_starts_with($repoPath, $repo)) {
+            $p = $project . substr($repoPath, strlen($repo));
+            return valid_project_path($p) ? $p : null;
+        }
+    }
+    return null;
+}
+
+/** The repository path of a project path, or null. */
+function repo_path(string $projectPath): ?string
+{
+    if (!valid_project_path($projectPath)) return null;
+    foreach (REPO_DIRS as $project => $repo) {
+        if ($projectPath === $project && !str_ends_with($project, '/')) return $repo;
+        if (str_ends_with($project, '/') && str_starts_with($projectPath, $project)) {
+            return $repo . substr($projectPath, strlen($project));
+        }
+    }
+    return null;
+}
+
+/** packages/engine/tooling/project-layout.ts isProjectPath. */
+function valid_project_path(string $p): bool
+{
+    if ($p === '' || strlen($p) > 512 || str_contains($p, '\\') || preg_match('/[\x00-\x1f\x7f]/', $p)) return false;
+    foreach (explode('/', $p) as $segment) {
+        if ($segment === '' || $segment[0] === '.') return false;
+    }
+    return true;
+}
+
+/** project-layout.ts isWritablePath: games/<name>/... and assets/<kind>/... only. */
+function writable_path(string $p): bool
+{
+    if (!valid_project_path($p)) return false;
+    $parts = explode('/', $p);
+    if ($parts[0] === 'games') return count($parts) >= 3 && preg_match('/^[A-Za-z0-9_-]+$/', $parts[1]) === 1;
+    if ($parts[0] === 'assets') return count($parts) >= 3 && in_array($parts[1], ['sprites', 'sfx', 'music'], true);
+    return false;
+}
+
+function github_route(array $config, string $route, string $method): void
+{
+    if (!logged_in($config)) throw new HttpError(401, 'Log in first');
+    if (!github_ready($config)) throw new HttpError(503, 'Saving to GitHub is not set up. Run pnpm ai:setup with EDITOR_GITHUB_TOKEN.');
+    $repo = $config['github_repo'];
+
+    if ($route === 'tree' && $method === 'GET') {
+        $head = github_head($config);
+        [$status, $tree] = github($config, 'GET', "/repos/$repo/git/trees/$head?recursive=1");
+        if ($status !== 200) throw github_fail($status, 'list the files');
+        $files = [];
+        foreach ($tree['tree'] ?? [] as $item) {
+            if (($item['type'] ?? '') !== 'blob') continue;
+            $p = project_path((string) $item['path']);
+            if ($p !== null) $files[] = ['path' => $p, 'size' => (int) ($item['size'] ?? 0), 'sha' => (string) $item['sha']];
+        }
+        send_json(200, ['head' => $head, 'truncated' => !empty($tree['truncated']), 'files' => $files]);
+        return;
+    }
+
+    if (str_starts_with($route, 'blob/') && $method === 'GET') {
+        $sha = substr($route, strlen('blob/'));
+        if (!preg_match('/^[0-9a-f]{40}$/', $sha)) throw new HttpError(400, 'Bad blob id');
+        [$status, $bytes] = github($config, 'GET', "/repos/$repo/git/blobs/$sha", null, true);
+        if ($status !== 200) throw github_fail($status, 'read a file');
+        http_response_code(200);
+        header('Content-Type: application/octet-stream');
+        // A blob's id is its content's hash: it never changes.
+        header('Cache-Control: private, max-age=31536000, immutable');
+        echo $bytes;
+        return;
+    }
+
+    if ($route === 'commit' && $method === 'POST') {
+        rate_limit($config, 'commits', 120);
+        $input = json_decode(read_body(), true);
+        if (!is_array($input) || !is_string($input['base'] ?? null) || !is_array($input['changes'] ?? null)) {
+            throw new HttpError(400, 'Expected { base, message, changes }');
+        }
+        $base = $input['base'];
+        if (!preg_match('/^[0-9a-f]{40}$/', $base)) throw new HttpError(400, 'Bad base commit');
+        $changes = $input['changes'];
+        if (count($changes) === 0 || count($changes) > MAX_COMMIT_FILES) throw new HttpError(400, 'Between 1 and ' . MAX_COMMIT_FILES . ' files per commit');
+
+        // Someone else committed since the editor read the branch: never overwrite.
+        $head = github_head($config);
+        if ($head !== $base) {
+            send_json(409, ['error' => 'The web branch changed since the editor read it.', 'head' => $head]);
+            return;
+        }
+        [$status, $commit] = github($config, 'GET', "/repos/$repo/git/commits/$base");
+        if ($status !== 200) throw github_fail($status, 'read the commit');
+
+        $tree = [];
+        $blobs = [];
+        foreach ($changes as $change) {
+            $path = is_array($change) ? (string) ($change['path'] ?? '') : '';
+            if (!writable_path($path)) throw new HttpError(403, "Not writable: " . substr($path, 0, 100));
+            $repoPath = repo_path($path);
+            if (array_key_exists('content', $change) && $change['content'] !== null) {
+                [$status, $blob] = github($config, 'POST', "/repos/$repo/git/blobs", ['content' => (string) $change['content'], 'encoding' => 'base64']);
+                if ($status !== 201) throw github_fail($status, 'store a file');
+                $blobs[$path] = (string) $blob['sha'];
+                $tree[] = ['path' => $repoPath, 'mode' => '100644', 'type' => 'blob', 'sha' => $blobs[$path]];
+            } else {
+                $tree[] = ['path' => $repoPath, 'mode' => '100644', 'type' => 'blob', 'sha' => null];
+            }
+        }
+        [$status, $newTree] = github($config, 'POST', "/repos/$repo/git/trees", ['base_tree' => $commit['tree']['sha'], 'tree' => $tree]);
+        if ($status !== 201) throw github_fail($status, 'build the commit');
+        // Nothing changed (the files were already like this): no empty commit.
+        if ($newTree['sha'] === $commit['tree']['sha']) {
+            send_json(200, ['head' => $base, 'blobs' => (object) $blobs]);
+            return;
+        }
+        $message = substr(trim((string) ($input['message'] ?? '')), 0, 2000) ?: 'Edit from the TinyForge editor';
+        [$status, $newCommit] = github($config, 'POST', "/repos/$repo/git/commits", [
+            'message' => $message,
+            'tree' => $newTree['sha'],
+            'parents' => [$base],
+        ]);
+        if ($status !== 201) throw github_fail($status, 'commit');
+        $branch = rawurlencode(github_branch($config));
+        [$status] = github($config, 'PATCH', "/repos/$repo/git/refs/heads/$branch", ['sha' => $newCommit['sha'], 'force' => false]);
+        if ($status === 422) {
+            send_json(409, ['error' => 'The web branch changed while saving.', 'head' => github_head($config)]);
+            return;
+        }
+        if ($status !== 200) throw github_fail($status, 'move the branch');
+        send_json(200, ['head' => (string) $newCommit['sha'], 'blobs' => (object) $blobs]);
+        return;
+    }
+    throw new HttpError(404, 'Not found');
+}
+
 function handle(): void
 {
     $path = (string) parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH);
@@ -300,17 +527,24 @@ function handle(): void
         }
         throw new HttpError(503, SETUP);
     }
-    check_request($config);
+    // A game Worker fetches assets by URL and cannot add the header. Blobs are
+    // the repository's own (public) file contents, and still need the login.
+    $isBlob = $method === 'GET' && str_starts_with($route, 'github/blob/');
+    check_request($config, !$isBlob);
 
     if ($route === 'status' && $method === 'GET') {
         if (!logged_in($config)) {
             send_json(200, ['providers' => [], 'login' => 'password']);
             return;
         }
-        send_json(200, [
+        $status = [
             'providers' => [['id' => 'anthropic', 'models' => MODELS, 'defaultModel' => DEFAULT_MODEL]],
             'session' => true,
-        ]);
+        ];
+        if (github_ready($config)) {
+            $status['github'] = ['repo' => $config['github_repo'], 'branch' => github_branch($config)];
+        }
+        send_json(200, $status);
         return;
     }
     if ($route === 'login' && $method === 'POST') {
@@ -329,6 +563,10 @@ function handle(): void
     if ($route === 'logout' && $method === 'POST') {
         set_cookie($config, '', time() - 3600);
         send_json(200, ['ok' => true]);
+        return;
+    }
+    if (str_starts_with($route, 'github/')) {
+        github_route($config, substr($route, strlen('github/')), $method);
         return;
     }
     if ($route === 'anthropic/v1/messages' && $method === 'POST') {

@@ -10,7 +10,7 @@
 // (apps/editor/server/ai/index.php) that holds the key; the panel then asks
 // for its password first.
 
-import { createStore } from '@tinyforge/editor-core';
+import { createStore, GitHubWorkspace } from '@tinyforge/editor-core';
 import {
   Agent,
   type AiProvider,
@@ -121,6 +121,20 @@ export default function AiPanel() {
 
   const [checks, setChecks] = useState(0);
   const recheck = () => setChecks((n) => n + 1);
+  // Save what is pending first; the editor then restarts read-only.
+  const logout = async () => {
+    const ws = editor.files.workspace;
+    if (ws instanceof GitHubWorkspace) await ws.flush();
+    await aiLogout();
+    if (ws instanceof GitHubWorkspace) location.reload();
+    else recheck();
+  };
+  // With GitHub saving set up, the editor restarts on the web branch.
+  const afterLogin = () =>
+    void fetchAiStatus().then((s) => {
+      if (s?.github && !editor.files.writable) location.reload();
+      else recheck();
+    });
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: `checks` asks again after a login or logout
   useEffect(() => {
@@ -155,7 +169,7 @@ export default function AiPanel() {
   if (status?.login) {
     return (
       <div className="tf-ai" data-testid="ai-panel">
-        <AiLoginForm onDone={recheck} />
+        <AiLoginForm onDone={afterLogin} />
       </div>
     );
   }
@@ -165,11 +179,7 @@ export default function AiPanel() {
 
   return (
     <div className="tf-ai" data-testid="ai-panel">
-      <Settings
-        status={status ?? null}
-        onNewChat={newChat}
-        onLogout={status?.session ? () => void aiLogout().then(recheck) : null}
-      />
+      <Settings status={status ?? null} onNewChat={newChat} onLogout={status?.session ? () => void logout() : null} />
       {game && !notice ? (
         <div className="tf-ai-scope" data-testid="ai-scope">
           Working on <strong>{game}</strong>
