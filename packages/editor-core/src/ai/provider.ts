@@ -93,6 +93,26 @@ export interface AiStatus {
   providers: Array<{ id: string; models: string[]; defaultModel: string }>;
   /** Why AI is off when no provider is listed, or a setting in .env that is refused. */
   reason?: string;
+  /** The deployed editor's proxy wants a login first (how). */
+  login?: 'password';
+  /** Logged in to the deployed editor's proxy: the panel offers Log out. */
+  session?: boolean;
+}
+
+/** Log in to the deployed editor's AI proxy. Resolves to an error message, or null when logged in. */
+export async function aiLogin(password: string, fetchFn: typeof fetch = fetch): Promise<string | null> {
+  const res = await fetchFn(`${AI_BASE}/login`, {
+    method: 'POST',
+    headers: { 'X-TinyForge': '1', 'content-type': 'application/json' },
+    body: JSON.stringify({ password }),
+  });
+  if (res.ok) return null;
+  return res.status === 401 ? 'Wrong password.' : (await res.text()).slice(0, 200) || `Error ${res.status}`;
+}
+
+/** Log out of the deployed editor's AI proxy. */
+export async function aiLogout(fetchFn: typeof fetch = fetch): Promise<void> {
+  await fetchFn(`${AI_BASE}/logout`, { method: 'POST', headers: { 'X-TinyForge': '1' } });
 }
 
 export const emptyUsage = (): Usage => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });

@@ -906,6 +906,7 @@ pnpm watch:games
 - `pnpm dev` - Start the new editor (see [The Editor](#the-editor))
 - `pnpm editor:static` - Build the editor as static files with a read-only copy of the project, and serve them on http://localhost:4173 (no AI)
 - `pnpm test:e2e:static` - Build the editor and check it under the deployed site's Content-Security-Policy
+- `pnpm ai:setup` - Set the deployed editor's AI password and upload its key (see [The Editor](#the-editor))
 
 **Command line (`pnpm tf help` lists them):**
 
@@ -1032,6 +1033,19 @@ preview` (and so `pnpm editor:static`) sends the same CSP, and
 `pnpm test:e2e:static` builds the editor and checks that games compile and run
 under it with no violation. `pnpm upload:editor` refuses to upload a build
 that contains an API key, a GitHub token or any value from `.env`.
+
+**AI in the deployed editor:** a small PHP proxy (`apps/editor/server/ai/index.php`,
+deployed with the editor under `__tf/ai/`) answers the same routes as the dev
+server and holds the Anthropic key; the browser never sees it. The AI panel
+asks for a password (the browser's password manager can keep it), and the
+proxy then sets a 30-day session cookie that scripts cannot read. It forwards
+only the editor's models, at most 300 requests an hour, and refuses logins for
+an hour after 10 wrong passwords. To set it up, put a key made for this (with
+a monthly spending limit) in `.env` as `EDITOR_AI_ANTHROPIC_KEY`, deploy, then
+run `pnpm ai:setup`: it asks for the password (shown as you type) and uploads the key and the
+password's hash to `/.private/` on the site (refused to browsers), and checks
+that the site answers. Run it again to change the password, which logs every
+browser out.
 
 - **The game runs in a Web Worker** with an `OffscreenCanvas`, so heavy gameplay
   code cannot stall the editor. Audio is played on the main thread

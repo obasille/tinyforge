@@ -5,12 +5,18 @@
 // The settings (provider and model, effort, show cost) are a preference of
 // this browser, saved in localStorage; the dev server's .env sets which
 // providers there are and the default model. No API key reaches the page.
+//
+// The deployed editor answers the same routes with a PHP proxy
+// (apps/editor/server/ai/index.php) that holds the key; the panel then asks
+// for its password first.
 
 import { createStore } from '@tinyforge/editor-core';
 import {
   Agent,
   type AiProvider,
   type AiStatus,
+  aiLogin,
+  aiLogout,
   type ChatItem,
   type ChatSettings,
   ClaudeProvider,
@@ -22,7 +28,7 @@ import {
   readSdkApi,
   systemPrompt,
 } from '@tinyforge/editor-core/ai';
-import { useEffect, useRef, useState } from 'react';
+import { type FormEvent, useEffect, useRef, useState } from 'react';
 import guide from '../../../../AGENTS.md?raw';
 import { useEditor } from '../EditorContext.ts';
 import type { Editor } from '../editor.ts';
@@ -107,11 +113,16 @@ async function agentFor(editor: Editor, game: string, provider: ProviderStatus):
 export default function AiPanel() {
   const editor = useEditor();
   const game = useStore(editor.project).game;
+  const { writable } = useStore(editor.files.state);
   const [status, setStatus] = useState<AiStatus | null | undefined>(undefined);
   const [agent, setAgent] = useState<Agent | null>(null);
   const { provider: providerId, onlyGame } = useStore(settings);
   const provider = status?.providers.find((p) => p.id === providerId) ?? null;
 
+  const [checks, setChecks] = useState(0);
+  const recheck = () => setChecks((n) => n + 1);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `checks` asks again after a login or logout
   useEffect(() => {
     void fetchAiStatus().then((s) => {
       setStatus(s);
@@ -122,7 +133,7 @@ export default function AiPanel() {
       const first = saved ?? s?.providers[0];
       if (first) settings.setState((x) => ({ ...x, provider: first.id, model: first.defaultModel }));
     });
-  }, []);
+  }, [checks]);
 
   useEffect(() => {
     setAgent(null);
@@ -141,13 +152,24 @@ export default function AiPanel() {
   };
 
   let notice: string | null = null;
-  if (status === null) notice = 'AI needs the dev server (pnpm dev). A static build has no AI.';
+  if (status?.login) {
+    return (
+      <div className="tf-ai" data-testid="ai-panel">
+        <AiLoginForm onDone={recheck} />
+      </div>
+    );
+  }
+  if (status === null) notice = 'AI needs the dev server (pnpm dev), or the AI proxy of the deployed editor.';
   else if (status && status.providers.length === 0) notice = status.reason ?? 'AI is not set up.';
   else if (!game) notice = 'Pick a game first.';
 
   return (
     <div className="tf-ai" data-testid="ai-panel">
-      <Settings status={status ?? null} onNewChat={newChat} />
+      <Settings
+        status={status ?? null}
+        onNewChat={newChat}
+        onLogout={status?.session ? () => void aiLogout().then(recheck) : null}
+      />
       {game && !notice ? (
         <div className="tf-ai-scope" data-testid="ai-scope">
           Working on <strong>{game}</strong>
@@ -160,6 +182,11 @@ export default function AiPanel() {
             />
             Only change this game
           </label>
+        </div>
+      ) : null}
+      {game && !notice && !writable ? (
+        <div className="tf-ai-notice" data-testid="ai-read-only">
+          This copy of the editor is read-only: the AI can explain and suggest changes, but cannot save them.
         </div>
       ) : null}
       {status?.reason && status.providers.length > 0 ? (
@@ -180,7 +207,70 @@ export default function AiPanel() {
 
 const PROVIDER_LABELS: Record<string, string> = { anthropic: 'Claude', openai: 'OpenAI-compatible (.env)' };
 
-function Settings({ status, onNewChat }: { status: AiStatus | null; onNewChat: () => void }) {
+/**
+ * The proxy's login: a real form with a username and a password field, so the
+ * browser's password manager offers to save the password and fills it in.
+ */
+function AiLoginForm({ onDone }: { onDone: () => void }) {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    aiLogin(password)
+      .then((problem) => {
+        if (problem) setError(problem);
+        else onDone();
+      })
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
+      .finally(() => setBusy(false));
+  };
+  return (
+    <form className="tf-ai-login" data-testid="ai-login" onSubmit={submit}>
+      <p>Log in to use the AI. The API key stays on the server.</p>
+      <label>
+        Name
+        <input type="text" name="username" autoComplete="username" value="TinyForge AI" readOnly />
+      </label>
+      <label>
+        Password
+        <input
+          type="password"
+          name="password"
+          autoComplete="current-password"
+          data-testid="ai-login-password"
+          required
+          value={password}
+          onChange={(e) => {
+            setPassword(e.target.value);
+            setError('');
+          }}
+        />
+      </label>
+      {error ? (
+        <div className="tf-ai-error" role="alert" data-testid="ai-login-error">
+          {error}
+        </div>
+      ) : null}
+      <button type="submit" data-testid="ai-login-submit" disabled={busy}>
+        {busy ? 'Logging in…' : 'Log in'}
+      </button>
+    </form>
+  );
+}
+
+function Settings({
+  status,
+  onNewChat,
+  onLogout,
+}: {
+  status: AiStatus | null;
+  onNewChat: () => void;
+  onLogout: (() => void) | null;
+}) {
   const s = useStore(settings);
   const providers = status?.providers ?? [];
   // A provider's id never has a ':'; a model's name may (llama3.1:8b).
@@ -236,6 +326,11 @@ function Settings({ status, onNewChat }: { status: AiStatus | null; onNewChat: (
       <button type="button" onClick={onNewChat} title="Forget this conversation and start a new one">
         New chat
       </button>
+      {onLogout ? (
+        <button type="button" data-testid="ai-logout" onClick={onLogout} title="Log out of the AI on this device">
+          Log out
+        </button>
+      ) : null}
     </div>
   );
 }

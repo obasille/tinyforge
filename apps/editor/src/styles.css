@@ -2016,3 +2016,34 @@ div.tf-ai-file,
   min-height: 40px;
   font-size: 15px;
 }
+
+/* The AI proxy's login (deployed editor). */
+.tf-ai-login {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  max-width: 420px;
+}
+
+.tf-ai-login p {
+  margin: 0;
+  color: var(--tf-muted);
+}
+
+.tf-ai-login label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* 16 px: iOS zooms into smaller fields. 44 px: touch target. */
+.tf-ai form.tf-ai-login input,
+.tf-ai form.tf-ai-login button {
+  min-height: 44px;
+  font-size: 16px;
+}
+
+.tf-ai-login input[readonly] {
+  color: var(--tf-muted);
+}

@@ -52,6 +52,9 @@ export interface AgentOptions {
 
 /** Which games this request may change, as the user set it. */
 function scopeLine(context: AgentContext): string {
+  if (!context.files.writable) {
+    return 'This copy of the editor is read-only: no file can be changed or created here. Do not try. Explain the change and show the code to change instead.';
+  }
   return context.onlyGame()
     ? `You may change only games/${context.game}/ (the user limited changes to this game).`
     : `You may change any game's files (games/<name>/), not only ${context.game}; compile each game you change.`;

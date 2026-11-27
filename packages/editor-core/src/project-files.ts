@@ -9,7 +9,7 @@ import { ASSET_KINDS, type AssetKind } from '@tinyforge/engine/tooling/asset-sca
 import { assetFilesIn, assetKindOf, gamesIn } from '@tinyforge/engine/tooling/project-layout';
 import type { AssetManifest, AssetRef } from './protocol.ts';
 import { createStore, type Store } from './store.ts';
-import type { FileChange, FileEntry, Workspace } from './workspace.ts';
+import { type FileChange, type FileEntry, type Workspace, WorkspaceError } from './workspace.ts';
 
 export interface ProjectFilesState {
   files: FileEntry[];
@@ -30,6 +30,9 @@ export function parseAssetName(file: string): { id: string; format: string } {
   }
   return { id: dash >= 0 ? name.slice(0, dash) : name, format: '' };
 }
+
+/** Why a change fails in a read-only copy of the project. */
+export const READ_ONLY = 'This copy of the editor is read-only: it cannot save changes.';
 
 export class ProjectFiles {
   readonly state: Store<ProjectFilesState> = createStore<ProjectFilesState>({
@@ -140,7 +143,14 @@ export class ProjectFiles {
     };
   }
 
+  /** Refuse a change in a read-only copy (the static build) before any request. */
+  private checkWritable(): void {
+    const { ready, writable } = this.state.getState();
+    if (ready && !writable) throw new WorkspaceError(READ_ONLY, 403);
+  }
+
   async write(path: string, data: Uint8Array | string): Promise<void> {
+    this.checkWritable();
     const existed = this.byPath.has(path);
     this.cache.delete(path);
     await this.workspace.write(path, data);
@@ -149,6 +159,7 @@ export class ProjectFiles {
   }
 
   async delete(path: string): Promise<void> {
+    this.checkWritable();
     this.cache.delete(path);
     await this.workspace.delete(path);
     this.own.set(path, false);
@@ -156,6 +167,7 @@ export class ProjectFiles {
   }
 
   async rename(from: string, to: string): Promise<void> {
+    this.checkWritable();
     this.cache.delete(from);
     this.cache.delete(to);
     await this.workspace.rename(from, to);
