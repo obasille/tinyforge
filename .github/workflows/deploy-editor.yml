@@ -1,5 +1,6 @@
 # Builds the editor and uploads it to its FTP account (https://basille.net/tf/),
-# the same as `pnpm build:editor` then `pnpm upload:editor` on a PC.
+# the same as `pnpm build:editor` then `pnpm upload:editor` on a PC. Only the
+# files that changed since the last deploy are sent (see scripts/upload-editor.js).
 #
 # Runs only when started by hand (Actions > Deploy editor > Run workflow) on the
 # branch picked there, and on pushes to master that touch the editor. It never
@@ -15,6 +16,10 @@ on:
     inputs:
       with_maps:
         description: Upload source maps too
+        type: boolean
+        default: false
+      full:
+        description: Upload every file (ignore the manifest of what is there)
         type: boolean
         default: false
   push:
@@ -66,7 +71,8 @@ jobs:
           EDITOR_FTP_SECURE: ${{ secrets.EDITOR_FTP_SECURE }}
           EDITOR_FTP_PORT: ${{ secrets.EDITOR_FTP_PORT }}
           WITH_MAPS: ${{ inputs.with_maps && '--with-maps' || '' }}
-        run: pnpm upload:editor -- $WITH_MAPS
+          FULL: ${{ inputs.full && '--full' || '' }}
+        run: pnpm upload:editor -- $WITH_MAPS $FULL
 
       - name: Check the site
         run: curl --fail --silent --show-error --output /dev/null https://basille.net/tf/
