@@ -116,8 +116,10 @@ export function aiProxyHtaccess(): string {
   RewriteBase /__tf/ai/
   RewriteRule ^(status|login|logout|anthropic/v1/messages)$ index.php [L]
 </IfModule>
-# Streamed replies must not wait for compression.
+# Streamed replies must not wait for compression: a compressor sends its
+# output in blocks, so the text would arrive in chunks.
 SetEnv no-gzip 1
+SetEnv no-brotli 1
 <Files ".user.ini">
   Require all denied
 </Files>

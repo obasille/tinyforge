@@ -206,8 +206,12 @@ function forward(array $config, string $body): void
     $beta = header_value('anthropic-beta');
     if ($beta !== null && preg_match('/^[a-z0-9-]+(,[a-z0-9-]+)*$/', $beta)) $headers[] = "anthropic-beta: $beta";
 
-    // No buffering anywhere between here and the browser.
+    // No buffering or compression anywhere between here and the browser.
     @ini_set('zlib.output_compression', '0');
+    if (function_exists('apache_setenv')) {
+        @apache_setenv('no-gzip', '1');
+        @apache_setenv('no-brotli', '1');
+    }
     while (ob_get_level() > 0) ob_end_flush();
     @set_time_limit(0);
     header('Cache-Control: no-store');
