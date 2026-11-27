@@ -13,7 +13,7 @@ describe('site headers', () => {
   it('writes the CSP, HSTS and the HTTPS redirect into the root .htaccess', () => {
     const text = rootHtaccess();
     expect(text).toContain(`Header always set Content-Security-Policy "${CONTENT_SECURITY_POLICY}"`);
-    expect(text).toContain('Strict-Transport-Security');
+    expect(text).toContain('Strict-Transport-Security "max-age=86400"');
     expect(text).toMatch(/RewriteCond %\{HTTPS\} !=on\n.*X-Forwarded-Proto\} !=https\n.*R=301/);
   });
 

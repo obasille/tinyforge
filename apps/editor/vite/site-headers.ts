@@ -68,8 +68,9 @@ export function rootHtaccess(): string {
 
 <IfModule mod_headers.c>
 ${headers}
-  # Browsers ignore this header over plain HTTP. One year, this host only.
-  Header always set Strict-Transport-Security "max-age=31536000"
+  # Browsers ignore this header over plain HTTP. One day to start, this host
+  # only: raise it to a year (31536000) once the site has run fine on HTTPS.
+  Header always set Strict-Transport-Security "max-age=86400"
 </IfModule>
 
 # The page and the project files (__tf/) keep their names across deploys:
