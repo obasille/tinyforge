@@ -18,7 +18,7 @@ on:
         type: boolean
         default: false
   push:
-    branches: [master]
+    branches: [master, claude/deploy-editor-action] # TEMP: test run, remove before merge
     paths:
       - apps/editor/**
       - packages/**
