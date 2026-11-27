@@ -76,6 +76,8 @@ test('the deployed editor logs in to its AI proxy, chats, and logs out', async (
   await panel.getByTestId('ai-login-password').fill('the right password');
   await panel.getByTestId('ai-login-submit').click();
   await expect(panel.getByTestId('ai-model')).toHaveValue('anthropic:claude-opus-5-5');
+  // The static copy cannot save: the panel says so (and the AI is told).
+  await expect(panel.getByTestId('ai-read-only')).toBeVisible();
   expect(logins).toEqual(['not it', 'the right password']);
 
   await panel.getByTestId('ai-input').fill('Say hello');

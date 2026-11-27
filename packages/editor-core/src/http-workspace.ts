@@ -38,7 +38,9 @@ export class HttpWorkspace implements Workspace {
   private async request(path: string, init: RequestInit = {}): Promise<Response> {
     const res = await this.fetch(new URL(path, this.base).href, { cache: 'no-store', ...init });
     if (!res.ok) {
-      const text = await res.text().catch(() => '');
+      // A web server's own error page (HTML) says nothing useful: keep only the status.
+      const html = /html|xml/i.test(res.headers.get('content-type') ?? '');
+      const text = html ? '' : (await res.text().catch(() => '')).slice(0, 300);
       throw new WorkspaceError(text || `HTTP ${res.status}`, res.status);
     }
     return res;

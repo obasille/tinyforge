@@ -113,6 +113,7 @@ async function agentFor(editor: Editor, game: string, provider: ProviderStatus):
 export default function AiPanel() {
   const editor = useEditor();
   const game = useStore(editor.project).game;
+  const { writable } = useStore(editor.files.state);
   const [status, setStatus] = useState<AiStatus | null | undefined>(undefined);
   const [agent, setAgent] = useState<Agent | null>(null);
   const { provider: providerId, onlyGame } = useStore(settings);
@@ -181,6 +182,11 @@ export default function AiPanel() {
             />
             Only change this game
           </label>
+        </div>
+      ) : null}
+      {game && !notice && !writable ? (
+        <div className="tf-ai-notice" data-testid="ai-read-only">
+          This copy of the editor is read-only: the AI can explain and suggest changes, but cannot save them.
         </div>
       ) : null}
       {status?.reason && status.providers.length > 0 ? (
