@@ -23,7 +23,7 @@ declare global {
 
 async function boot(): Promise<void> {
   // The project's files: served by the dev server (or a static copy of them),
-  // or the mobile branch on GitHub in the deployed editor.
+  // or the web branch on GitHub in the deployed editor.
   const files = new ProjectFiles(await chooseWorkspace(document.baseURI));
   await files.start();
   const editor = new Editor(files);

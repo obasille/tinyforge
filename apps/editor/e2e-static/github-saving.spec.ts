@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { expect, type Page, test } from '@playwright/test';
 
 // The deployed editor saving to GitHub. The proxy's GitHub routes are faked
-// here (their PHP is tested in vite/ai-proxy-php.test.ts): the mobile branch
+// here (their PHP is tested in vite/ai-proxy-php.test.ts): the web branch
 // is the deployed copy, so files come from the static __tf/files/.
 
 const DIST = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist');
@@ -58,7 +58,7 @@ async function fakeSite(page: Page, replies: Block[][]) {
       json: {
         providers: [{ id: 'anthropic', models: ['claude-opus-5-5'], defaultModel: 'claude-opus-5-5' }],
         session: true,
-        github: { repo: 'me/game', branch: 'mobile' },
+        github: { repo: 'me/game', branch: 'web' },
       },
     }),
   );
@@ -80,7 +80,7 @@ async function fakeSite(page: Page, replies: Block[][]) {
   return commits;
 }
 
-test('an AI edit becomes one commit on the mobile branch', async ({ page }) => {
+test('an AI edit becomes one commit on the web branch', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));

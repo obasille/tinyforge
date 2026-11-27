@@ -1,6 +1,6 @@
 // Which Workspace the editor runs on: the dev server's (or a static copy's)
 // HTTP protocol, or, in the deployed editor once logged in to its proxy with
-// GitHub set up, the mobile branch on GitHub.
+// GitHub set up, the web branch on GitHub.
 
 import { GitHubWorkspace, HttpWorkspace, type Workspace } from '@tinyforge/editor-core';
 

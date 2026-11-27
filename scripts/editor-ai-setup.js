@@ -12,7 +12,7 @@
 //
 // Saving from the site to GitHub (optional): EDITOR_GITHUB_TOKEN, a
 // fine-grained token for this repository only, with Contents read and write
-// and an expiry date. The site commits to the `mobile` branch
+// and an expiry date. The site commits to the `web` branch
 // (EDITOR_GITHUB_BRANCH), made from `master` (EDITOR_GITHUB_BASE) the first
 // time. EDITOR_GITHUB_REPO is owner/name, by default this clone's origin.
 import { createInterface } from 'readline/promises';
@@ -69,7 +69,7 @@ const github = githubToken
   ? {
       github_token: githubToken,
       github_repo: (process.env.EDITOR_GITHUB_REPO || originRepo()).trim(),
-      github_branch: (process.env.EDITOR_GITHUB_BRANCH || 'mobile').trim(),
+      github_branch: (process.env.EDITOR_GITHUB_BRANCH || 'web').trim(),
       github_base: (process.env.EDITOR_GITHUB_BASE || 'master').trim(),
     }
   : {};

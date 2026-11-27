@@ -129,7 +129,7 @@ export default function AiPanel() {
     if (ws instanceof GitHubWorkspace) location.reload();
     else recheck();
   };
-  // With GitHub saving set up, the editor restarts on the mobile branch.
+  // With GitHub saving set up, the editor restarts on the web branch.
   const afterLogin = () =>
     void fetchAiStatus().then((s) => {
       if (s?.github && !editor.files.writable) location.reload();

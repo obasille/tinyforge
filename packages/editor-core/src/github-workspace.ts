@@ -1,5 +1,5 @@
 // Workspace on GitHub, for the deployed editor: the project as it is on the
-// repository's mobile branch, through the site's proxy (apps/editor/server/ai,
+// repository's `web` branch, through the site's proxy (apps/editor/server/ai,
 // which holds the token). Edits are kept here and saved as one commit after a
 // few seconds without changes, on save(), or when the page goes away.
 //
@@ -250,7 +250,7 @@ export class GitHubWorkspace implements Workspace {
       if (res.status === 409) {
         this.setPending({
           status: 'conflict',
-          error: 'The mobile branch changed somewhere else. Reload to get it; unsaved changes here are lost.',
+          error: 'The web branch changed somewhere else. Reload to get it; unsaved changes here are lost.',
         });
         return;
       }
@@ -304,7 +304,7 @@ export class GitHubWorkspace implements Workspace {
     if (this.edits.size > 0) {
       this.setPending({
         status: 'conflict',
-        error: 'The mobile branch changed somewhere else. Reload to get it; unsaved changes here are lost.',
+        error: 'The web branch changed somewhere else. Reload to get it; unsaved changes here are lost.',
       });
       return;
     }

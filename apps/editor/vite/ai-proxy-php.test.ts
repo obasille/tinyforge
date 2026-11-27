@@ -287,11 +287,11 @@ describe.skipIf(!hasPhp)('AI proxy (PHP)', () => {
     expect(streamed).toBe('Hello world.');
   });
 
-  it('lists the mobile branch (made from master), with project paths only', async () => {
+  it('lists the web branch (made from master), with project paths only', async () => {
     const res = await call('github/tree', { cookie });
     expect(res.status).toBe(200);
     const tree = (await res.json()) as { head: string; files: Array<{ path: string; sha: string }> };
-    expect(git.refs.mobile).toBe('c'.repeat(40));
+    expect(git.refs.web).toBe('c'.repeat(40));
     expect(tree.head).toBe('c'.repeat(40));
     expect(tree.files.map((f) => f.path)).toEqual([
       'games/pong/main.ts',
@@ -307,7 +307,7 @@ describe.skipIf(!hasPhp)('AI proxy (PHP)', () => {
     expect((await fetch(`${base}/__tf/ai/github/blob/${'1'.repeat(40)}`)).status).toBe(401);
   });
 
-  it('commits a batch on the mobile branch, never with force, and only to writable paths', async () => {
+  it('commits a batch on the web branch, never with force, and only to writable paths', async () => {
     const commit = (body: unknown) =>
       call('github/commit', {
         method: 'POST',
@@ -322,7 +322,7 @@ describe.skipIf(!hasPhp)('AI proxy (PHP)', () => {
     });
     expect(ok.status).toBe(200);
     expect(await ok.json()).toEqual({ head: 'd'.repeat(40), blobs: { 'games/pong/main.ts': 'b'.repeat(40) } });
-    expect(git.refs.mobile).toBe('d'.repeat(40));
+    expect(git.refs.web).toBe('d'.repeat(40));
     expect(git.refs.master).toBe('c'.repeat(40));
     expect(git.trees.at(-1)).toEqual({
       base_tree: 't'.repeat(40),

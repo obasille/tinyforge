@@ -265,7 +265,7 @@ export function tinyforge({ assetsDir }: { assetsDir: string }): Plugin {
 
     // A static copy of the project: the same protocol, read-only.
     // Each file also has its Git blob SHA, so the deployed editor's GitHub
-    // workspace can serve a file unchanged on the mobile branch from here.
+    // workspace can serve a file unchanged on the web branch from here.
     async generateBundle() {
       const list = await listing(dirs, false);
       const files: Array<Listing['files'][number] & { sha?: string }> = [];

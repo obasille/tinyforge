@@ -9,14 +9,14 @@
 //   POST /__tf/ai/login                  { password }: sets the session cookie
 //   POST /__tf/ai/logout                 clears it
 //   POST /__tf/ai/anthropic/v1/messages  forwarded to the Anthropic API with the key, streamed
-//   GET  /__tf/ai/github/tree            the project's files on the mobile branch (made from
+//   GET  /__tf/ai/github/tree            the project's files on the web branch (made from
 //                                        the base branch the first time): { head, files }
 //   GET  /__tf/ai/github/blob/<sha>      a file's bytes, by Git blob SHA (never changes)
 //   POST /__tf/ai/github/commit          { base, message, changes: [{ path, content? }] }: one
-//                                        commit on the mobile branch; 409 when it moved
+//                                        commit on the web branch; 409 when it moved
 //
 // The GitHub token stays here too. Only writable project paths (games/<name>/,
-// assets/<kind>/) can be committed, only to the mobile branch, and never with
+// assets/<kind>/) can be committed, only to the web branch, and never with
 // force: a branch that moved since `base` is a conflict, not an overwrite.
 //
 // Every request needs HTTPS, the X-TinyForge header (another site cannot add
@@ -305,7 +305,7 @@ function forward(array $config, string $body): void
     curl_close($ch);
 }
 
-// ---- GitHub: the project on the mobile branch ----
+// ---- GitHub: the project on the web branch ----
 
 function github_ready(array $config): bool
 {
@@ -315,7 +315,7 @@ function github_ready(array $config): bool
 
 function github_branch(array $config): string
 {
-    return (string) ($config['github_branch'] ?? 'mobile');
+    return (string) ($config['github_branch'] ?? 'web');
 }
 
 /** A GitHub API call. Returns [status, decoded body]; raw bytes when $raw. */
@@ -354,7 +354,7 @@ function github_fail(int $status, string $what): HttpError
     return new HttpError(502, "GitHub error $status ($what)");
 }
 
-/** The mobile branch's head commit, made from the base branch if it does not exist. */
+/** The web branch's head commit, made from the base branch if it does not exist. */
 function github_head(array $config): string
 {
     $repo = $config['github_repo'];
@@ -464,7 +464,7 @@ function github_route(array $config, string $route, string $method): void
         // Someone else committed since the editor read the branch: never overwrite.
         $head = github_head($config);
         if ($head !== $base) {
-            send_json(409, ['error' => 'The mobile branch changed since the editor read it.', 'head' => $head]);
+            send_json(409, ['error' => 'The web branch changed since the editor read it.', 'head' => $head]);
             return;
         }
         [$status, $commit] = github($config, 'GET', "/repos/$repo/git/commits/$base");
@@ -497,7 +497,7 @@ function github_route(array $config, string $route, string $method): void
         $branch = rawurlencode(github_branch($config));
         [$status] = github($config, 'PATCH', "/repos/$repo/git/refs/heads/$branch", ['sha' => $newCommit['sha'], 'force' => false]);
         if ($status === 422) {
-            send_json(409, ['error' => 'The mobile branch changed while saving.', 'head' => github_head($config)]);
+            send_json(409, ['error' => 'The web branch changed while saving.', 'head' => github_head($config)]);
             return;
         }
         if ($status !== 200) throw github_fail($status, 'move the branch');

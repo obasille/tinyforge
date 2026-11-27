@@ -102,7 +102,7 @@ function SaveState({ workspace, touch }: { workspace: GitHubWorkspace; touch: bo
     save.error ??
     (save.pending.length > 0
       ? `Not on GitHub yet: ${save.pending.join(', ')}`
-      : 'Every change is committed to the mobile branch');
+      : 'Every change is committed to the web branch');
   return (
     <span className={`tf-save tf-save-${save.status}`} data-testid="save-state" title={title}>
       {touch && save.status === 'saved' ? '✓' : SAVE_LABELS[save.status]}
