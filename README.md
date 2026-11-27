@@ -1042,7 +1042,7 @@ proxy then sets a 30-day session cookie that scripts cannot read. It forwards
 only the editor's models, at most 300 requests an hour, and refuses logins for
 an hour after 10 wrong passwords. To set it up, put a key made for this (with
 a monthly spending limit) in `.env` as `EDITOR_AI_ANTHROPIC_KEY`, deploy, then
-run `pnpm ai:setup`: it asks for the password and uploads the key and the
+run `pnpm ai:setup`: it asks for the password (shown as you type) and uploads the key and the
 password's hash to `/.private/` on the site (refused to browsers), and checks
 that the site answers. Run it again to change the password, which logs every
 browser out.

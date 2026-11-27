@@ -1,5 +1,5 @@
 // Sets up the deployed editor's AI proxy (apps/editor/server/ai/index.php):
-// asks for a login password, then uploads the proxy's config, with the
+// asks for a login password (shown as you type it), then uploads the proxy's config, with the
 // Anthropic key from .env and the password's hash, to /.private/ on the
 // editor's FTP account. The config is never written to this computer's disk.
 //
@@ -9,6 +9,7 @@
 // limit; ANTHROPIC_API_KEY when it is missing) and the EDITOR_FTP_* settings
 // of pnpm upload:editor. EDITOR_SITE_URL is the site to check afterwards
 // (https://tf.basille.net by default).
+import { createInterface } from 'readline/promises';
 import { Readable } from 'stream';
 import ftp from 'basic-ftp';
 import dotenv from 'dotenv';
@@ -34,41 +35,13 @@ if (!process.env.EDITOR_AI_ANTHROPIC_KEY) {
   console.warn('Using ANTHROPIC_API_KEY. A separate EDITOR_AI_ANTHROPIC_KEY with a monthly limit is safer.');
 }
 
-/** Read a line without echoing it. */
-function askHidden(question) {
-  return new Promise((resolve) => {
-    process.stdout.write(question);
-    const stdin = process.stdin;
-    stdin.setRawMode?.(true);
-    stdin.resume();
-    stdin.setEncoding('utf8');
-    let value = '';
-    const onData = (ch) => {
-      if (ch === '\r' || ch === '\n' || ch === '\u0004') {
-        stdin.setRawMode?.(false);
-        stdin.pause();
-        stdin.off('data', onData);
-        process.stdout.write('\n');
-        resolve(value);
-      } else if (ch === '\u0003') {
-        process.exit(130);
-      } else if (ch === '\u007f' || ch === '\b') {
-        value = value.slice(0, -1);
-      } else {
-        value += ch;
-      }
-    };
-    stdin.on('data', onData);
-  });
-}
-
-const password = await askHidden(`Password for the AI on the site (${MIN_PASSWORD}+ characters): `);
+// Typed in the clear, once: it stays in this terminal's scrollback, so clear
+// the terminal afterwards if anyone else can see it.
+const rl = createInterface({ input: process.stdin, output: process.stdout });
+const password = (await rl.question(`Password for the AI on the site (${MIN_PASSWORD}+ characters): `)).trim();
+rl.close();
 if (password.length < MIN_PASSWORD) {
   console.error(`The password needs at least ${MIN_PASSWORD} characters.`);
-  process.exit(1);
-}
-if ((await askHidden('Password again: ')) !== password) {
-  console.error('The two passwords differ.');
   process.exit(1);
 }
 
