@@ -2047,3 +2047,22 @@ div.tf-ai-file,
 .tf-ai-login input[readonly] {
   color: var(--tf-muted);
 }
+
+/* GitHub save state (deployed editor). */
+.tf-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--tf-muted);
+}
+
+.tf-save-pending,
+.tf-save-saving {
+  color: var(--tf-accent);
+}
+
+.tf-save-failed,
+.tf-save-conflict {
+  color: var(--tf-error);
+}

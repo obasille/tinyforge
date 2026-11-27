@@ -52,6 +52,13 @@ describe.skipIf(!hasPhp)('AI proxy (PHP)', () => {
   let dir: string;
   let php: ChildProcess;
   let upstream: Server;
+  let gh: Server;
+  /** The fake GitHub: its refs and objects, and every request it got. */
+  const git = {
+    refs: { master: 'c'.repeat(40) } as Record<string, string>,
+    requests: [] as Array<{ method: string; url: string; auth?: string; body?: Record<string, unknown> }>,
+    trees: [] as unknown[],
+  };
   let base: string;
   const seen: Array<{ headers: IncomingHttpHeaders; body: string }> = [];
 
@@ -80,6 +87,65 @@ describe.skipIf(!hasPhp)('AI proxy (PHP)', () => {
     await new Promise<void>((r) => upstream.listen(0, '127.0.0.1', r));
     const apiPort = (upstream.address() as AddressInfo).port;
 
+    gh = createServer((req, res) => {
+      let raw = '';
+      req.on('data', (c) => {
+        raw += c;
+      });
+      req.on('end', () => {
+        const url = req.url ?? '';
+        const body = raw ? (JSON.parse(raw) as Record<string, unknown>) : undefined;
+        git.requests.push({ method: req.method ?? '', url, auth: req.headers.authorization, body });
+        const json = (status: number, v: unknown) => {
+          res.writeHead(status, { 'content-type': 'application/json' });
+          res.end(JSON.stringify(v));
+        };
+        const base = '/repos/me/game/git';
+        const ref = new RegExp(`^${base}/ref/heads/(\\w+)$`).exec(url);
+        const move = new RegExp(`^${base}/refs/heads/(\\w+)$`).exec(url);
+        if (ref) {
+          const sha = git.refs[ref[1]];
+          return sha ? json(200, { object: { sha } }) : json(404, { message: 'Not Found' });
+        }
+        if (url === `${base}/refs` && req.method === 'POST') {
+          git.refs[String(body?.ref).replace('refs/heads/', '')] = String(body?.sha);
+          return json(201, {});
+        }
+        if (url.startsWith(`${base}/trees/`) && req.method === 'GET') {
+          return json(200, {
+            tree: [
+              { path: 'packages/engine/assembly/games/pong/main.ts', type: 'blob', size: 4, sha: '1'.repeat(40) },
+              { path: 'packages/engine/assembly/sdk/index.ts', type: 'blob', size: 2, sha: '2'.repeat(40) },
+              { path: 'packages/engine/memory-map.ts', type: 'blob', size: 2, sha: '3'.repeat(40) },
+              { path: 'assets/sfx/hit.wav', type: 'blob', size: 2, sha: '4'.repeat(40) },
+              { path: 'README.md', type: 'blob', size: 2, sha: '5'.repeat(40) },
+              { path: 'packages/engine/assembly/games', type: 'tree', sha: '6'.repeat(40) },
+            ],
+          });
+        }
+        if (url === `${base}/blobs/${'1'.repeat(40)}`) {
+          res.writeHead(200, { 'content-type': 'application/octet-stream' });
+          return res.end('pong');
+        }
+        if (url.startsWith(`${base}/commits/`) && req.method === 'GET')
+          return json(200, { tree: { sha: 't'.repeat(40) } });
+        if (url === `${base}/blobs` && req.method === 'POST') return json(201, { sha: 'b'.repeat(40) });
+        if (url === `${base}/trees` && req.method === 'POST') {
+          git.trees.push(body);
+          return json(201, { sha: 'e'.repeat(40) });
+        }
+        if (url === `${base}/commits` && req.method === 'POST') return json(201, { sha: 'd'.repeat(40) });
+        if (move && req.method === 'PATCH') {
+          if (body?.force !== false) return json(400, {});
+          git.refs[move[1]] = String(body?.sha);
+          return json(200, {});
+        }
+        json(500, { message: `unexpected ${req.method} ${url}` });
+      });
+    });
+    await new Promise<void>((r) => gh.listen(0, '127.0.0.1', r));
+    const ghPort = (gh.address() as AddressInfo).port;
+
     writeFileSync(path.join(dir, 'index.php'), aiProxyPhp());
     writeFileSync(
       path.join(dir, 'config.php'),
@@ -87,7 +153,13 @@ describe.skipIf(!hasPhp)('AI proxy (PHP)', () => {
         anthropicKey: KEY,
         password: PASSWORD,
         iterations: 1000,
-        extra: { allow_http: true, anthropic_url: `http://127.0.0.1:${apiPort}/v1/messages` },
+        extra: {
+          allow_http: true,
+          anthropic_url: `http://127.0.0.1:${apiPort}/v1/messages`,
+          github_token: 'github_pat_test',
+          github_repo: 'me/game',
+          github_api: `http://127.0.0.1:${ghPort}`,
+        },
       }),
     );
     // What .htaccess does on Apache: the proxy's routes go to index.php.
@@ -115,6 +187,7 @@ describe.skipIf(!hasPhp)('AI proxy (PHP)', () => {
   afterAll(() => {
     php?.kill();
     upstream?.close();
+    gh?.close();
     if (dir) rmSync(dir, { recursive: true, force: true });
   });
 
@@ -212,6 +285,63 @@ describe.skipIf(!hasPhp)('AI proxy (PHP)', () => {
     const turn = await chat.send({ text: 'hi' }, { onText: (d) => (streamed += d) });
     expect(turn.text).toBe('Hello world.');
     expect(streamed).toBe('Hello world.');
+  });
+
+  it('lists the mobile branch (made from master), with project paths only', async () => {
+    const res = await call('github/tree', { cookie });
+    expect(res.status).toBe(200);
+    const tree = (await res.json()) as { head: string; files: Array<{ path: string; sha: string }> };
+    expect(git.refs.mobile).toBe('c'.repeat(40));
+    expect(tree.head).toBe('c'.repeat(40));
+    expect(tree.files.map((f) => f.path)).toEqual([
+      'games/pong/main.ts',
+      'engine/sdk/index.ts',
+      'engine/memory-map.ts',
+      'assets/sfx/hit.wav',
+    ]);
+    expect(git.requests.every((r) => r.auth === 'Bearer github_pat_test')).toBe(true);
+    // A Worker fetches blobs without the header, but still with the login.
+    const blob = await fetch(`${base}/__tf/ai/github/blob/${'1'.repeat(40)}`, { headers: { cookie } });
+    expect(await blob.text()).toBe('pong');
+    expect(blob.headers.get('cache-control')).toMatch(/immutable/);
+    expect((await fetch(`${base}/__tf/ai/github/blob/${'1'.repeat(40)}`)).status).toBe(401);
+  });
+
+  it('commits a batch on the mobile branch, never with force, and only to writable paths', async () => {
+    const commit = (body: unknown) =>
+      call('github/commit', {
+        method: 'POST',
+        cookie,
+        body: JSON.stringify(body),
+        headers: { 'content-type': 'application/json' },
+      });
+    const ok = await commit({
+      base: 'c'.repeat(40),
+      message: 'Edit 2 files',
+      changes: [{ path: 'games/pong/main.ts', content: btoa('new') }, { path: 'assets/sfx/hit.wav' }],
+    });
+    expect(ok.status).toBe(200);
+    expect(await ok.json()).toEqual({ head: 'd'.repeat(40), blobs: { 'games/pong/main.ts': 'b'.repeat(40) } });
+    expect(git.refs.mobile).toBe('d'.repeat(40));
+    expect(git.refs.master).toBe('c'.repeat(40));
+    expect(git.trees.at(-1)).toEqual({
+      base_tree: 't'.repeat(40),
+      tree: [
+        { path: 'packages/engine/assembly/games/pong/main.ts', mode: '100644', type: 'blob', sha: 'b'.repeat(40) },
+        { path: 'assets/sfx/hit.wav', mode: '100644', type: 'blob', sha: null },
+      ],
+    });
+
+    // The branch moved since: a conflict, and nothing written.
+    const before = git.requests.length;
+    const stale = await commit({ base: 'c'.repeat(40), changes: [{ path: 'games/pong/main.ts', content: '' }] });
+    expect(stale.status).toBe(409);
+    expect(git.requests.slice(before).some((r) => r.method !== 'GET')).toBe(false);
+
+    for (const bad of ['engine/sdk/index.ts', 'games/asconfig.json', 'games/../x', '.github/workflows/x.yml']) {
+      const res = await commit({ base: 'd'.repeat(40), changes: [{ path: bad, content: '' }] });
+      expect(res.status).toBe(403);
+    }
   });
 
   it('refuses other models, other sites and requests without the header', async () => {

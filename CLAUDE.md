@@ -19,7 +19,8 @@ pnpm workspace. Two hosts share one engine:
 - `packages/runtime`: host runtime in plain TS with no DOM (cartridge imports,
   memory-mapped input, sprite table, fixed-step clock). Runs in a Worker or Node.
 - `packages/editor-core`: editor logic in plain TS: store, commands, the
-  Workspace (`workspace.ts`, `http-workspace.ts`, `project-files.ts`), the
+  Workspace (`workspace.ts`, `http-workspace.ts`, `project-files.ts`, and
+  `github-workspace.ts`: the deployed editor's mobile branch, batched commits), the
   compile Worker and its bridge (`compile-worker.ts`, `compiler-host.ts`), the
   game Worker (`worker-core.ts`, `game-worker.ts`) and its bridge
   (`game-host.ts`), the code editor and live asset scan, the asset library and import
@@ -36,7 +37,8 @@ pnpm workspace. Two hosts share one engine:
   server only: adds the API key from `.env` to the AI panel's requests, and
   forwards them to Claude or to the OpenAI-compatible server set in `.env`).
   The deployed editor answers the same routes with `server/ai/index.php`, a
-  PHP proxy with a password login (set up by `pnpm ai:setup`); the build
+  PHP proxy with a password login (set up by `pnpm ai:setup`) that also
+  lists, reads and commits the mobile branch on GitHub; the build
   writes it, and the site's `.htaccess` files, from `vite/site-headers.ts`.
 - `apps/classic`: the original host, deployed to the site root. Keep it working,
   with minimal changes and no code shared with the editor packages. What it

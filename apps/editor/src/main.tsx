@@ -1,8 +1,9 @@
-import { HttpWorkspace, ProjectFiles } from '@tinyforge/editor-core';
+import { ProjectFiles } from '@tinyforge/editor-core';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.tsx';
 import { Editor } from './editor.ts';
+import { chooseWorkspace } from './workspace.ts';
 import 'dockview-react/dist/styles/dockview.css';
 import './styles.css';
 
@@ -21,8 +22,9 @@ declare global {
 }
 
 async function boot(): Promise<void> {
-  // The project's files: served by the dev server (or a static copy of them).
-  const files = new ProjectFiles(new HttpWorkspace(document.baseURI));
+  // The project's files: served by the dev server (or a static copy of them),
+  // or the mobile branch on GitHub in the deployed editor.
+  const files = new ProjectFiles(await chooseWorkspace(document.baseURI));
   await files.start();
   const editor = new Editor(files);
 

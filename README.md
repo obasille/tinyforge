@@ -1047,6 +1047,18 @@ password's hash to `/.private/` on the site (refused to browsers), and checks
 that the site answers. Run it again to change the password, which logs every
 browser out.
 
+**Saving from the deployed editor:** with `EDITOR_GITHUB_TOKEN` in `.env` (a
+fine-grained token for this repository only, Contents read and write, with an
+expiry date) when you run `pnpm ai:setup`, the site saves to GitHub once you
+are logged in. Edits go to the `mobile` branch (made from `master` the first
+time), never to `master`: a few seconds after the last change, or with Save in
+the top bar, they become one commit. If the branch moved meanwhile (another
+device, or a push), the editor shows Conflict and never overwrites it; reload
+to get the latest. Files unchanged since the deploy load from the site
+itself, so only changed files cost GitHub requests. Merge `mobile` into
+`master` on your computer (`git pull origin mobile`), then push. The
+repository is public: what you save from the phone is public at once.
+
 - **The game runs in a Web Worker** with an `OffscreenCanvas`, so heavy gameplay
   code cannot stall the editor. Audio is played on the main thread
   (`AudioContext` does not exist in Workers). If a game hangs in an infinite

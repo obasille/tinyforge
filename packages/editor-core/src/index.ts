@@ -9,6 +9,7 @@ export * from './file-tree.ts';
 export * from './game-catalog.ts';
 export * from './game-host.ts';
 export * from './game-transfer.ts';
+export * from './github-workspace.ts';
 export * from './http-workspace.ts';
 export * from './input.ts';
 export * from './live-scan.ts';

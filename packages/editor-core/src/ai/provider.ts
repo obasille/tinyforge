@@ -97,6 +97,8 @@ export interface AiStatus {
   login?: 'password';
   /** Logged in to the deployed editor's proxy: the panel offers Log out. */
   session?: boolean;
+  /** The proxy saves to this repository's branch (the editor then runs on it). */
+  github?: { repo: string; branch: string };
 }
 
 /** Log in to the deployed editor's AI proxy. Resolves to an error message, or null when logged in. */

@@ -23,6 +23,7 @@
 // Build: emits the same files.json (read-only, no events) and every project
 // file under __tf/files/, so a static host serves the same protocol.
 
+import { createHash } from 'node:crypto';
 import { createReadStream, existsSync, promises as fs } from 'node:fs';
 import type { ServerResponse } from 'node:http';
 import path from 'node:path';
@@ -68,6 +69,11 @@ async function listing(dirs: ProjectDirs, live: boolean): Promise<Listing> {
     live && isWritablePath(f.path) ? f : { ...f, readonly: true as const },
   );
   return { writable: live, watch: live, files };
+}
+
+/** The SHA Git gives a file's content (what GitHub's tree lists). */
+export function gitBlobSha(bytes: Uint8Array): string {
+  return createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex');
 }
 
 class HttpError extends Error {
@@ -258,14 +264,19 @@ export function tinyforge({ assetsDir }: { assetsDir: string }): Plugin {
     },
 
     // A static copy of the project: the same protocol, read-only.
+    // Each file also has its Git blob SHA, so the deployed editor's GitHub
+    // workspace can serve a file unchanged on the mobile branch from here.
     async generateBundle() {
       const list = await listing(dirs, false);
-      this.emitFile({ type: 'asset', fileName: '__tf/files.json', source: JSON.stringify(list) });
+      const files: Array<Listing['files'][number] & { sha?: string }> = [];
       for (const f of list.files) {
         const file = diskPath(f.path, dirs);
         if (!file) continue;
-        this.emitFile({ type: 'asset', fileName: `__tf/files/${f.path}`, source: await fs.readFile(file) });
+        const bytes = await fs.readFile(file);
+        files.push({ ...f, sha: gitBlobSha(bytes) });
+        this.emitFile({ type: 'asset', fileName: `__tf/files/${f.path}`, source: bytes });
       }
+      this.emitFile({ type: 'asset', fileName: '__tf/files.json', source: JSON.stringify({ ...list, files }) });
     },
   };
 }
