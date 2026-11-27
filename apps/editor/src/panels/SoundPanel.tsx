@@ -3,10 +3,10 @@
 // inside the panel; Save writes a WAV as one undoable file command.
 
 import { formatTime, SoundEditor, Waveform, WebSoundOutput } from '@tinyforge/editor-core';
-import type { IDockviewPanelProps } from 'dockview-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useEditor } from '../EditorContext.ts';
 import { useSaveShortcut, useStore } from '../hooks.ts';
+import type { PanelProps } from './panel-api.ts';
 
 export interface SoundPanelParams {
   path: string;
@@ -14,7 +14,7 @@ export interface SoundPanelParams {
 
 const baseName = (p: string) => p.slice(p.lastIndexOf('/') + 1);
 
-export function SoundPanel({ api, params }: IDockviewPanelProps<SoundPanelParams>) {
+export function SoundPanel({ api, params }: PanelProps<SoundPanelParams>) {
   const editor = useEditor();
   const [initial] = useState(params.path);
   // Stable, so the view's title effect runs only when the title or path changes.

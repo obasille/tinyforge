@@ -5,7 +5,14 @@
 // and expanded. It stays above the on-screen keyboard and expands while the
 // keyboard is open, so a text field being typed in stays visible.
 
-import { type PointerEvent as ReactPointerEvent, type RefObject, useEffect, useRef, useState } from 'react';
+import {
+  type PointerEvent as ReactPointerEvent,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 
 export type SheetState = 'collapsed' | 'half' | 'expanded';
 
@@ -131,7 +138,11 @@ export function useMobileSheet(enabled: boolean, rootRef: RefObject<HTMLElement 
     },
   };
 
+  /** Opens a collapsed sheet to half; leaves it as it is otherwise. */
+  const open = useCallback(() => setState((s) => (s === 'collapsed' ? 'half' : s)), []);
+
   return {
+    open,
     state: shown,
     style: enabled ? { height, bottom: bounds.keyboard } : undefined,
     handleProps,

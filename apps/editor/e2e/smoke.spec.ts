@@ -457,7 +457,15 @@ test.describe('on a touch screen in portrait', () => {
     await page.goto('/');
     await expect(page.getByTestId('run-status')).toHaveText('running');
     await expect(page.getByTestId('touch-game')).toHaveClass(/tf-touch-game-portrait/);
-    expect(await tabGroups(page)).toEqual([['Files', 'Library', 'Console', 'Run', 'Memory']]);
+    await expect(page.getByTestId('touch-panels').getByRole('tab')).toHaveText([
+      'Files',
+      'Library',
+      'Console',
+      'Run',
+      'Memory',
+    ]);
+    // No Dockview in the touch layout.
+    await expect(page.locator('.dv-groupview')).toHaveCount(0);
     await expect(page.getByTestId('pixel-color')).toBeHidden();
     // The columns sit beside the game, the row with Start and the triggers above it.
     const screen = await page.getByTestId('touch-screen').boundingBox();
@@ -473,6 +481,59 @@ test.describe('on a touch screen in portrait', () => {
     expect(await heldButtons(page)).toBe(1 << 4);
     await touchAt(page, rightColumn.x + 20, rightColumn.y + rightColumn.height - 5, 21, 'pointerup');
     expect(await heldButtons(page)).toBe(0);
+  });
+});
+
+test.describe('the touch panels in portrait', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+
+  test('open files in the Editor tab, with a switcher, and stay open after a reload', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByTestId('run-status')).toHaveText('running');
+    await page.getByTestId('file-games/pong').click();
+    await page.getByTestId('file-games/pong/main.ts').click();
+    const editorTab = page.getByTestId('touch-tab-editor');
+    await expect(editorTab).toHaveText('main.ts');
+    await expect(editorTab).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('code-games/pong/main.ts').locator('.cm-content')).toContainText(
+      'const TITLE = "Pong"',
+    );
+    await expect(page.getByTestId('file-games/pong/main.ts')).toHaveClass(/tf-files-active/);
+
+    // A second file: the switcher lists both, one is shown.
+    await page.evaluate(() => window.__tf?.editor.workbench.openFile('engine/sdk/drawing.ts'));
+    const select = page.getByTestId('touch-file-select');
+    await expect(select.locator('option')).toHaveText(['main.ts', 'drawing.ts']);
+    await expect(page.getByTestId('code-engine/sdk/drawing.ts')).toBeVisible();
+    await expect(page.getByTestId('code-games/pong/main.ts')).toBeHidden();
+    await select.selectOption({ label: 'main.ts' });
+    await expect(page.getByTestId('code-games/pong/main.ts')).toBeVisible();
+
+    // The other tabs keep the files open.
+    await page.getByTestId('touch-tab-console').click();
+    await expect(page.getByTestId('touch-panel-editor')).toBeHidden();
+    await page.reload();
+    await expect(page.getByTestId('run-status')).toHaveText('running');
+    await expect(page.getByTestId('touch-tab-console')).toHaveAttribute('aria-selected', 'true');
+    await page.getByTestId('touch-tab-editor').click();
+    await expect(page.getByTestId('code-games/pong/main.ts').locator('.cm-content')).toContainText(
+      'const TITLE = "Pong"',
+    );
+
+    // Closing the last file removes the Editor tab.
+    await page.getByTestId('touch-file-close').click();
+    await page.getByTestId('touch-file-close').click();
+    await expect(page.getByTestId('touch-tab-editor')).toHaveCount(0);
+    await expect(page.getByTestId('touch-tab-files')).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('a tab opens a collapsed sheet', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('tinyforge.editor.sheet', 'collapsed'));
+    await page.goto('/');
+    await expect(page.getByTestId('sheet')).toHaveAttribute('data-state', 'collapsed');
+    await page.getByTestId('touch-tab-run').click();
+    await expect(page.getByTestId('sheet')).toHaveAttribute('data-state', 'half');
+    await expect(page.getByTestId('touch-panel-run')).toBeVisible();
   });
 });
 
@@ -520,7 +581,6 @@ test.describe('the bottom sheet in portrait', () => {
 test('the menu switches to the touch layout and back, keeping the game running', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByTestId('run-status')).toHaveText('running');
-  const generation = (await session(page))?.generation;
   await page.getByTestId('app-menu').click();
   await page.getByTestId('use-touch-layout').click();
   // A desktop window is landscape: the game takes the screen, the menu is by Pause.

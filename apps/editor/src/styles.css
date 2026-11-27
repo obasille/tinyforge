@@ -1849,3 +1849,103 @@ div.tf-ai-file,
     display: none;
   }
 }
+
+/* The touch layout's panels (TouchPanels.tsx): large tabs, one panel at a time. */
+.tf-touch-panels {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.tf-touch-tabs {
+  display: flex;
+  flex: none;
+  height: 40px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid #3a3a48;
+}
+
+.tf-touch-tab {
+  flex: 1 0 auto;
+  min-width: 56px;
+  max-width: 160px;
+  padding: 0 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--tf-muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font: inherit;
+  font-size: 14px;
+}
+
+.tf-touch-tab[aria-selected="true"] {
+  color: var(--tf-text);
+  border-bottom-color: var(--tf-accent);
+}
+
+.tf-touch-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.tf-touch-panel {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+}
+
+.tf-touch-panel[hidden],
+.tf-touch-file[hidden] {
+  display: none;
+}
+
+.tf-touch-editor {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tf-touch-filebar {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 8px;
+  border-bottom: 1px solid #3a3a48;
+}
+
+.tf-touch-filebar select,
+.tf-touch-filebar span {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  font-size: 15px;
+}
+
+.tf-touch-filebar span {
+  line-height: 36px;
+}
+
+.tf-touch-close {
+  flex: none;
+  width: 40px;
+  height: 36px;
+  font-size: 20px;
+  color: inherit;
+  background: #2a2a38;
+  border: 1px solid #3a3a48;
+  border-radius: 6px;
+}
+
+.tf-touch-file {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}

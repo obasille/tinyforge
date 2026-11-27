@@ -19,10 +19,10 @@ import {
   type SpriteTool,
   spriteTableCost,
 } from '@tinyforge/editor-core';
-import type { IDockviewPanelProps } from 'dockview-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useEditor } from '../EditorContext.ts';
 import { useSaveShortcut, useStore } from '../hooks.ts';
+import type { PanelProps } from './panel-api.ts';
 
 export interface SpritePanelParams {
   path: string;
@@ -44,7 +44,7 @@ function formatBytes(n: number): string {
   return `${(n / 1024).toFixed(1)} KB`;
 }
 
-export function SpritePanel({ api, params }: IDockviewPanelProps<SpritePanelParams>) {
+export function SpritePanel({ api, params }: PanelProps<SpritePanelParams>) {
   const editor = useEditor();
   // The path the panel opened; a save may rename the file, the model follows it.
   const [initial] = useState(params.path);

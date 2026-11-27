@@ -35,6 +35,7 @@ import { parseGameMeta } from '@tinyforge/engine/tooling/game-meta';
 import { assetKindOf, gameEntryPath } from '@tinyforge/engine/tooling/project-layout';
 import { createLayoutMode } from './layout-mode.ts';
 import { createLogStore, type LogStore } from './log-store.ts';
+import { createTouchPanels } from './touch-panels.ts';
 
 const PROJECT_KEY = 'tinyforge.editor.project';
 
@@ -84,6 +85,8 @@ export class Editor {
   readonly hasSavedState = createStore(false);
   /** Desktop or touch layout (see layout-mode.ts). */
   readonly layoutMode = createLayoutMode();
+  /** The touch layout's tabs and open files. */
+  readonly touchPanels = createTouchPanels();
   /** Color of the game pixel under the mouse, or null when not over the game. */
   readonly pixel = createStore<PixelInfo | null>(null);
   /** The color just copied with F4, shown briefly under the game; null otherwise. */

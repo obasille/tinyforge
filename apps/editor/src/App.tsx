@@ -1,5 +1,4 @@
 import { matchShortcut } from '@tinyforge/editor-core';
-import { assetKindOf } from '@tinyforge/engine/tooling/project-layout';
 import {
   type DockviewApi,
   DockviewReact,
@@ -26,15 +25,11 @@ import { SoundPanel } from './panels/SoundPanel.tsx';
 import { SpritePanel } from './panels/SpritePanel.tsx';
 import { Toolbar, useMenuItems } from './Toolbar.tsx';
 import { TouchGame } from './TouchGame.tsx';
+import { TouchPanels } from './TouchPanels.tsx';
+import { activeCodePath, panelKind } from './touch-panels.ts';
 
+/** The desktop layout (Dockview). The touch layout has no Dockview: TouchPanels. */
 const LAYOUT_KEY = 'tinyforge.editor.layout.v3';
-
-/**
- * The touch layout (phones, tablets, or chosen in the menu) has its own
- * default and is saved under its own key, so each layout keeps its own
- * arrangement and a layout saved before does not hide it.
- */
-const layoutKey = (touch: boolean): string => (touch ? `${LAYOUT_KEY}.touch2` : LAYOUT_KEY);
 
 const LANDSCAPE = '(orientation: landscape)';
 const isLandscape = (): boolean => typeof matchMedia === 'function' && matchMedia(LANDSCAPE).matches;
@@ -54,22 +49,16 @@ const components: Record<string, FunctionComponent<IDockviewPanelProps>> = {
   run: withBoundary('Run', RunPanel),
   files: withBoundary('Files', FilesPanel),
   library: withBoundary('Library', LibraryPanel),
-  code: withBoundary('Code', CodePanel as FunctionComponent<IDockviewPanelProps>),
-  sprite: withBoundary('Sprite', SpritePanel as FunctionComponent<IDockviewPanelProps>),
-  sound: withBoundary('Sound', SoundPanel as FunctionComponent<IDockviewPanelProps>),
+  code: withBoundary('Code', CodePanel) as FunctionComponent<IDockviewPanelProps>,
+  sprite: withBoundary('Sprite', SpritePanel) as FunctionComponent<IDockviewPanelProps>,
+  sound: withBoundary('Sound', SoundPanel) as FunctionComponent<IDockviewPanelProps>,
   ai: withBoundary('AI', LazyAiPanel),
 };
 
 const EDITOR_PANELS = /^(code|sprite|sound):/;
 
-/** The panel kind that edits a file: the sprite editor, the sound player, or code. */
-function panelKind(path: string): 'code' | 'sprite' | 'sound' {
-  const kind = assetKindOf(path);
-  return kind === 'sprites' ? 'sprite' : kind ? 'sound' : 'code';
-}
-
 /** Show a file: focus its panel, or open one next to the other editor panels (left of the game). */
-function openFilePanel(api: DockviewApi, path: string, touch = false): void {
+function openFilePanel(api: DockviewApi, path: string): void {
   const component = panelKind(path);
   // A save can rename an asset file; its panel keeps its ID and follows the new path.
   const existing =
@@ -79,8 +68,7 @@ function openFilePanel(api: DockviewApi, path: string, touch = false): void {
     existing.api.setActive();
     return;
   }
-  // The touch layout keeps every panel in one group of tabs.
-  const sibling = touch ? api.panels[0] : api.panels.find((p) => EDITOR_PANELS.test(p.id));
+  const sibling = api.panels.find((p) => EDITOR_PANELS.test(p.id));
   const anchor = api.getPanel('game') ?? api.panels[0];
   api.addPanel({
     id: `${component}:${path}`,
@@ -123,29 +111,7 @@ function trackActiveCode(api: DockviewApi, editor: Editor): void {
   });
 }
 
-function defaultLayout(api: DockviewApi, touch: boolean): void {
-  if (touch) touchLayout(api);
-  else desktopLayout(api);
-}
-
-/**
- * The touch layout's panels: one group of tabs, one panel at a time, below
- * the game (portrait). The game itself is outside the panels (TouchGame).
- */
-function touchLayout(api: DockviewApi): void {
-  api.addPanel({ id: 'files', component: 'files', title: 'Files' });
-  for (const [id, title] of [
-    ['library', 'Library'],
-    ['console', 'Console'],
-    ['run', 'Run'],
-    ['memory', 'Memory'],
-  ] as const) {
-    api.addPanel({ id, component: id, title, position: { referencePanel: 'files', direction: 'within' } });
-  }
-  api.getPanel('files')?.api.setActive();
-}
-
-function desktopLayout(api: DockviewApi): void {
+function defaultLayout(api: DockviewApi): void {
   api.addPanel({ id: 'game', component: 'game', title: 'Game' });
   api.addPanel({
     id: 'files',
@@ -229,18 +195,22 @@ export function App({ editor }: { editor: Editor }) {
   }, []);
   const rootRef = useRef<HTMLDivElement>(null);
   const sheet = useMobileSheet(touch && !landscape, rootRef);
+  const openSheet = sheet.open;
   const touchRef = useRef(touch);
-  // While a layout is being replaced, its intermediate states are not saved.
+  touchRef.current = touch;
+  const panels = editor.touchPanels;
+  // While a layout is being loaded, its intermediate states are not saved.
   const loadingRef = useRef(false);
 
-  /** Show the saved layout for the current mode, or its default. */
-  const loadLayout = useCallback((api: DockviewApi) => {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Dockview calls onReady once per mount; the editor is fixed for the app's life.
+  const onReady = useCallback((event: DockviewReadyEvent) => {
+    const api = event.api;
+    apiRef.current = api;
     loadingRef.current = true;
     try {
       let restored = false;
-      api.clear();
       try {
-        const saved = localStorage.getItem(layoutKey(touchRef.current));
+        const saved = localStorage.getItem(LAYOUT_KEY);
         if (saved) {
           api.fromJSON(JSON.parse(saved));
           restored = true;
@@ -248,62 +218,75 @@ export function App({ editor }: { editor: Editor }) {
       } catch {
         api.clear();
       }
-      if (!restored || api.panels.length === 0) defaultLayout(api, touchRef.current);
+      if (!restored || api.panels.length === 0) defaultLayout(api);
     } finally {
       loadingRef.current = false;
     }
-  }, []);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Dockview calls onReady once; the editor is fixed for the app's life.
-  const onReady = useCallback((event: DockviewReadyEvent) => {
-    apiRef.current = event.api;
-    loadLayout(event.api);
-    trackActiveCode(event.api, editor);
-    event.api.onDidLayoutChange(() => {
-      if (loadingRef.current) return;
+    trackActiveCode(api, editor);
+    api.onDidLayoutChange(() => {
+      if (loadingRef.current || apiRef.current !== api) return;
       try {
-        localStorage.setItem(layoutKey(touchRef.current), JSON.stringify(event.api.toJSON()));
+        localStorage.setItem(LAYOUT_KEY, JSON.stringify(api.toJSON()));
       } catch {
         // Layout persistence is a convenience; ignore storage errors.
       }
     });
   }, []);
 
-  // Switching between the desktop and the touch layout (menu): each keeps
-  // its own saved arrangement. The game keeps running throughout.
+  // The touch layout has no Dockview; switching layouts (menu) mounts one or
+  // the other. The game keeps running throughout.
   useEffect(() => {
     editor.viewport.setFractional(touch);
-    if (touchRef.current === touch) return;
-    touchRef.current = touch;
-    if (apiRef.current) loadLayout(apiRef.current);
-  }, [editor, touch, loadLayout]);
+    if (touch) apiRef.current = null;
+  }, [editor, touch]);
+
+  // In the touch layout, the code file shown (or last shown) is the active one.
+  useEffect(() => {
+    if (!touch) return;
+    const sync = () => editor.activeCode.setState(activeCodePath(panels.getState(), editor.activeCode.getState()));
+    sync();
+    return panels.subscribe(sync);
+  }, [editor, panels, touch]);
 
   useEffect(
     () =>
       editor.workbench.onOpenFile((path) => {
-        if (apiRef.current) openFilePanel(apiRef.current, path, touchRef.current);
+        if (touchRef.current) {
+          panels.openFile(path);
+          openSheet();
+        } else if (apiRef.current) openFilePanel(apiRef.current, path);
       }),
-    [editor],
+    [editor, panels, openSheet],
   );
 
   useEffect(
     () =>
       editor.onShowLibrary(() => {
-        if (apiRef.current) showLibraryPanel(apiRef.current);
+        if (touchRef.current) {
+          panels.show('library');
+          openSheet();
+        } else if (apiRef.current) showLibraryPanel(apiRef.current);
       }),
-    [editor],
+    [editor, panels, openSheet],
   );
 
   const showAi = useCallback(() => {
-    if (apiRef.current) showAiPanel(apiRef.current);
-  }, []);
+    if (touchRef.current) {
+      panels.show('ai');
+      openSheet();
+    } else if (apiRef.current) showAiPanel(apiRef.current);
+  }, [panels, openSheet]);
 
   const resetLayout = useCallback(() => {
+    if (touchRef.current) {
+      panels.reset();
+      return;
+    }
     const api = apiRef.current;
     if (!api) return;
     api.clear();
-    defaultLayout(api, touchRef.current);
-  }, []);
+    defaultLayout(api);
+  }, [panels]);
 
   const menu = useMenuItems(editor, resetLayout, showAi, touch);
 
@@ -349,9 +332,13 @@ export function App({ editor }: { editor: Editor }) {
               <span />
             </button>
           )}
-          <div className="tf-dock">
-            <DockviewReact components={components} onReady={onReady} theme={themeDark} />
-          </div>
+          {touch ? (
+            <TouchPanels panels={panels} onTab={openSheet} />
+          ) : (
+            <div className="tf-dock">
+              <DockviewReact components={components} onReady={onReady} theme={themeDark} />
+            </div>
+          )}
         </div>
         {touch && landscape && <TouchGame key="landscape" layout="landscape" menu={menu} />}
       </div>
