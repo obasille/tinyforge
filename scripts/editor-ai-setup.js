@@ -41,7 +41,11 @@ if (!key.startsWith('sk-ant-')) {
   process.exit(1);
 }
 if (!process.env.EDITOR_AI_ANTHROPIC_KEY) {
-  console.warn('Using ANTHROPIC_API_KEY. A separate EDITOR_AI_ANTHROPIC_KEY with a monthly limit is safer.');
+  // The site's key is usable by anyone with the password: a key of its own
+  // can have its own spending limit and be revoked without touching dev.
+  console.log(
+    'The site will use your ANTHROPIC_API_KEY. Optional: set EDITOR_AI_ANTHROPIC_KEY to a key used only by the site, with its own spending limit, so you can revoke it without touching your dev key.',
+  );
 }
 
 // Typed in the clear, once: it stays in this terminal's scrollback, so clear
