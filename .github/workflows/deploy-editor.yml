@@ -58,6 +58,10 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+          # v5 sets up a pnpm cache when package.json names pnpm, but pnpm
+          # only exists after `corepack enable` below. No cache: the install
+          # takes a few seconds anyway.
+          package-manager-cache: false
 
       # pnpm comes from corepack (the version in package.json), not from a
       # third-party action.
