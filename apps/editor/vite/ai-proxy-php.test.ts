@@ -9,6 +9,7 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { ClaudeProvider } from '../../../packages/editor-core/src/ai/anthropic.ts';
 import { aiConfigPhp } from '../../../scripts/ai-config.js';
 import { aiProxyPhp } from './site-headers.ts';
 
@@ -24,6 +25,29 @@ const KEY = 'sk-ant-api03-php-test-key-0123456789';
 const PASSWORD = 'a long proxy password';
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+const ev = (type: string, data: Record<string, unknown>) =>
+  `event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`;
+const EVENTS = [
+  ev('message_start', {
+    message: {
+      id: 'msg_1',
+      type: 'message',
+      role: 'assistant',
+      model: 'claude-haiku-5-5',
+      content: [],
+      stop_reason: null,
+      stop_sequence: null,
+      usage: { input_tokens: 5, output_tokens: 1 },
+    },
+  }),
+  ev('content_block_start', { index: 0, content_block: { type: 'text', text: '' } }),
+  ev('content_block_delta', { index: 0, delta: { type: 'text_delta', text: 'Hello ' } }),
+  ev('content_block_delta', { index: 0, delta: { type: 'text_delta', text: 'world.' } }),
+  ev('content_block_stop', { index: 0 }),
+  ev('message_delta', { delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: 3 } }),
+  ev('message_stop', {}),
+];
+
 describe.skipIf(!hasPhp)('AI proxy (PHP)', () => {
   let dir: string;
   let php: ChildProcess;
@@ -33,7 +57,7 @@ describe.skipIf(!hasPhp)('AI proxy (PHP)', () => {
 
   beforeAll(async () => {
     dir = mkdtempSync(path.join(tmpdir(), 'tf-ai-php-'));
-    // The fake API: three server-sent events, 300 ms apart.
+    // The fake API: a Messages API stream whose events come 300 ms apart.
     upstream = createServer((req, res) => {
       let body = '';
       req.on('data', (c) => {
@@ -42,8 +66,12 @@ describe.skipIf(!hasPhp)('AI proxy (PHP)', () => {
       req.on('end', async () => {
         seen.push({ headers: req.headers, body });
         res.writeHead(200, { 'content-type': 'text/event-stream', 'request-id': 'req_1', 'x-secret': 'no' });
-        for (const n of [1, 2, 3]) {
-          res.write(`event: ping\ndata: {"n":${n}}\n\n`);
+        for (const event of EVENTS) {
+          // Cut in two, so the proxy sees events split across reads.
+          const half = Math.floor(event.length / 2);
+          res.write(event.slice(0, half));
+          await sleep(20);
+          res.write(event.slice(half));
           await sleep(300);
         }
         res.end();
@@ -152,10 +180,13 @@ describe.skipIf(!hasPhp)('AI proxy (PHP)', () => {
     let text = new TextDecoder().decode(first.value);
     for (let r = await reader.read(); !r.done; r = await reader.read()) text += new TextDecoder().decode(r.value);
     const totalAt = Date.now() - started;
-    expect(text).toContain('"n":1');
-    expect(text).toContain('"n":3');
-    // The first event arrived before the API had finished (it takes 900 ms).
-    expect(firstAt).toBeLessThan(totalAt - 400);
+    // The events arrive whole, with padding comment lines between them that
+    // fill the output to 8 KB blocks, so a buffering host sends them on.
+    expect(text.replace(/^:[ ]*\n/gm, '')).toBe(EVENTS.join(''));
+    expect(text).toMatch(/^: {100,}$/m);
+    expect(text.length % 8192).toBe(0);
+    // The first event arrived before the API had finished (it takes 2 s).
+    expect(firstAt).toBeLessThan(totalAt - 1000);
 
     const sent = seen.at(-1);
     expect(sent?.headers['x-api-key']).toBe(KEY);
@@ -163,6 +194,24 @@ describe.skipIf(!hasPhp)('AI proxy (PHP)', () => {
     expect(sent?.headers['anthropic-beta']).toBe('x-1');
     expect(sent?.headers.cookie).toBeUndefined();
     expect(sent?.headers['x-tinyforge']).toBeUndefined();
+  });
+
+  it('streams a reply the Claude adapter reads, padding and all', async () => {
+    const withCookie = (url: string, init: RequestInit) => {
+      const headers = new Headers(init.headers);
+      headers.set('cookie', cookie);
+      return fetch(url, { ...init, headers });
+    };
+    const provider = new ClaudeProvider(base, withCookie as typeof fetch);
+    const chat = provider.createChat({
+      settings: () => ({ model: 'claude-haiku-5-5', effort: 'low' }),
+      system: [{ text: 'sys' }],
+      tools: [],
+    });
+    let streamed = '';
+    const turn = await chat.send({ text: 'hi' }, { onText: (d) => (streamed += d) });
+    expect(turn.text).toBe('Hello world.');
+    expect(streamed).toBe('Hello world.');
   });
 
   it('refuses other models, other sites and requests without the header', async () => {

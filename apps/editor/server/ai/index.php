@@ -30,6 +30,16 @@ const SESSION_SECONDS = 30 * 24 * 3600;
 const MAX_REQUESTS_PER_HOUR = 300;
 const MAX_LOGIN_FAILURES_PER_HOUR = 10;
 const MAX_BODY = 32 * 1024 * 1024;
+/**
+ * Some hosts (PHP-FPM behind Apache) hold the output until about 8 KB have
+ * built up, so a streamed reply would arrive in chunks of about 100 words.
+ * When nothing has gone out for FLUSH_MS, the proxy pads the stream with an
+ * SSE comment line (which clients ignore) up to the next FLUSH_BYTES, so the
+ * host sends what it has. Set 'stream_flush_bytes' => 0 in the config to turn
+ * it off, or to the host's buffer size.
+ */
+const FLUSH_BYTES = 8192;
+const FLUSH_MS = 200;
 const SETUP = 'AI is not set up on this server. Run pnpm ai:setup on your computer.';
 
 final class HttpError extends Exception
@@ -217,6 +227,9 @@ function forward(array $config, string $body): void
     header('Cache-Control: no-store');
     header('X-Accel-Buffering: no');
 
+    $flushBytes = (int) ($config['stream_flush_bytes'] ?? FLUSH_BYTES);
+    $stream = ['sse' => false, 'pending' => '', 'sent' => 0, 'last' => microtime(true)];
+
     $ch = curl_init((string) ($config['anthropic_url'] ?? ANTHROPIC_URL));
     curl_setopt_array($ch, [
         CURLOPT_POST => true,
@@ -225,22 +238,47 @@ function forward(array $config, string $body): void
         CURLOPT_CONNECTTIMEOUT => 15,
         CURLOPT_TIMEOUT => 900,
         // Only these response headers go back to the page.
-        CURLOPT_HEADERFUNCTION => function ($ch, string $line): int {
+        CURLOPT_HEADERFUNCTION => function ($ch, string $line) use (&$stream): int {
             if (preg_match('#^HTTP/\S+\s+(\d{3})#', $line, $m)) {
                 http_response_code((int) $m[1]);
             } elseif (preg_match('/^(content-type|retry-after|request-id):\s*(.+?)\s*$/i', $line, $m)) {
                 header($m[1] . ': ' . $m[2]);
+                if (strtolower($m[1]) === 'content-type' && str_starts_with(strtolower($m[2]), 'text/event-stream')) {
+                    $stream['sse'] = true;
+                }
             }
             return strlen($line);
         },
-        CURLOPT_WRITEFUNCTION => function ($ch, string $data): int {
-            echo $data;
+        CURLOPT_WRITEFUNCTION => function ($ch, string $data) use (&$stream, $flushBytes): int {
+            if (!$stream['sse'] || $flushBytes <= 0) {
+                echo $data;
+            } else {
+                // Whole events only, so padding never lands inside one.
+                $stream['pending'] .= $data;
+                $end = strrpos($stream['pending'], "\n\n");
+                if ($end !== false) {
+                    $out = substr($stream['pending'], 0, $end + 2);
+                    $stream['pending'] = substr($stream['pending'], $end + 2);
+                    $now = microtime(true);
+                    if (($now - $stream['last']) * 1000 >= FLUSH_MS) {
+                        $fill = $flushBytes - (($stream['sent'] + strlen($out)) % $flushBytes);
+                        if ($fill >= 3) $out .= ':' . str_repeat(' ', $fill - 2) . "\n";
+                        $stream['last'] = $now;
+                    }
+                    $stream['sent'] += strlen($out);
+                    echo $out;
+                }
+            }
             flush();
             // Stop the upstream request when the page goes away.
             return connection_aborted() ? 0 : strlen($data);
         },
     ]);
     $ok = curl_exec($ch);
+    if ($stream['pending'] !== '') {
+        echo $stream['pending'];
+        flush();
+    }
     if ($ok === false && !headers_sent() && !connection_aborted()) {
         send_text(502, 'Could not reach the Anthropic API');
     }
