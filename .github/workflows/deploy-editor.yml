@@ -27,7 +27,7 @@ on:
         type: boolean
         default: false
   push:
-    branches: [master, claude/touch-controls-play] # TEMP: phone testing, remove before merge
+    branches: [master]
     paths:
       - apps/editor/**
       - packages/**
