@@ -58,6 +58,8 @@ describe.skipIf(!hasPhp)('AI proxy (PHP)', () => {
     refs: { master: 'c'.repeat(40) } as Record<string, string>,
     requests: [] as Array<{ method: string; url: string; auth?: string; body?: Record<string, unknown> }>,
     trees: [] as unknown[],
+    /** The next tree is the base commit's: nothing changed. */
+    sameTree: false,
   };
   let base: string;
   const seen: Array<{ headers: IncomingHttpHeaders; body: string }> = [];
@@ -132,7 +134,7 @@ describe.skipIf(!hasPhp)('AI proxy (PHP)', () => {
         if (url === `${base}/blobs` && req.method === 'POST') return json(201, { sha: 'b'.repeat(40) });
         if (url === `${base}/trees` && req.method === 'POST') {
           git.trees.push(body);
-          return json(201, { sha: 'e'.repeat(40) });
+          return json(201, { sha: (git.sameTree ? 't' : 'e').repeat(40) });
         }
         if (url === `${base}/commits` && req.method === 'POST') return json(201, { sha: 'd'.repeat(40) });
         if (move && req.method === 'PATCH') {
@@ -342,6 +344,17 @@ describe.skipIf(!hasPhp)('AI proxy (PHP)', () => {
       const res = await commit({ base: 'd'.repeat(40), changes: [{ path: bad, content: '' }] });
       expect(res.status).toBe(403);
     }
+
+    // The files are already like this on the branch: no empty commit.
+    git.sameTree = true;
+    const mark = git.requests.length;
+    const same = await commit({
+      base: 'd'.repeat(40),
+      changes: [{ path: 'games/pong/main.ts', content: btoa('new') }],
+    });
+    expect(same.status).toBe(200);
+    expect((await same.json()).head).toBe('d'.repeat(40));
+    expect(git.requests.slice(mark).some((r) => r.method === 'PATCH' || r.url.endsWith('/git/commits'))).toBe(false);
   });
 
   it('refuses other models, other sites and requests without the header', async () => {

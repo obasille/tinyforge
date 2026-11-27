@@ -487,6 +487,11 @@ function github_route(array $config, string $route, string $method): void
         }
         [$status, $newTree] = github($config, 'POST', "/repos/$repo/git/trees", ['base_tree' => $commit['tree']['sha'], 'tree' => $tree]);
         if ($status !== 201) throw github_fail($status, 'build the commit');
+        // Nothing changed (the files were already like this): no empty commit.
+        if ($newTree['sha'] === $commit['tree']['sha']) {
+            send_json(200, ['head' => $base, 'blobs' => (object) $blobs]);
+            return;
+        }
         $message = substr(trim((string) ($input['message'] ?? '')), 0, 2000) ?: 'Edit from the TinyForge editor';
         [$status, $newCommit] = github($config, 'POST', "/repos/$repo/git/commits", [
             'message' => $message,

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { GitHubWorkspace } from '../src/github-workspace.ts';
+import { GitHubWorkspace, gitBlobSha } from '../src/github-workspace.ts';
 import { ProjectFiles } from '../src/project-files.ts';
 
 const SHA = (c: string) => c.repeat(40);
@@ -157,5 +157,20 @@ describe('GitHubWorkspace', () => {
     fail = false;
     await ws.flush();
     expect(ws.save.getState().status).toBe('saved');
+  });
+
+  it('makes no commit when the files end as they are on the branch (undo, then redo, then undo)', async () => {
+    const { site, calls, fetchFn } = fakeSite();
+    site.files[0].sha = await gitBlobSha(new TextEncoder().encode('pong'));
+    const ws = new GitHubWorkspace('https://tf.example/', { fetch: fetchFn });
+    await ws.list();
+    await ws.write('games/pong/main.ts', 'pong!');
+    await ws.write('games/pong/main.ts', 'pong');
+    await ws.write('assets/sprites/new.png', new Uint8Array([1]));
+    await ws.delete('assets/sprites/new.png');
+    await ws.flush();
+    expect(site.commits).toBe(0);
+    expect(calls.some((c) => c.url.endsWith('/commit'))).toBe(false);
+    expect(ws.save.getState()).toMatchObject({ status: 'saved', pending: [] });
   });
 });

@@ -44,6 +44,16 @@ const encodePath = (p: string) => p.split('/').map(encodeURIComponent).join('/')
 /** A number that changes with the content: the editor's FileEntry.mtime. */
 const shaTime = (sha: string) => Number.parseInt(sha.slice(0, 12), 16);
 
+/** The Git blob id of these bytes, as GitHub's tree lists it. */
+export async function gitBlobSha(bytes: Uint8Array): Promise<string> {
+  const header = new TextEncoder().encode(`blob ${bytes.length}\0`);
+  const all = new Uint8Array(header.length + bytes.length);
+  all.set(header);
+  all.set(bytes, header.length);
+  const hash = new Uint8Array(await crypto.subtle.digest('SHA-1', all));
+  return [...hash].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 function base64(bytes: Uint8Array): string {
   let binary = '';
   for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
@@ -230,9 +240,23 @@ export class GitHubWorkspace implements Workspace {
   }
 
   private async commit(): Promise<void> {
-    const batch = [...this.edits].map(([path, e]) => ({ path, ...e }));
     this.setPending({ status: 'saving' });
     try {
+      // Edits that put a file back as it is on the branch (an undo, then a
+      // redo and an undo...) are dropped: they would make an empty commit.
+      const batch = [];
+      for (const [path, e] of this.edits) {
+        const r = this.remote.get(path);
+        const same =
+          e.data === null ? !r : r !== undefined && r.size === e.data.length && r.sha === (await gitBlobSha(e.data));
+        if (!same) batch.push({ path, ...e });
+        else if (this.edits.get(path)?.version === e.version) this.edits.delete(path);
+      }
+      if (batch.length === 0) {
+        this.setPending({ status: this.edits.size > 0 ? 'pending' : 'saved' });
+        if (this.edits.size > 0) this.schedule();
+        return;
+      }
       const names = batch.map((b) => b.path);
       const message =
         names.length === 1
