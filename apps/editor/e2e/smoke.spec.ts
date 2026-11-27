@@ -527,6 +527,31 @@ test.describe('the touch panels in portrait', () => {
     await expect(page.getByTestId('touch-tab-files')).toHaveAttribute('aria-selected', 'true');
   });
 
+  test('the top bar fits one row; the Files actions are in a menu', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.goto('/');
+    await expect(page.getByTestId('run-status')).toHaveText('running');
+    const toolbar = await page.locator('.tf-toolbar').boundingBox();
+    expect(toolbar?.height).toBeLessThan(56);
+    await expect(page.getByRole('button', { name: 'Redo' })).toBeVisible();
+    // No zoom into the code editor on iOS: its text is at least 16px.
+    await page.evaluate(() => window.__tf?.editor.workbench.openFile('games/pong/main.ts'));
+    await expect(page.locator('.cm-content').first()).toHaveCSS('font-size', '16px');
+    await page.getByTestId('touch-tab-files').click();
+    await expect(page.getByTestId('files-export')).toHaveCount(0);
+    await page.getByTestId('files-menu').click();
+    await expect(page.getByRole('menuitem')).toHaveText([
+      'New game',
+      'New file',
+      'Rename',
+      'Delete',
+      'Export',
+      'Cartridge',
+      'Import',
+    ]);
+    await expect(page.getByTestId('files-export')).toBeEnabled();
+  });
+
   test('a tab opens a collapsed sheet', async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem('tinyforge.editor.sheet', 'collapsed'));
     await page.goto('/');

@@ -4,12 +4,26 @@ export interface AppMenuItem {
   label: string;
   testId?: string;
   title?: string;
+  disabled?: boolean;
   onSelect: () => void;
 }
 
-/** The top bar's menu button: less frequent actions (AI, Reset layout). */
-/** `up`: the list opens above the button (a button at the bottom of the screen). */
-export function AppMenu({ items, up = false }: { items: AppMenuItem[]; up?: boolean }) {
+/**
+ * A menu button: the top bar's (AI, Reset layout), or a panel's actions.
+ * `up`: the list opens above the button (a button at the bottom of the screen).
+ * `label` and `testId` replace the ☰ button's.
+ */
+export function AppMenu({
+  items,
+  up = false,
+  label,
+  testId = 'app-menu',
+}: {
+  items: AppMenuItem[];
+  up?: boolean;
+  label?: string;
+  testId?: string;
+}) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -20,12 +34,14 @@ export function AppMenu({ items, up = false }: { items: AppMenuItem[]; up?: bool
       if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener('pointerdown', onDown);
-    listRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
+    listRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')?.focus();
     return () => document.removeEventListener('pointerdown', onDown);
   }, [open]);
 
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    const buttons = [...(listRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? [])];
+    const buttons = [
+      ...(listRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)') ?? []),
+    ];
     const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
     const move = (to: number) => {
       e.preventDefault();
@@ -47,14 +63,14 @@ export function AppMenu({ items, up = false }: { items: AppMenuItem[]; up?: bool
       <button
         type="button"
         className="tf-menu-button"
-        data-testid="app-menu"
-        aria-label="Menu"
+        data-testid={testId}
+        aria-label={label ?? 'Menu'}
         aria-haspopup="menu"
         aria-expanded={open}
         title="Menu"
         onClick={() => setOpen(!open)}
       >
-        ☰
+        {label ?? '☰'}
       </button>
       {open && (
         <div
@@ -72,6 +88,7 @@ export function AppMenu({ items, up = false }: { items: AppMenuItem[]; up?: bool
               className="tf-menu-item"
               data-testid={item.testId}
               title={item.title}
+              disabled={item.disabled}
               onClick={() => {
                 setOpen(false);
                 item.onSelect();

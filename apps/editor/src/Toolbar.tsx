@@ -26,8 +26,15 @@ export function Toolbar({
       <strong className="tf-brand">TinyForge</strong>
       <GamePicker />
       <span className="tf-undo-group">
-        <button type="button" disabled={!stack.canUndo} onClick={() => editor.commands.undo()} title="Undo (Ctrl+Z)">
-          Undo{stack.undoLabel ? ` ${stack.undoLabel}` : ''}
+        <button
+          type="button"
+          disabled={!stack.canUndo}
+          onClick={() => editor.commands.undo()}
+          title="Undo (Ctrl+Z)"
+          // The touch layout shows an arrow; the name still says what is undone.
+          aria-label={touch ? `Undo${stack.undoLabel ? ` ${stack.undoLabel}` : ''}` : undefined}
+        >
+          {touch ? '↶' : `Undo${stack.undoLabel ? ` ${stack.undoLabel}` : ''}`}
         </button>
         <UndoHistory />
       </span>
@@ -36,8 +43,9 @@ export function Toolbar({
         disabled={!stack.canRedo}
         onClick={() => editor.commands.redo()}
         title="Redo (Ctrl+Shift+Z)"
+        aria-label={touch ? 'Redo' : undefined}
       >
-        Redo
+        {touch ? '↷' : 'Redo'}
       </button>
       <span className="tf-spacer" />
       <span className="tf-volume">
@@ -67,7 +75,7 @@ export function Toolbar({
           onPointerUp={() => editor.viewport.focus()}
         />
       </span>
-      <span className={`tf-status tf-status-${session.status}`} data-testid="run-status">
+      <span className={`tf-status tf-status-${session.status}`} data-testid="run-status" title={session.status}>
         {session.status}
       </span>
       <AppMenu items={items} />

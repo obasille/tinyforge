@@ -1649,8 +1649,10 @@ div.tf-ai-file,
   inset: 0;
   display: flex;
   justify-content: space-between;
-  padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
-    max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  /* Half of the side insets: the notch and the rounded corners only cover part
+     of them, and the full inset puts the controls far from the edges. */
+  padding: max(8px, env(safe-area-inset-top)) max(8px, calc(env(safe-area-inset-right) / 2))
+    max(8px, env(safe-area-inset-bottom)) max(8px, calc(env(safe-area-inset-left) / 2));
   pointer-events: none;
 }
 
@@ -1674,7 +1676,7 @@ div.tf-ai-file,
 
 .tf-touch-menu {
   position: absolute;
-  left: calc(max(16px, env(safe-area-inset-left)) + 152px);
+  left: calc(max(8px, calc(env(safe-area-inset-left) / 2)) + 152px);
   bottom: max(12px, env(safe-area-inset-bottom));
 }
 
@@ -1837,17 +1839,61 @@ div.tf-ai-file,
   left: 0;
 }
 
-/* Narrow touch screens (portrait phones): the top bar wraps instead of overflowing. */
+/* Touch layout: one row that fits a phone. No brand or volume slider (the
+   mute button stays), arrows for Undo and Redo, the status as a dot, and the
+   game picker takes the room left. */
 .tf-touch .tf-toolbar {
-  flex-wrap: wrap;
-  row-gap: 6px;
+  gap: 6px;
+  padding: 6px max(8px, env(safe-area-inset-right)) 6px max(8px, env(safe-area-inset-left));
 }
 
-@media (max-width: 600px) {
-  .tf-touch .tf-brand,
-  .tf-touch .tf-volume input[type="range"] {
-    display: none;
-  }
+.tf-touch .tf-brand,
+.tf-touch .tf-volume input[type="range"],
+.tf-touch .tf-spacer {
+  display: none;
+}
+
+.tf-touch .tf-picker {
+  flex: 1;
+  min-width: 0;
+}
+
+.tf-touch .tf-picker-button {
+  width: 100%;
+  min-width: 0;
+}
+
+.tf-touch .tf-picker-button > span:not(.tf-picker-caret) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tf-touch .tf-toolbar > button,
+.tf-touch .tf-undo-group > button:first-child,
+.tf-touch .tf-volume button {
+  min-width: 36px;
+  height: 34px;
+  font-size: 18px;
+}
+
+.tf-touch .tf-status {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  overflow: hidden;
+  font-size: 0;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* iOS zooms the page into a text field whose font is under 16px. */
+.tf-touch input:not([type="range"]),
+.tf-touch select,
+.tf-touch textarea,
+.tf-touch .cm-content {
+  font-size: 16px;
 }
 
 /* The touch layout's panels (TouchPanels.tsx): large tabs, one panel at a time. */
@@ -1948,4 +1994,25 @@ div.tf-ai-file,
   flex: 1;
   min-height: 0;
   overflow: auto;
+}
+
+.tf-menu-item:disabled {
+  color: var(--tf-muted);
+  opacity: 0.6;
+}
+
+/* Touch layout: the Files actions are one menu button at the right. */
+.tf-touch .tf-files-actions {
+  justify-content: flex-end;
+}
+
+.tf-touch .tf-files-actions .tf-menu-button {
+  height: 34px;
+  padding: 0 12px;
+  font-size: 15px;
+}
+
+.tf-touch .tf-menu-item {
+  min-height: 40px;
+  font-size: 15px;
 }
