@@ -1,6 +1,11 @@
-// Claude, through the dev server: the page sends Messages API requests to
-// /__tf/ai/anthropic, and the server adds the key from .env. The page never
-// sees the key (the `apiKey` below is a placeholder the server replaces).
+// Claude, in one of two ways:
+// - Through the dev server (pnpm dev): the page sends Messages API requests to
+//   /__tf/ai/anthropic, and the server adds the key from .env. The page never
+//   sees the key (the `apiKey` below is a placeholder the server replaces).
+// - Direct (hosted mode, the deployed editor): requests go to
+//   api.anthropic.com with the key from the unlocked key vault. The key is
+//   read for each request and put in the header there, so the SDK client never
+//   holds it, and locking the vault stops the next request.
 
 import Anthropic from '@anthropic-ai/sdk';
 import type {
@@ -27,6 +32,10 @@ const PRICES: Record<string, [number, number, number]> = {
   'claude-haiku-5-5': [0.1, 0.5, 0.01],
 };
 
+/** The Messages API, called directly in hosted mode. */
+export const ANTHROPIC_API = 'https://api.anthropic.com';
+const LOCKED = 'The key vault is locked. Unlock it to use the AI.';
+
 const STOPS: Record<string, ChatTurn['stop']> = { tool_use: 'tools', max_tokens: 'max_tokens', refusal: 'refusal' };
 
 export class ClaudeProvider implements AiProvider {
@@ -35,21 +44,49 @@ export class ClaudeProvider implements AiProvider {
   readonly models = CLAUDE_MODELS;
   readonly hasEffort = true;
   private readonly client: Anthropic;
+  /** Throws when a request cannot be sent (direct, with the vault locked). */
+  private readonly ready: () => void = () => {};
 
-  /** `origin`: where the dev server is (the page's origin in the browser). */
-  constructor(origin: string, fetchFn?: typeof fetch) {
+  /**
+   * `origin`: where the dev server is (the page's origin in the browser).
+   * `{ apiKey }`: call the API directly, with the key this returns for each
+   * request (null when the vault is locked).
+   */
+  constructor(target: string | { apiKey: () => string | null }, fetchFn?: typeof fetch) {
+    if (typeof target === 'string') {
+      this.client = new Anthropic({
+        baseURL: `${target}${AI_BASE}/anthropic`,
+        apiKey: 'added-by-the-dev-server',
+        // Allowed because no key is in the page: the dev server holds it.
+        dangerouslyAllowBrowser: true,
+        defaultHeaders: { 'X-TinyForge': '1' },
+        fetch: fetchFn,
+      });
+      return;
+    }
+    const send = fetchFn ?? ((input, init) => fetch(input, init));
     this.client = new Anthropic({
-      baseURL: `${origin}${AI_BASE}/anthropic`,
-      apiKey: 'added-by-the-dev-server',
-      // Allowed because no key is in the page: the dev server holds it.
+      baseURL: ANTHROPIC_API,
+      apiKey: 'set-for-each-request',
+      // Hosted mode: the key is in the page, from the key vault, by design
+      // (see the plan's security section). The SDK then also sends the
+      // anthropic-dangerous-direct-browser-access header that CORS needs.
       dangerouslyAllowBrowser: true,
-      defaultHeaders: { 'X-TinyForge': '1' },
-      fetch: fetchFn,
+      fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const key = target.apiKey();
+        if (!key) throw new Error(LOCKED);
+        const headers = new Headers(init?.headers);
+        headers.set('x-api-key', key);
+        return send(input, { ...init, headers });
+      }) as typeof fetch,
     });
+    this.ready = () => {
+      if (!target.apiKey()) throw new Error(LOCKED);
+    };
   }
 
   createChat(options: ChatOptions): Chat {
-    return new ClaudeChat(this.client, options);
+    return new ClaudeChat(this.client, options, this.ready);
   }
 }
 
@@ -60,6 +97,7 @@ class ClaudeChat implements Chat {
   constructor(
     private readonly client: Anthropic,
     private readonly options: ChatOptions,
+    private readonly ready: () => void,
   ) {
     this.tools = options.tools.map((t) => ({
       name: t.name,
@@ -69,6 +107,7 @@ class ClaudeChat implements Chat {
   }
 
   async send(input: ChatInput, { signal, onText, onThinking }: SendOptions = {}) {
+    this.ready();
     const content: Array<BetaToolResultBlockParam | { type: 'text'; text: string }> = (input.results ?? []).map(
       (r) => ({ type: 'tool_result', tool_use_id: r.id, content: r.content, is_error: r.isError === true }),
     );

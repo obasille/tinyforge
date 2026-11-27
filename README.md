@@ -1033,6 +1033,16 @@ preview` (and so `pnpm editor:static`) sends the same CSP, and
 under it with no violation. `pnpm upload:editor` refuses to upload a build
 that contains an API key, a GitHub token or any value from `.env`.
 
+**AI in the deployed editor (hosted mode):** with no dev server, the AI panel
+asks once for your own Anthropic API key and a password. The key is encrypted
+with the password (PBKDF2-SHA256, 600,000 iterations, then AES-GCM; WebCrypto)
+and stored in this browser's IndexedDB; only the ciphertext is stored. Each
+visit asks for the password, which the browser's password manager can fill in.
+The key is then in memory only, until Lock, 15 minutes without activity, or
+leaving the page. Requests go straight to api.anthropic.com. Use a key made
+for this with a monthly spending limit, and only on your own devices (Forget
+keys removes it). `pnpm dev` is unchanged: the key stays in `.env`.
+
 - **The game runs in a Web Worker** with an `OffscreenCanvas`, so heavy gameplay
   code cannot stall the editor. Audio is played on the main thread
   (`AudioContext` does not exist in Workers). If a game hangs in an infinite

@@ -4,7 +4,12 @@
 //
 // The settings (provider and model, effort, show cost) are a preference of
 // this browser, saved in localStorage; the dev server's .env sets which
-// providers there are and the default model. No API key reaches the page.
+// providers there are and the default model. With the dev server, no API key
+// reaches the page.
+//
+// Hosted mode (no dev server, the deployed editor): the panel asks for the
+// user's own Anthropic key, kept in the key vault (../vault.ts), and calls the
+// API directly once the vault is unlocked.
 
 import { createStore } from '@tinyforge/editor-core';
 import {
@@ -13,7 +18,9 @@ import {
   type AiStatus,
   type ChatItem,
   type ChatSettings,
+  CLAUDE_MODELS,
   ClaudeProvider,
+  DEFAULT_CLAUDE_MODEL,
   type Effort,
   type FileChangeView,
   fetchAiStatus,
@@ -27,6 +34,8 @@ import guide from '../../../../AGENTS.md?raw';
 import { useEditor } from '../EditorContext.ts';
 import type { Editor } from '../editor.ts';
 import { useStore } from '../hooks.ts';
+import { vault } from '../vault.ts';
+import { ForgetKeys, VaultSetup, VaultUnlock } from './VaultForms.tsx';
 
 const SETTINGS_KEY = 'tinyforge.editor.ai';
 const EFFORTS: Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -66,8 +75,29 @@ settings.subscribe(() => {
 
 type ProviderStatus = AiStatus['providers'][number];
 
+/** Hosted mode, unlocked: Claude, called directly. */
+const HOSTED_STATUS: AiStatus = {
+  providers: [{ id: 'anthropic', models: CLAUDE_MODELS, defaultModel: DEFAULT_CLAUDE_MODEL }],
+};
+
+/** Set when the dev server is missing; the panel then runs in hosted mode. */
+let hosted = false;
+
 const makeProvider = (p: ProviderStatus): AiProvider =>
-  p.id === 'openai' ? new OpenAiProvider(location.origin, p.models) : new ClaudeProvider(location.origin);
+  p.id === 'openai'
+    ? new OpenAiProvider(location.origin, p.models)
+    : hosted
+      ? new ClaudeProvider({ apiKey: () => vault.get('anthropic') })
+      : new ClaudeProvider(location.origin);
+
+/** Keep the saved provider and model while they are still offered, else take the first. */
+function chooseDefaults(s: AiStatus | null): void {
+  const { provider: id, model } = settings.getState();
+  const saved = s?.providers.find((p) => p.id === id);
+  if (saved?.models.includes(model)) return;
+  const first = saved ?? s?.providers[0];
+  if (first) settings.setState((x) => ({ ...x, provider: first.id, model: first.defaultModel }));
+}
 
 /** One conversation per game and provider, kept while the page is open. */
 const agents = new Map<string, Agent>();
@@ -107,22 +137,26 @@ async function agentFor(editor: Editor, game: string, provider: ProviderStatus):
 export default function AiPanel() {
   const editor = useEditor();
   const game = useStore(editor.project).game;
-  const [status, setStatus] = useState<AiStatus | null | undefined>(undefined);
+  const [devStatus, setDevStatus] = useState<AiStatus | null | undefined>(undefined);
+  const vaultStatus = useStore(vault.status);
   const [agent, setAgent] = useState<Agent | null>(null);
   const { provider: providerId, onlyGame } = useStore(settings);
+  const isHosted = devStatus === null;
+  // Hosted mode offers Claude only while the vault is unlocked.
+  const status = isHosted ? (vaultStatus === 'unlocked' ? HOSTED_STATUS : null) : devStatus;
   const provider = status?.providers.find((p) => p.id === providerId) ?? null;
 
   useEffect(() => {
     void fetchAiStatus().then((s) => {
-      setStatus(s);
-      // Keep the saved choice while the dev server still offers it.
-      const { provider: id, model } = settings.getState();
-      const saved = s?.providers.find((p) => p.id === id);
-      if (saved?.models.includes(model)) return;
-      const first = saved ?? s?.providers[0];
-      if (first) settings.setState((x) => ({ ...x, provider: first.id, model: first.defaultModel }));
+      if (s === null) {
+        hosted = true;
+        void vault.load();
+      }
+      setDevStatus(s);
     });
   }, []);
+
+  useEffect(() => chooseDefaults(status ?? null), [status]);
 
   useEffect(() => {
     setAgent(null);
@@ -140,14 +174,21 @@ export default function AiPanel() {
     void agentFor(editor, game, provider).then(setAgent);
   };
 
+  if (isHosted && vaultStatus !== 'unlocked') {
+    return (
+      <div className="tf-ai" data-testid="ai-panel">
+        {vaultStatus === 'empty' ? <VaultSetup /> : vaultStatus === 'locked' ? <VaultUnlock /> : null}
+      </div>
+    );
+  }
+
   let notice: string | null = null;
-  if (status === null) notice = 'AI needs the dev server (pnpm dev). A static build has no AI.';
-  else if (status && status.providers.length === 0) notice = status.reason ?? 'AI is not set up.';
+  if (status && status.providers.length === 0) notice = status.reason ?? 'AI is not set up.';
   else if (!game) notice = 'Pick a game first.';
 
   return (
     <div className="tf-ai" data-testid="ai-panel">
-      <Settings status={status ?? null} onNewChat={newChat} />
+      <Settings status={status ?? null} hosted={isHosted} onNewChat={newChat} />
       {game && !notice ? (
         <div className="tf-ai-scope" data-testid="ai-scope">
           Working on <strong>{game}</strong>
@@ -180,8 +221,9 @@ export default function AiPanel() {
 
 const PROVIDER_LABELS: Record<string, string> = { anthropic: 'Claude', openai: 'OpenAI-compatible (.env)' };
 
-function Settings({ status, onNewChat }: { status: AiStatus | null; onNewChat: () => void }) {
+function Settings({ status, hosted, onNewChat }: { status: AiStatus | null; hosted: boolean; onNewChat: () => void }) {
   const s = useStore(settings);
+  const [forgetting, setForgetting] = useState(false);
   const providers = status?.providers ?? [];
   // A provider's id never has a ':'; a model's name may (llama3.1:8b).
   const choose = (value: string) => {
@@ -236,6 +278,19 @@ function Settings({ status, onNewChat }: { status: AiStatus | null; onNewChat: (
       <button type="button" onClick={onNewChat} title="Forget this conversation and start a new one">
         New chat
       </button>
+      {hosted ? (
+        <>
+          <button
+            type="button"
+            data-testid="vault-lock"
+            title="Remove the API key from memory; the password unlocks it again"
+            onClick={() => vault.lock()}
+          >
+            Lock
+          </button>
+          <ForgetKeys forgetting={forgetting} setForgetting={setForgetting} />
+        </>
+      ) : null}
     </div>
   );
 }

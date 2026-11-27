@@ -17,10 +17,10 @@ import type { Plugin } from 'vite';
  * - img-src / media-src blob: data:: sprite previews, covers and sounds.
  * - worker-src blob:: Workers are same-origin files today; blob: keeps a
  *   bundler-inlined Worker working.
- * - connect-src 'self' data:: the static build only reads its own __tf/ files.
- *   data: is for the compiler, which loads a small WebAssembly helper from a
- *   data: URL with fetch(). The AI and GitHub origins are added only when
- *   hosted mode (plan step 5) needs them.
+ * - connect-src: the site's own __tf/ files; the Anthropic API, which the AI
+ *   panel calls directly in hosted mode with the key from the key vault; and
+ *   data:, for the compiler, which loads a small WebAssembly helper from a
+ *   data: URL with fetch(). api.github.com joins when saving to GitHub does.
  * - frame-ancestors 'none': no framing (clickjacking). Header only, so this
  *   policy is never sent as a meta tag.
  */
@@ -31,7 +31,7 @@ export const CONTENT_SECURITY_POLICY = [
   "img-src 'self' data: blob:",
   "media-src 'self' data: blob:",
   "font-src 'self' data:",
-  "connect-src 'self' data:",
+  "connect-src 'self' https://api.anthropic.com data:",
   "worker-src 'self' blob:",
   "object-src 'none'",
   "base-uri 'self'",

@@ -8,6 +8,8 @@ describe('site headers', () => {
     expect(CONTENT_SECURITY_POLICY).not.toMatch(/'unsafe-eval'/);
     expect(CONTENT_SECURITY_POLICY).toContain("frame-ancestors 'none'");
     expect(CONTENT_SECURITY_POLICY).toContain("object-src 'none'");
+    // Only the site and the Anthropic API can be reached (data: is not a network).
+    expect(CONTENT_SECURITY_POLICY).toContain("connect-src 'self' https://api.anthropic.com data:");
   });
 
   it('writes the CSP, HSTS and the HTTPS redirect into the root .htaccess', () => {

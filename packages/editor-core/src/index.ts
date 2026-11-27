@@ -11,6 +11,7 @@ export * from './game-host.ts';
 export * from './game-transfer.ts';
 export * from './http-workspace.ts';
 export * from './input.ts';
+export * from './key-vault.ts';
 export * from './live-scan.ts';
 export * from './memory-regions.ts';
 export * from './memory-view.ts';
