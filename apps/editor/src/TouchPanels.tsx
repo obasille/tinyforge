@@ -82,7 +82,7 @@ export function TouchPanels({ panels, onTab }: Props) {
               onTab?.();
             }}
           >
-            {t === 'editor' && activeFile ? activeFile.title : LABELS[t]}
+            {LABELS[t]}
           </button>
         ))}
       </div>
@@ -109,7 +109,7 @@ export function TouchPanels({ panels, onTab }: Props) {
               >
                 {files.map((f) => (
                   <option key={f.id} value={f.id} title={f.path}>
-                    {f.title}
+                    {switcherLabel(f)}
                   </option>
                 ))}
               </select>
@@ -118,7 +118,7 @@ export function TouchPanels({ panels, onTab }: Props) {
                   type="button"
                   className="tf-touch-close"
                   data-testid="touch-file-close"
-                  aria-label={`Close ${activeFile.title}`}
+                  aria-label={`Close ${switcherLabel(activeFile)}`}
                   onClick={() => panels.closeFile(activeFile.id)}
                 >
                   ×
@@ -154,6 +154,16 @@ export function TouchPanels({ panels, onTab }: Props) {
       </div>
     </div>
   );
+}
+
+/**
+ * A file in the switcher: its path without `games/` or `assets/`
+ * (`breakout/main.ts`, `sprites/dino.png`, `engine/sdk/drawing.ts`), with
+ * the panel's ● for unsaved changes.
+ */
+export function switcherLabel(file: OpenFile): string {
+  const path = file.path.replace(/^(games|assets)\//, '');
+  return file.title.startsWith('● ') ? `● ${path}` : path;
 }
 
 /** One open file's panel, with the panel API that Dockview would give it. */

@@ -493,7 +493,7 @@ test.describe('the touch panels in portrait', () => {
     await page.getByTestId('file-games/pong').click();
     await page.getByTestId('file-games/pong/main.ts').click();
     const editorTab = page.getByTestId('touch-tab-editor');
-    await expect(editorTab).toHaveText('main.ts');
+    await expect(editorTab).toHaveText('Editor');
     await expect(editorTab).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByTestId('code-games/pong/main.ts').locator('.cm-content')).toContainText(
       'const TITLE = "Pong"',
@@ -503,10 +503,10 @@ test.describe('the touch panels in portrait', () => {
     // A second file: the switcher lists both, one is shown.
     await page.evaluate(() => window.__tf?.editor.workbench.openFile('engine/sdk/drawing.ts'));
     const select = page.getByTestId('touch-file-select');
-    await expect(select.locator('option')).toHaveText(['main.ts', 'drawing.ts']);
+    await expect(select.locator('option')).toHaveText(['pong/main.ts', 'engine/sdk/drawing.ts']);
     await expect(page.getByTestId('code-engine/sdk/drawing.ts')).toBeVisible();
     await expect(page.getByTestId('code-games/pong/main.ts')).toBeHidden();
-    await select.selectOption({ label: 'main.ts' });
+    await select.selectOption({ label: 'pong/main.ts' });
     await expect(page.getByTestId('code-games/pong/main.ts')).toBeVisible();
 
     // The other tabs keep the files open.
@@ -550,6 +550,23 @@ test.describe('the touch panels in portrait', () => {
       'Import',
     ]);
     await expect(page.getByTestId('files-export')).toBeEnabled();
+    // The list stays on screen, above the bottom edge.
+    const list = await page.getByRole('menu').boundingBox();
+    expect((list?.y ?? 0) + (list?.height ?? 0)).toBeLessThanOrEqual(800);
+  });
+
+  test('the Files actions menu opens upward when the sheet is low', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('tinyforge.editor.sheet', 'half'));
+    await page.setViewportSize({ width: 390, height: 700 });
+    await page.goto('/');
+    await expect(page.getByTestId('run-status')).toHaveText('running');
+    await page.getByTestId('touch-tab-files').click();
+    await page.getByTestId('files-menu').click();
+    const button = await page.getByTestId('files-menu').boundingBox();
+    const list = await page.getByRole('menu').boundingBox();
+    if (!button || !list) throw new Error('not shown');
+    expect(list.y + list.height).toBeLessThanOrEqual(700);
+    await expect(page.getByRole('menuitem', { name: 'Import' })).toBeInViewport();
   });
 
   test('a tab opens a collapsed sheet', async ({ page }) => {
