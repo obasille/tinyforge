@@ -6,7 +6,8 @@
 // file's SHA-256), and a deploy uploads new or changed files, index.html
 // last, removes the files that are gone, then writes the new manifest.
 // Without a manifest (first run, or --full) the build's folders are
-// replaced and everything is uploaded.
+// replaced and everything is uploaded. Files go up over 3 connections at
+// once; --serial uses one, --parallel=N (1 to 8) another number.
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createHash } from 'crypto';
@@ -81,35 +82,54 @@ const MAX_RETRIES = 3;
 // Keeps the host name out of anything printed.
 const redact = (text) => String(text).split(EDITOR_FTP_HOST).join('<host>');
 
-let client;
+// Files go up over several connections at once (3 by default); --serial
+// uses one, --parallel=N picks the number.
+const parallelArg = process.argv.find((arg) => arg.startsWith('--parallel='));
+const PARALLEL = process.argv.includes('--serial')
+  ? 1
+  : Math.max(1, Math.min(8, Number(parallelArg?.split('=')[1]) || 3));
 
-async function connect() {
-  client?.close();
-  client = new ftp.Client(60_000);
-  client.ftp.verbose = false;
-  await client.access({
-    host: EDITOR_FTP_HOST,
-    port,
-    user: EDITOR_FTP_USER,
-    password: EDITOR_FTP_PASS,
-    secure,
-  });
+/** One FTP connection that reconnects and retries when the server drops it. */
+function createConnection() {
+  const conn = {
+    client: null,
+    async connect() {
+      conn.client?.close();
+      conn.client = new ftp.Client(60_000);
+      conn.client.ftp.verbose = false;
+      await conn.client.access({
+        host: EDITOR_FTP_HOST,
+        port,
+        user: EDITOR_FTP_USER,
+        password: EDITOR_FTP_PASS,
+        secure,
+      });
+    },
+    /** Runs `action(client)`, reconnecting and retrying on a dropped connection. */
+    async run(label, action) {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          return await action(conn.client);
+        } catch (error) {
+          if (attempt >= MAX_RETRIES || !RETRYABLE.test(error.message))
+            throw error;
+          console.warn(
+            `  ${label}: ${redact(error.message)}; reconnecting (retry ${attempt + 1}/${MAX_RETRIES})`,
+          );
+          await sleep(1000 * (attempt + 1));
+          await conn.connect();
+        }
+      }
+    },
+    close() {
+      conn.client?.close();
+    },
+  };
+  return conn;
 }
 
-async function withRetry(label, action) {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      return await action();
-    } catch (error) {
-      if (attempt >= MAX_RETRIES || !RETRYABLE.test(error.message)) throw error;
-      console.warn(
-        `  ${label}: ${redact(error.message)}; reconnecting (retry ${attempt + 1}/${MAX_RETRIES})`,
-      );
-      await sleep(1000 * (attempt + 1));
-      await connect();
-    }
-  }
-}
+const main = createConnection();
+const workers = [];
 
 const MANIFEST = '/.tf-deploy.json';
 const full = process.argv.includes('--full');
@@ -129,7 +149,9 @@ async function readManifest() {
     },
   });
   try {
-    await withRetry('read manifest', () => client.downloadTo(sink, MANIFEST));
+    await main.run('read manifest', (client) =>
+      client.downloadTo(sink, MANIFEST),
+    );
     const files = JSON.parse(Buffer.concat(chunks).toString('utf8')).files;
     return files && typeof files === 'object' ? files : null;
   } catch {
@@ -139,7 +161,7 @@ async function readManifest() {
 
 const started = Date.now();
 try {
-  await connect();
+  await main.connect();
 
   const local = {};
   for (const filePath of (await collectFiles(distPath)).filter(
@@ -163,7 +185,7 @@ try {
     for (const entry of top) {
       if (!entry.isDirectory()) continue;
       console.log(`Removing /${entry.name}`);
-      await withRetry(`remove /${entry.name}`, async () => {
+      await main.run(`remove /${entry.name}`, async (client) => {
         try {
           await client.removeDir(`/${entry.name}`);
         } catch (error) {
@@ -185,11 +207,10 @@ try {
     `${changed.length} of ${Object.keys(local).length} files to upload, ${gone.length} to remove.`,
   );
 
-  let n = 0;
-  for (const relative of changed) {
-    n++;
-    console.log(`[${n}/${changed.length}] ${relative}`);
-    await withRetry(relative, async () => {
+  // index.html goes up on its own, after every other file.
+  const last = changed.at(-1) === 'index.html' ? changed.pop() : null;
+  const upload = (conn, relative) =>
+    conn.run(relative, async (client) => {
       await client.ensureDir(
         path.posix.join('/', path.posix.dirname(relative)),
       );
@@ -198,10 +219,31 @@ try {
         path.posix.join('/', relative),
       );
     });
+  let n = 0;
+  const total = changed.length + (last ? 1 : 0);
+  const queue = [...changed];
+  const count = Math.min(PARALLEL, queue.length);
+  if (count > 1) console.log(`Uploading over ${count} connections.`);
+  for (let i = 1; i < count; i++) {
+    const conn = createConnection();
+    workers.push(conn);
+    await conn.connect();
+  }
+  await Promise.all(
+    [main, ...workers].slice(0, Math.max(count, 1)).map(async (conn) => {
+      for (let relative; (relative = queue.shift());) {
+        console.log(`[${++n}/${total}] ${relative}`);
+        await upload(conn, relative);
+      }
+    }),
+  );
+  if (last) {
+    console.log(`[${++n}/${total}] ${last}`);
+    await upload(main, last);
   }
   for (const relative of gone) {
     console.log(`Removing ${relative}`);
-    await withRetry(`remove ${relative}`, async () => {
+    await main.run(`remove ${relative}`, async (client) => {
       try {
         await client.remove(path.posix.join('/', relative));
       } catch (error) {
@@ -214,18 +256,19 @@ try {
   // Written last: if a deploy stops halfway, the next one compares against
   // the previous manifest and sends the rest again.
   const manifest = Buffer.from(JSON.stringify({ files: local }));
-  await withRetry('write manifest', async () => {
+  await main.run('write manifest', async (client) => {
     await client.cd('/');
     await client.uploadFrom(Readable.from([manifest]), MANIFEST);
   });
 
   const seconds = ((Date.now() - started) / 1000).toFixed(0);
   console.log(
-    `Editor upload complete (${changed.length} uploaded, ${gone.length} removed${withMaps ? '' : ', source maps skipped'}, ${seconds} s).`,
+    `Editor upload complete (${total} uploaded, ${gone.length} removed${withMaps ? '' : ', source maps skipped'}, ${seconds} s).`,
   );
 } catch (error) {
   console.error(`Editor FTP upload failed: ${redact(error.message ?? error)}`);
   process.exit(1);
 } finally {
-  client?.close();
+  main.close();
+  for (const conn of workers) conn.close();
 }

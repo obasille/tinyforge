@@ -18,6 +18,10 @@ on:
         description: Upload source maps too
         type: boolean
         default: false
+      serial:
+        description: Upload over one connection (if the server limits them)
+        type: boolean
+        default: false
       full:
         description: Upload every file (ignore the manifest of what is there)
         type: boolean
@@ -72,7 +76,8 @@ jobs:
           EDITOR_FTP_PORT: ${{ secrets.EDITOR_FTP_PORT }}
           WITH_MAPS: ${{ inputs.with_maps && '--with-maps' || '' }}
           FULL: ${{ inputs.full && '--full' || '' }}
-        run: pnpm upload:editor -- $WITH_MAPS $FULL
+          SERIAL: ${{ inputs.serial && '--serial' || '' }}
+        run: pnpm upload:editor -- $WITH_MAPS $FULL $SERIAL
 
       - name: Check the site
         run: curl --fail --silent --show-error --output /dev/null https://basille.net/tf/
