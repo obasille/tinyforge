@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useEditor } from '../EditorContext.ts';
 import { useStore } from '../hooks.ts';
+import { usesTouchLayout } from '../layout-mode.ts';
 import { mountPixelReadout } from '../pixel-readout.ts';
 
 /** Mounts a container and hands it to the plain-TS viewport. */
@@ -9,6 +10,8 @@ export function GamePanel() {
   const ref = useRef<HTMLDivElement>(null);
   const readout = useRef<HTMLDivElement>(null);
   const session = useStore(editor.host.session);
+  // The touch layout shows the game outside the panels (TouchGame).
+  const touch = usesTouchLayout(useStore(editor.layoutMode));
   const { game } = useStore(editor.project);
   const build = useStore(editor.compiler.builds)[game ?? ''];
   const errors = build?.status === 'failed' ? build.diagnostics.filter((d) => d.severity === 'error') : [];
@@ -17,12 +20,12 @@ export function GamePanel() {
 
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    if (!el || touch) return;
     editor.viewport.attach(el);
     // Keys go to the game from the start, without a click first.
     editor.viewport.focus();
     return () => editor.viewport.detach();
-  }, [editor]);
+  }, [editor, touch]);
 
   useEffect(() => {
     const el = readout.current;

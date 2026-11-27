@@ -67,3 +67,40 @@ describe('InputTracker', () => {
     expect(tracker.current.mouseButtons).toBe(0b10);
   });
 });
+
+describe('InputTracker with on-screen controls', () => {
+  it('keeps a button held by touch when the same key is released', () => {
+    const tracker = new InputTracker(() => {});
+    tracker.key('KeyS', true);
+    tracker.touch('p1', Button.a);
+    tracker.key('KeyS', false);
+    expect(tracker.current.buttons).toBe(Button.a);
+    tracker.touch('p1', 0);
+    expect(tracker.current.buttons).toBe(0);
+  });
+
+  it('combines several fingers and releases them one at a time', () => {
+    const tracker = new InputTracker(() => {});
+    tracker.touch('p1', Button.left | Button.up);
+    tracker.touch('p2', Button.b);
+    expect(tracker.current.buttons).toBe(Button.left | Button.up | Button.b);
+    tracker.touch('p1', Button.right);
+    expect(tracker.current.buttons).toBe(Button.right | Button.b);
+    tracker.touch('p2', 0);
+    expect(tracker.current.buttons).toBe(Button.right);
+  });
+
+  it('clears the keyboard and touch apart, and both at once', () => {
+    const tracker = new InputTracker(() => {});
+    tracker.key('ArrowUp', true);
+    tracker.touch('p1', Button.a);
+    tracker.clearKeys();
+    expect(tracker.current.buttons).toBe(Button.a);
+    tracker.key('ArrowUp', true);
+    tracker.clearTouch();
+    expect(tracker.current.buttons).toBe(Button.up);
+    tracker.touch('p1', Button.a);
+    tracker.clear();
+    expect(tracker.current.buttons).toBe(0);
+  });
+});

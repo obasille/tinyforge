@@ -271,9 +271,54 @@ button:disabled {
   color: var(--tf-error);
 }
 
+.tf-sheet {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .tf-dock {
   flex: 1;
   min-height: 0;
+}
+
+/* Portrait (touch): the panels in a bottom sheet over the page's bottom edge. */
+.tf-portrait {
+  position: relative;
+}
+
+.tf-portrait .tf-sheet {
+  position: absolute;
+  right: 0;
+  left: 0;
+  z-index: 10;
+  background: var(--tf-bg);
+  border-top: 1px solid #3a3a48;
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 -6px 18px rgb(0 0 0 / 45%);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.tf-sheet-handle {
+  display: flex;
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: none;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.tf-sheet-handle span {
+  width: 44px;
+  height: 5px;
+  background: #6a6a80;
+  border-radius: 3px;
 }
 
 .tf-game-panel {
@@ -1562,9 +1607,412 @@ div.tf-ai-file,
   outline: none;
 }
 
-/* Touch screens: no hover, so no pixel colour readout under the game. */
-@media (pointer: coarse) {
-  .tf-pixel-readout {
-    display: none;
-  }
+/* Touch layout: no hover, so no pixel colour readout under the game. */
+.tf-touch .tf-pixel-readout {
+  display: none;
+}
+
+.tf-touch .tf-viewport-host {
+  touch-action: none;
+}
+
+/* The game in the touch layout (TouchGame). */
+.tf-touch-game {
+  background: #000;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.tf-touch-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  outline: none;
+  touch-action: none;
+}
+
+/* Landscape: the game full screen, the controls over its sides. */
+.tf-touch-game-landscape {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+}
+
+.tf-touch-game-landscape .tf-touch-screen {
+  position: absolute;
+  inset: 0;
+}
+
+.tf-vc-landscape {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: space-between;
+  /* Half of the side insets: the notch and the rounded corners only cover part
+     of them, and the full inset puts the controls far from the edges. */
+  padding: max(8px, env(safe-area-inset-top)) max(8px, calc(env(safe-area-inset-right) / 2))
+    max(8px, env(safe-area-inset-bottom)) max(8px, calc(env(safe-area-inset-left) / 2));
+  pointer-events: none;
+}
+
+.tf-vc-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  width: 180px;
+}
+
+.tf-vc-col > * {
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.tf-vc-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.tf-touch-menu {
+  position: absolute;
+  left: calc(max(8px, calc(env(safe-area-inset-left) / 2)) + 152px);
+  bottom: max(12px, env(safe-area-inset-bottom));
+}
+
+/* Portrait: a row above the game, one narrow column on each side of it. */
+.tf-touch-game-portrait {
+  display: grid;
+  flex: none;
+  grid-template-columns: 60px 1fr 60px;
+  grid-template-areas:
+    "top top top"
+    "left screen right";
+  gap: 6px;
+  padding: 6px max(6px, env(safe-area-inset-right)) 6px max(6px, env(safe-area-inset-left));
+  border-bottom: 1px solid #2c2c38;
+}
+
+.tf-vc-portrait {
+  display: contents;
+}
+
+.tf-touch-game-portrait .tf-touch-screen {
+  grid-area: screen;
+  /* 4:3 of the width left between the two columns. */
+  height: calc((100vw - 120px - 24px) * 0.75);
+}
+
+.tf-vc-top {
+  grid-area: top;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tf-vc-top-middle {
+  display: flex;
+  gap: 8px;
+}
+
+.tf-vc-top .tf-vc-trigger {
+  width: 72px;
+  height: 40px;
+}
+
+.tf-vc-column {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  touch-action: none;
+}
+
+.tf-vc-column-left {
+  grid-area: left;
+}
+
+.tf-vc-column-right {
+  grid-area: right;
+}
+
+.tf-vc-column .tf-vc-btn {
+  flex: 1;
+  min-height: 0;
+  border-radius: 10px;
+  pointer-events: none;
+}
+
+.tf-vc-column .tf-vc-round {
+  border-radius: 50%;
+}
+
+/* The buttons. */
+.tf-vc-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 0;
+  font-weight: 600;
+  color: rgb(255 255 255 / 90%);
+  background: rgb(255 255 255 / 22%);
+  border: 2px solid rgb(255 255 255 / 45%);
+  opacity: 0.8;
+  touch-action: none;
+}
+
+.tf-vc-btn[data-pressed] {
+  background: rgb(120 200 255 / 60%);
+  border-color: #9cf;
+  opacity: 1;
+}
+
+.tf-vc-trigger {
+  width: 110px;
+  height: 46px;
+  border-radius: 14px;
+}
+
+.tf-vc-pad {
+  position: relative;
+  width: 168px;
+  height: 168px;
+}
+
+.tf-vc-pad .tf-vc-btn {
+  position: absolute;
+  width: 58px;
+  height: 58px;
+  border-radius: 10px;
+  pointer-events: none;
+}
+
+.tf-vc-pad .tf-vc-round {
+  border-radius: 50%;
+}
+
+.tf-vc-up {
+  top: 0;
+  left: 55px;
+}
+
+.tf-vc-down {
+  bottom: 0;
+  left: 55px;
+}
+
+.tf-vc-left {
+  top: 55px;
+  left: 0;
+}
+
+.tf-vc-right {
+  top: 55px;
+  right: 0;
+}
+
+.tf-vc-start {
+  width: 84px;
+  height: 34px;
+  font-size: 13px;
+  border-radius: 17px;
+}
+
+.tf-vc-action {
+  width: 52px;
+  height: 40px;
+  font-size: 15px;
+  border-radius: 20px;
+}
+
+.tf-vc-top .tf-vc-start,
+.tf-vc-top .tf-vc-action {
+  width: 64px;
+  height: 34px;
+}
+
+/* The menu list opening upwards (landscape: its button is at the bottom). */
+.tf-menu-up {
+  top: auto;
+  right: auto;
+  bottom: calc(100% + 4px);
+  left: 0;
+}
+
+/* Touch layout: one row that fits a phone. No brand or volume slider (the
+   mute button stays), arrows for Undo and Redo, the status as a dot, and the
+   game picker takes the room left. */
+.tf-touch .tf-toolbar {
+  gap: 6px;
+  padding: 6px max(8px, env(safe-area-inset-right)) 6px max(8px, env(safe-area-inset-left));
+}
+
+.tf-touch .tf-brand,
+.tf-touch .tf-volume input[type="range"],
+.tf-touch .tf-spacer {
+  display: none;
+}
+
+.tf-touch .tf-picker {
+  flex: 1;
+  min-width: 0;
+}
+
+.tf-touch .tf-picker-button {
+  width: 100%;
+  min-width: 0;
+}
+
+.tf-touch .tf-picker-button > span:not(.tf-picker-caret) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tf-touch .tf-toolbar > button,
+.tf-touch .tf-undo-group > button:first-child,
+.tf-touch .tf-volume button {
+  min-width: 36px;
+  height: 34px;
+  font-size: 18px;
+}
+
+.tf-touch .tf-status {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  overflow: hidden;
+  font-size: 0;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* iOS zooms the page into a text field whose font is under 16px. */
+.tf-touch input:not([type="range"]),
+.tf-touch select,
+.tf-touch textarea,
+.tf-touch .cm-content {
+  font-size: 16px;
+}
+
+/* The touch layout's panels (TouchPanels.tsx): large tabs, one panel at a time. */
+.tf-touch-panels {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.tf-touch-tabs {
+  display: flex;
+  flex: none;
+  height: 40px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid #3a3a48;
+}
+
+.tf-touch-tab {
+  flex: 1 0 auto;
+  min-width: 56px;
+  max-width: 160px;
+  padding: 0 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--tf-muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font: inherit;
+  font-size: 14px;
+}
+
+.tf-touch-tab[aria-selected="true"] {
+  color: var(--tf-text);
+  border-bottom-color: var(--tf-accent);
+}
+
+.tf-touch-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.tf-touch-panel {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+}
+
+.tf-touch-panel[hidden],
+.tf-touch-file[hidden] {
+  display: none;
+}
+
+.tf-touch-editor {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tf-touch-filebar {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 8px;
+  border-bottom: 1px solid #3a3a48;
+}
+
+.tf-touch-filebar select,
+.tf-touch-filebar span {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  font-size: 15px;
+}
+
+.tf-touch-filebar span {
+  line-height: 36px;
+}
+
+.tf-touch-close {
+  flex: none;
+  width: 40px;
+  height: 36px;
+  font-size: 20px;
+  color: inherit;
+  background: #2a2a38;
+  border: 1px solid #3a3a48;
+  border-radius: 6px;
+}
+
+.tf-touch-file {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.tf-menu-item:disabled {
+  color: var(--tf-muted);
+  opacity: 0.6;
+}
+
+/* Touch layout: the Files actions are one menu button at the right. */
+.tf-touch .tf-files-actions {
+  justify-content: flex-end;
+}
+
+.tf-touch .tf-files-actions .tf-menu-button {
+  height: 34px;
+  padding: 0 12px;
+  font-size: 15px;
+}
+
+.tf-touch .tf-menu-item {
+  min-height: 40px;
+  font-size: 15px;
 }

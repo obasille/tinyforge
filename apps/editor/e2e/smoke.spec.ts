@@ -378,20 +378,266 @@ test('each game loads only its own sprites and sounds, and a changed sprite relo
   expect(errors).toEqual([]);
 });
 
-test.describe('on a touch screen', () => {
+const tabGroups = (page: Page) =>
+  page.evaluate(() =>
+    [...document.querySelectorAll('.dv-groupview')].map((g) =>
+      [...g.querySelectorAll('.dv-tab')].map((t) => t.textContent?.trim()),
+    ),
+  );
+
+/** A touch on the on-screen controls (pointer events, as a finger sends them). */
+const touchAt = (page: Page, x: number, y: number, id: number, type: string) =>
+  page.evaluate(
+    ([x, y, id, type]) => {
+      document.elementFromPoint(x as number, y as number)?.dispatchEvent(
+        new PointerEvent(type as string, {
+          bubbles: true,
+          pointerId: id as number,
+          pointerType: 'touch',
+          clientX: x as number,
+          clientY: y as number,
+        }),
+      );
+    },
+    [x, y, id, type] as const,
+  );
+
+const heldButtons = (page: Page) => page.evaluate(() => window.__tf?.editor.input.current.buttons ?? -1);
+
+test.describe('on a touch screen in landscape', () => {
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 844, height: 390 } });
 
-  test('the default layout has three columns and no pixel readout', async ({ page }) => {
+  test('the game fills the screen with the controls, which press game buttons', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByTestId('run-status')).toHaveText('running');
-    expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
-    // Files and Library share the left group, Console, Run and Memory the right one.
-    const groups = await page.evaluate(() =>
-      [...document.querySelectorAll('.dv-groupview')].map((g) =>
-        [...g.querySelectorAll('.dv-tab')].map((t) => t.textContent?.trim()),
-      ),
-    );
-    expect(groups).toEqual([['Files', 'Library'], ['Game'], ['Console', 'Run', 'Memory']]);
-    await expect(page.getByTestId('pixel-color')).toBeHidden();
+    const generation = (await session(page))?.generation;
+    await expect(page.getByTestId('touch-game')).toHaveClass(/tf-touch-game-landscape/);
+    await expect(page.getByTestId('virtual-controls')).toBeVisible();
+    const canvas = await page.getByTestId('touch-screen').getByTestId('game-canvas').boundingBox();
+    expect(Math.round(canvas?.height ?? 0)).toBe(390);
+    expect(Math.round(canvas?.width ?? 0)).toBe(520);
+
+    // Hold the left of the D-pad and A at once (two fingers).
+    const pad = await page.locator('.tf-vc-dpad').boundingBox();
+    const face = await page.locator('.tf-vc-face').boundingBox();
+    if (!pad || !face) throw new Error('no controls');
+    const left = [pad.x + 5, pad.y + pad.height / 2] as const;
+    const a = [face.x + face.width / 2, face.y + face.height - 5] as const;
+    await touchAt(page, left[0], left[1], 11, 'pointerdown');
+    await touchAt(page, a[0], a[1], 12, 'pointerdown');
+    expect(await heldButtons(page)).toBe((1 << 2) | (1 << 4));
+    await expect(page.locator('.tf-vc-dpad [data-pressed]')).toHaveText('◀');
+    await touchAt(page, left[0], left[1], 11, 'pointerup');
+    expect(await heldButtons(page)).toBe(1 << 4);
+    await touchAt(page, a[0], a[1], 12, 'pointercancel');
+    expect(await heldButtons(page)).toBe(0);
+
+    // Pause and Restart sit at the bottom left; there is no Edit button.
+    await page.getByTestId('play-pause').click();
+    await expect.poll(async () => (await session(page))?.status).toBe('paused');
+    await page.getByTestId('play-pause').click();
+    await expect.poll(async () => (await session(page))?.status).toBe('running');
+    await expect(page.getByTestId('play-exit')).toHaveCount(0);
+    // No menu button on a phone in landscape: turning it to portrait shows the top bar.
+    await expect(page.locator('.tf-touch-menu')).toHaveCount(0);
+
+    // Turning the phone keeps the same game running.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.getByTestId('touch-game')).toHaveClass(/tf-touch-game-portrait/);
+    await expect(page.getByTestId('touch-screen').getByTestId('game-canvas')).toBeVisible();
+    expect((await session(page))?.generation).toBe(generation);
+    expect((await session(page))?.status).toBe('running');
   });
+});
+
+test.describe('on a touch screen in portrait', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+
+  test('the game is on top with a column of controls on each side, the panels below as tabs', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByTestId('run-status')).toHaveText('running');
+    await expect(page.getByTestId('touch-game')).toHaveClass(/tf-touch-game-portrait/);
+    await expect(page.getByTestId('touch-panels').getByRole('tab')).toHaveText([
+      'Files',
+      'Library',
+      'Console',
+      'Run',
+      'Memory',
+    ]);
+    // No Dockview in the touch layout.
+    await expect(page.locator('.dv-groupview')).toHaveCount(0);
+    await expect(page.getByTestId('pixel-color')).toBeHidden();
+    // The columns sit beside the game, the row with Start and the triggers above it.
+    const screen = await page.getByTestId('touch-screen').boundingBox();
+    const leftColumn = await page.locator('.tf-vc-column-left').boundingBox();
+    const rightColumn = await page.locator('.tf-vc-column-right').boundingBox();
+    const top = await page.locator('.tf-vc-top').boundingBox();
+    if (!screen || !leftColumn || !rightColumn || !top) throw new Error('missing parts');
+    expect(leftColumn.x + leftColumn.width).toBeLessThanOrEqual(screen.x);
+    expect(rightColumn.x).toBeGreaterThanOrEqual(screen.x + screen.width);
+    expect(top.y + top.height).toBeLessThanOrEqual(screen.y);
+    // The bottom quarter of the right column is A.
+    await touchAt(page, rightColumn.x + 20, rightColumn.y + rightColumn.height - 5, 21, 'pointerdown');
+    expect(await heldButtons(page)).toBe(1 << 4);
+    await touchAt(page, rightColumn.x + 20, rightColumn.y + rightColumn.height - 5, 21, 'pointerup');
+    expect(await heldButtons(page)).toBe(0);
+  });
+});
+
+test.describe('the touch panels in portrait', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+
+  test('open files in the Editor tab, with a switcher, and stay open after a reload', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByTestId('run-status')).toHaveText('running');
+    await page.getByTestId('file-games/pong').click();
+    await page.getByTestId('file-games/pong/main.ts').click();
+    const editorTab = page.getByTestId('touch-tab-editor');
+    await expect(editorTab).toHaveText('Editor');
+    await expect(editorTab).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('code-games/pong/main.ts').locator('.cm-content')).toContainText(
+      'const TITLE = "Pong"',
+    );
+    await expect(page.getByTestId('file-games/pong/main.ts')).toHaveClass(/tf-files-active/);
+
+    // A second file: the switcher lists both, one is shown.
+    await page.evaluate(() => window.__tf?.editor.workbench.openFile('engine/sdk/drawing.ts'));
+    const select = page.getByTestId('touch-file-select');
+    await expect(select.locator('option')).toHaveText(['pong/main.ts', 'engine/sdk/drawing.ts']);
+    await expect(page.getByTestId('code-engine/sdk/drawing.ts')).toBeVisible();
+    await expect(page.getByTestId('code-games/pong/main.ts')).toBeHidden();
+    await select.selectOption({ label: 'pong/main.ts' });
+    await expect(page.getByTestId('code-games/pong/main.ts')).toBeVisible();
+
+    // The other tabs keep the files open.
+    await page.getByTestId('touch-tab-console').click();
+    await expect(page.getByTestId('touch-panel-editor')).toBeHidden();
+    await page.reload();
+    await expect(page.getByTestId('run-status')).toHaveText('running');
+    await expect(page.getByTestId('touch-tab-console')).toHaveAttribute('aria-selected', 'true');
+    await page.getByTestId('touch-tab-editor').click();
+    await expect(page.getByTestId('code-games/pong/main.ts').locator('.cm-content')).toContainText(
+      'const TITLE = "Pong"',
+    );
+
+    // Closing the last file removes the Editor tab.
+    await page.getByTestId('touch-file-close').click();
+    await page.getByTestId('touch-file-close').click();
+    await expect(page.getByTestId('touch-tab-editor')).toHaveCount(0);
+    await expect(page.getByTestId('touch-tab-files')).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('the top bar fits one row; the Files actions are in a menu', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.goto('/');
+    await expect(page.getByTestId('run-status')).toHaveText('running');
+    const toolbar = await page.locator('.tf-toolbar').boundingBox();
+    expect(toolbar?.height).toBeLessThan(56);
+    await expect(page.getByRole('button', { name: 'Redo' })).toBeVisible();
+    // No zoom into the code editor on iOS: its text is at least 16px.
+    await page.evaluate(() => window.__tf?.editor.workbench.openFile('games/pong/main.ts'));
+    await expect(page.locator('.cm-content').first()).toHaveCSS('font-size', '16px');
+    await page.getByTestId('touch-tab-files').click();
+    await expect(page.getByTestId('files-export')).toHaveCount(0);
+    await page.getByTestId('files-menu').click();
+    await expect(page.getByRole('menuitem')).toHaveText([
+      'New game',
+      'New file',
+      'Rename',
+      'Delete',
+      'Export',
+      'Cartridge',
+      'Import',
+    ]);
+    await expect(page.getByTestId('files-export')).toBeEnabled();
+    // The list stays on screen, above the bottom edge.
+    const list = await page.getByRole('menu').boundingBox();
+    expect((list?.y ?? 0) + (list?.height ?? 0)).toBeLessThanOrEqual(800);
+  });
+
+  test('the Files actions menu opens upward when the sheet is low', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('tinyforge.editor.sheet', 'half'));
+    await page.setViewportSize({ width: 390, height: 700 });
+    await page.goto('/');
+    await expect(page.getByTestId('run-status')).toHaveText('running');
+    await page.getByTestId('touch-tab-files').click();
+    await page.getByTestId('files-menu').click();
+    const button = await page.getByTestId('files-menu').boundingBox();
+    const list = await page.getByRole('menu').boundingBox();
+    if (!button || !list) throw new Error('not shown');
+    expect(list.y + list.height).toBeLessThanOrEqual(700);
+    await expect(page.getByRole('menuitem', { name: 'Import' })).toBeInViewport();
+  });
+
+  test('a tab opens a collapsed sheet', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('tinyforge.editor.sheet', 'collapsed'));
+    await page.goto('/');
+    await expect(page.getByTestId('sheet')).toHaveAttribute('data-state', 'collapsed');
+    await page.getByTestId('touch-tab-run').click();
+    await expect(page.getByTestId('sheet')).toHaveAttribute('data-state', 'half');
+    await expect(page.getByTestId('touch-panel-run')).toBeVisible();
+  });
+});
+
+test.describe('the bottom sheet in portrait', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+
+  test('sits under the game, expands over it on a tap, collapses when dragged down, and remembers', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await expect(page.getByTestId('run-status')).toHaveText('running');
+    const sheet = page.getByTestId('sheet');
+    const handle = page.getByTestId('sheet-handle');
+    const box = async (locator: ReturnType<typeof page.locator>) => {
+      const b = await locator.boundingBox();
+      if (!b) throw new Error('not shown');
+      return b;
+    };
+    await expect(sheet).toHaveAttribute('data-state', 'half');
+    const game = await box(page.getByTestId('touch-game'));
+    expect(Math.abs((await box(sheet)).y - (game.y + game.height))).toBeLessThan(2);
+
+    // A tap expands it over the game, up to the top bar.
+    await handle.click();
+    await expect(sheet).toHaveAttribute('data-state', 'expanded');
+    const toolbar = await box(page.locator('.tf-toolbar'));
+    await expect.poll(async () => Math.round((await box(sheet)).y)).toBe(Math.round(toolbar.y + toolbar.height));
+
+    // Dragged down to the bottom: only the handle and the tabs remain.
+    const h = await box(handle);
+    await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(h.x + h.width / 2, 830, { steps: 8 });
+    await page.mouse.up();
+    await expect(sheet).toHaveAttribute('data-state', 'collapsed');
+    await expect.poll(async () => Math.round((await box(sheet)).height)).toBe(64);
+    expect((await session(page))?.status).toBe('running');
+
+    await page.reload();
+    await expect(page.getByTestId('run-status')).toHaveText('running');
+    await expect(page.getByTestId('sheet')).toHaveAttribute('data-state', 'collapsed');
+  });
+});
+
+test('the menu switches to the touch layout and back, keeping the game running', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('run-status')).toHaveText('running');
+  await page.getByTestId('app-menu').click();
+  await page.getByTestId('use-touch-layout').click();
+  // A desktop window is landscape: the game takes the screen, the menu is by Pause.
+  await expect(page.getByTestId('touch-game')).toHaveClass(/tf-touch-game-landscape/);
+  // The choice survives a reload.
+  await page.reload();
+  await expect(page.getByTestId('run-status')).toHaveText('running');
+  const touchMenu = page.locator('.tf-touch-menu').getByTestId('app-menu');
+  await touchMenu.click();
+  await page.getByTestId('use-desktop-layout').click();
+  await expect(page.getByTestId('touch-game')).toHaveCount(0);
+  await expect.poll(async () => (await tabGroups(page)).length).toBe(5);
+  await expect(page.getByTestId('viewport').getByTestId('game-canvas')).toBeVisible();
+  await page.getByTestId('app-menu').click();
+  await page.getByTestId('auto-layout').click();
+  await expect(page.getByTestId('auto-layout')).toHaveCount(0);
+  expect((await session(page))?.status).toBe('running');
 });

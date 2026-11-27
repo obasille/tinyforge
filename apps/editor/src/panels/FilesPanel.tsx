@@ -18,9 +18,11 @@ import {
 import type { ImportPlan } from '@tinyforge/engine/tooling/game-zip';
 import { assetKindOf, GAME_NAME, gameOf, isWritablePath } from '@tinyforge/engine/tooling/project-layout';
 import { useMemo, useRef, useState } from 'react';
+import { AppMenu, type AppMenuItem } from '../AppMenu.tsx';
 import { BuildStatus } from '../BuildStatus.tsx';
 import { useEditor } from '../EditorContext.ts';
 import { useStore } from '../hooks.ts';
+import { usesTouchLayout } from '../layout-mode.ts';
 import { useRevealFile } from './reveal-file.ts';
 
 type Edit =
@@ -289,76 +291,79 @@ export function FilesPanel() {
     );
   };
 
+  const touch = usesTouchLayout(useStore(editor.layoutMode));
+  const actions: AppMenuItem[] = [
+    {
+      label: 'New game',
+      disabled: !state.writable,
+      onSelect: () => {
+        setOpen((s) => new Set([...s, 'games']));
+        setEdit({ kind: 'newGame' });
+      },
+    },
+    {
+      label: 'New file',
+      disabled: !state.writable || !canCreateIn,
+      title: canCreateIn ? `New file in ${targetFolder}` : 'Select a folder in games/ or assets/',
+      onSelect: () => targetFolder && setEdit({ kind: 'newFile', folder: targetFolder }),
+    },
+    {
+      label: 'Rename',
+      disabled: !state.writable || !canChange,
+      onSelect: () => selectedNode && setEdit({ kind: 'rename', node: selectedNode }),
+    },
+    {
+      label: 'Delete',
+      disabled: !state.writable || !canChange,
+      onSelect: () => selectedNode && setEdit({ kind: 'delete', node: selectedNode }),
+    },
+    {
+      label: 'Export',
+      testId: 'files-export',
+      disabled: !exportTarget,
+      title: exportTarget
+        ? `Save ${exportTarget} as a zip: its folder and the assets it uses`
+        : 'Select a game or one of its files',
+      onSelect: () => exportTarget && exportGame(exportTarget),
+    },
+    {
+      label: 'Cartridge',
+      testId: 'files-export-cartridge',
+      disabled: !exportTarget,
+      title: exportTarget
+        ? `Save ${exportTarget} as a playable cartridge (.wasm) with the assets it uses inside`
+        : 'Select a game or one of its files',
+      onSelect: () => exportTarget && exportGameCartridge(exportTarget),
+    },
+    {
+      label: 'Import',
+      testId: 'files-import',
+      disabled: !state.writable,
+      title: 'Add a game from a zip made by Export',
+      onSelect: () => zipInput.current?.click(),
+    },
+  ];
+
   return (
     <div className="tf-files" data-testid="files">
       <div className="tf-files-actions">
-        <button
-          type="button"
-          disabled={!state.writable}
-          onClick={() => {
-            setOpen((s) => new Set([...s, 'games']));
-            setEdit({ kind: 'newGame' });
-          }}
-        >
-          New game
-        </button>
-        <button
-          type="button"
-          disabled={!state.writable || !canCreateIn}
-          title={canCreateIn ? `New file in ${targetFolder}` : 'Select a folder in games/ or assets/'}
-          onClick={() => targetFolder && setEdit({ kind: 'newFile', folder: targetFolder })}
-        >
-          New file
-        </button>
-        <button
-          type="button"
-          disabled={!state.writable || !canChange}
-          onClick={() => selectedNode && setEdit({ kind: 'rename', node: selectedNode })}
-        >
-          Rename
-        </button>
-        <button
-          type="button"
-          disabled={!state.writable || !canChange}
-          onClick={() => selectedNode && setEdit({ kind: 'delete', node: selectedNode })}
-        >
-          Delete
-        </button>
-        <button
-          type="button"
-          data-testid="files-export"
-          disabled={!exportTarget}
-          title={
-            exportTarget
-              ? `Save ${exportTarget} as a zip: its folder and the assets it uses`
-              : 'Select a game or one of its files'
-          }
-          onClick={() => exportTarget && exportGame(exportTarget)}
-        >
-          Export
-        </button>
-        <button
-          type="button"
-          data-testid="files-export-cartridge"
-          disabled={!exportTarget}
-          title={
-            exportTarget
-              ? `Save ${exportTarget} as a playable cartridge (.wasm) with the assets it uses inside`
-              : 'Select a game or one of its files'
-          }
-          onClick={() => exportTarget && exportGameCartridge(exportTarget)}
-        >
-          Cartridge
-        </button>
-        <button
-          type="button"
-          data-testid="files-import"
-          disabled={!state.writable}
-          title="Add a game from a zip made by Export"
-          onClick={() => zipInput.current?.click()}
-        >
-          Import
-        </button>
+        {touch ? (
+          // The touch layout: the actions in a menu, so the tree starts at the top.
+          <AppMenu items={actions} label="Actions ▾" testId="files-menu" />
+        ) : (
+          actions.map((action) => (
+            <button
+              key={action.label}
+              type="button"
+              data-testid={action.testId}
+              disabled={action.disabled}
+              title={action.title}
+              onClick={action.onSelect}
+            >
+              {action.label}
+            </button>
+          ))
+        )}
         <input
           ref={zipInput}
           type="file"
@@ -404,7 +409,6 @@ export function FilesPanel() {
           {error}
         </div>
       ) : null}
-      {!state.writable && state.ready ? <div className="tf-files-note">Read-only copy of the project</div> : null}
       <ul className="tf-files-tree" ref={treeRef}>
         {SECTIONS.map(({ path, label }) => {
           const node = tree.find((n) => n.path === path);

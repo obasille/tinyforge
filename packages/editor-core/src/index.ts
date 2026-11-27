@@ -26,6 +26,7 @@ export * from './sprite-canvas.ts';
 export * from './sprite-editor.ts';
 export * from './store.ts';
 export * from './viewport.ts';
+export * from './virtual-controls.ts';
 export * from './wav.ts';
 export * from './workbench.ts';
 export { formatSeed } from './worker-core.ts';

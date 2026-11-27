@@ -57,10 +57,17 @@ export function toGamePixel(
   return { x, y };
 }
 
-/** Accumulates input and reports each change. */
+/**
+ * Accumulates input and reports each change. Keyboard keys and on-screen
+ * (touch) controls are tracked apart and combined into one button mask, so
+ * releasing one never releases a button the other still holds, and each can
+ * be cleared on its own (keyboard on blur, touch on a cancelled pointer).
+ */
 export class InputTracker {
   private state: InputState = { ...NO_INPUT };
   private readonly held = new Set<string>();
+  /** Buttons held by each on-screen control, by a caller-chosen id (one per pointer). */
+  private readonly touches = new Map<string, number>();
 
   constructor(
     private readonly onChange: (state: InputState) => void,
@@ -76,12 +83,27 @@ export class InputTracker {
     if (this.keys[code] === undefined) return false;
     if (down) this.held.add(code);
     else this.held.delete(code);
-    // Several keys can share a button (S and Z are both A), so rebuild the
-    // mask from every held key instead of clearing the bit on release.
-    let buttons = 0;
-    for (const held of this.held) buttons |= this.keys[held] ?? 0;
-    this.update({ buttons });
+    this.updateButtons();
     return true;
+  }
+
+  /** The buttons an on-screen control holds for `id` (0 releases them). */
+  touch(id: string, buttons: number): void {
+    if (buttons) this.touches.set(id, buttons);
+    else this.touches.delete(id);
+    this.updateButtons();
+  }
+
+  /** Release the keyboard keys only (the game view lost focus). */
+  clearKeys(): void {
+    this.held.clear();
+    this.updateButtons();
+  }
+
+  /** Release every on-screen control. */
+  clearTouch(): void {
+    this.touches.clear();
+    this.updateButtons();
   }
 
   pointer(x: number, y: number): void {
@@ -94,10 +116,20 @@ export class InputTracker {
     this.update({ mouseButtons: down ? this.state.mouseButtons | bit : this.state.mouseButtons & ~bit });
   }
 
-  /** Release everything (focus lost). */
+  /** Release everything (page hidden, game restarted). */
   clear(): void {
     this.held.clear();
+    this.touches.clear();
     this.update({ buttons: 0, mouseButtons: 0, mouseX: -1, mouseY: -1 });
+  }
+
+  private updateButtons(): void {
+    // Several keys can share a button (S and Z are both A), so rebuild the
+    // mask from everything held instead of clearing the bit on release.
+    let buttons = 0;
+    for (const held of this.held) buttons |= this.keys[held] ?? 0;
+    for (const bits of this.touches.values()) buttons |= bits;
+    this.update({ buttons });
   }
 
   private update(patch: Partial<InputState>): void {

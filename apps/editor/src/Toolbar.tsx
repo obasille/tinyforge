@@ -1,23 +1,40 @@
-import { AppMenu } from './AppMenu.tsx';
+import { AppMenu, type AppMenuItem } from './AppMenu.tsx';
 import { useEditor } from './EditorContext.ts';
+import type { Editor } from './editor.ts';
 import { GamePicker } from './GamePicker.tsx';
 import { useStore } from './hooks.ts';
 import { UndoHistory } from './UndoHistory.tsx';
 
-export function Toolbar({ onResetLayout, onShowAi }: { onResetLayout: () => void; onShowAi: () => void }) {
+export function Toolbar({
+  onResetLayout,
+  onShowAi,
+  touch,
+}: {
+  onResetLayout: () => void;
+  onShowAi: () => void;
+  touch: boolean;
+}) {
   const editor = useEditor();
   const stack = useStore(editor.commands);
   const session = useStore(editor.host.session);
   const sound = useStore(editor.audioSettings);
   const silent = sound.muted || sound.volume === 0;
+  const items = useMenuItems(editor, onResetLayout, onShowAi, touch);
 
   return (
     <header className="tf-toolbar">
       <strong className="tf-brand">TinyForge</strong>
       <GamePicker />
       <span className="tf-undo-group">
-        <button type="button" disabled={!stack.canUndo} onClick={() => editor.commands.undo()} title="Undo (Ctrl+Z)">
-          Undo{stack.undoLabel ? ` ${stack.undoLabel}` : ''}
+        <button
+          type="button"
+          disabled={!stack.canUndo}
+          onClick={() => editor.commands.undo()}
+          title="Undo (Ctrl+Z)"
+          // The touch layout shows an arrow; the name still says what is undone.
+          aria-label={touch ? `Undo${stack.undoLabel ? ` ${stack.undoLabel}` : ''}` : undefined}
+        >
+          {touch ? '↶' : `Undo${stack.undoLabel ? ` ${stack.undoLabel}` : ''}`}
         </button>
         <UndoHistory />
       </span>
@@ -26,8 +43,9 @@ export function Toolbar({ onResetLayout, onShowAi }: { onResetLayout: () => void
         disabled={!stack.canRedo}
         onClick={() => editor.commands.redo()}
         title="Redo (Ctrl+Shift+Z)"
+        aria-label={touch ? 'Redo' : undefined}
       >
-        Redo
+        {touch ? '↷' : 'Redo'}
       </button>
       <span className="tf-spacer" />
       <span className="tf-volume">
@@ -57,15 +75,40 @@ export function Toolbar({ onResetLayout, onShowAi }: { onResetLayout: () => void
           onPointerUp={() => editor.viewport.focus()}
         />
       </span>
-      <span className={`tf-status tf-status-${session.status}`} data-testid="run-status">
+      <span className={`tf-status tf-status-${session.status}`} data-testid="run-status" title={session.status}>
         {session.status}
       </span>
-      <AppMenu
-        items={[
-          { label: 'AI', testId: 'show-ai', title: 'Ask the code agent for a change', onSelect: onShowAi },
-          { label: 'Reset layout', testId: 'reset-layout', onSelect: onResetLayout },
-        ]}
-      />
+      <AppMenu items={items} />
     </header>
   );
+}
+
+/** The top-bar menu: AI, Reset layout, and the desktop/touch layout switch. */
+export function useMenuItems(
+  editor: Editor,
+  onResetLayout: () => void,
+  onShowAi: () => void,
+  touch: boolean,
+): AppMenuItem[] {
+  const mode = useStore(editor.layoutMode);
+  const items: AppMenuItem[] = [
+    { label: 'AI', testId: 'show-ai', title: 'Ask the code agent for a change', onSelect: onShowAi },
+    { label: 'Reset layout', testId: 'reset-layout', onSelect: onResetLayout },
+    touch
+      ? {
+          label: 'Use desktop layout',
+          testId: 'use-desktop-layout',
+          onSelect: () => editor.layoutMode.setState('desktop'),
+        }
+      : { label: 'Use touch layout', testId: 'use-touch-layout', onSelect: () => editor.layoutMode.setState('touch') },
+  ];
+  if (mode !== 'auto') {
+    items.push({
+      label: 'Automatic layout',
+      testId: 'auto-layout',
+      title: 'Touch layout on touch screens, desktop layout elsewhere',
+      onSelect: () => editor.layoutMode.setState('auto'),
+    });
+  }
+  return items;
 }

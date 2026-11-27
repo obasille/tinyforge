@@ -1,4 +1,3 @@
-import type { IDockviewPanelProps } from 'dockview-react';
 import { Component, type FunctionComponent, type ReactNode } from 'react';
 
 interface State {
@@ -35,13 +34,8 @@ class PanelBoundary extends Component<{ title: string; children: (key: number) =
   }
 }
 
-export function withBoundary(
-  title: string,
-  Panel: FunctionComponent<IDockviewPanelProps>,
-): FunctionComponent<IDockviewPanelProps> {
-  const Wrapped = (props: IDockviewPanelProps) => (
-    <PanelBoundary title={title}>{(key) => <Panel key={key} {...props} />}</PanelBoundary>
-  );
+export function withBoundary<P extends object>(title: string, Panel: FunctionComponent<P>): FunctionComponent<P> {
+  const Wrapped = (props: P) => <PanelBoundary title={title}>{(key) => <Panel key={key} {...props} />}</PanelBoundary>;
   Wrapped.displayName = `${title}Panel`;
   return Wrapped;
 }

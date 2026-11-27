@@ -1,5 +1,5 @@
-import type { DockviewPanelApi } from 'dockview-react';
 import { useEffect, useRef, useSyncExternalStore } from 'react';
+import type { PanelApi } from './panels/panel-api.ts';
 
 interface Subscribable<T> {
   getState(): T;
@@ -16,7 +16,7 @@ export function useStore<T>(store: Subscribable<T>): T {
  * keyboard focus is inside it (canvas, buttons, text fields). Keys already
  * handled elsewhere, such as by the code editor, are left alone.
  */
-export function useSaveShortcut(api: DockviewPanelApi, save: () => void): void {
+export function useSaveShortcut(api: PanelApi, save: () => void): void {
   const saveRef = useRef(save);
   saveRef.current = save;
   useEffect(() => {

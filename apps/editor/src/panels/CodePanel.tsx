@@ -2,10 +2,10 @@
 // (editor-core code-editor.ts). The tab title shows unsaved changes.
 
 import type { CodeEditor } from '@tinyforge/editor-core';
-import type { IDockviewPanelProps } from 'dockview-react';
 import { useEffect, useRef, useState } from 'react';
 import { useEditor } from '../EditorContext.ts';
 import { useStore } from '../hooks.ts';
+import type { PanelProps } from './panel-api.ts';
 
 export interface CodePanelParams {
   path: string;
@@ -13,7 +13,7 @@ export interface CodePanelParams {
 
 const baseName = (p: string) => p.slice(p.lastIndexOf('/') + 1);
 
-export function CodePanel({ api, params }: IDockviewPanelProps<CodePanelParams>) {
+export function CodePanel({ api, params }: PanelProps<CodePanelParams>) {
   const editor = useEditor();
   const ref = useRef<HTMLDivElement>(null);
   const [code, setCode] = useState<CodeEditor | null>(null);
