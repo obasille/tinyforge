@@ -29,6 +29,7 @@
     "watch:games": "node scripts/watch-games.js",
     "upload": "node scripts/upload.js",
     "upload:editor": "node scripts/upload-editor.js",
+    "ai:setup": "node scripts/editor-ai-setup.js",
     "serve": "node scripts/serve-classic.js 8080",
     "postbuild": "node scripts/upload.js --if-configured",
     "postbuild:host": "node scripts/upload.js --if-configured",

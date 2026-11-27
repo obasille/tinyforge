@@ -24,7 +24,7 @@ export async function secretValues(envFile) {
   } catch {
     // No .env (CI): the environment's secrets are still checked below.
   }
-  for (const name of ['EDITOR_FTP_PASS', 'FTP_PASS', 'ANTHROPIC_API_KEY']) {
+  for (const name of ['EDITOR_FTP_PASS', 'FTP_PASS', 'ANTHROPIC_API_KEY', 'EDITOR_AI_ANTHROPIC_KEY']) {
     if (process.env[name]) values.add(process.env[name]);
   }
   return [...values].filter((v) => v.length >= MIN_SECRET_LENGTH);

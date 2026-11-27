@@ -3,10 +3,17 @@
 // The host is Apache (Infomaniak), so the build writes them as .htaccess files:
 //   .htaccess          HTTPS redirect, Content-Security-Policy and other headers
 //   assets/.htaccess   long caching for Vite's hashed bundles
+//   __tf/ai/           the AI proxy (server/ai/index.php), its routes and PHP settings
 // `vite preview` (pnpm editor:static) sends the same CSP, so a violation shows
 // up locally before a deploy. The dev server sends none: pnpm dev is unchanged.
 
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { Plugin } from 'vite';
+import { CLAUDE_MODELS, DEFAULT_CLAUDE_MODEL } from '../../../packages/editor-core/src/ai/models.ts';
+
+const PROXY_SOURCE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../server/ai/index.php');
 
 /**
  * What the editor needs, and nothing more:
@@ -17,10 +24,10 @@ import type { Plugin } from 'vite';
  * - img-src / media-src blob: data:: sprite previews, covers and sounds.
  * - worker-src blob:: Workers are same-origin files today; blob: keeps a
  *   bundler-inlined Worker working.
- * - connect-src: the site's own __tf/ files; the Anthropic API, which the AI
- *   panel calls directly in hosted mode with the key from the key vault; and
- *   data:, for the compiler, which loads a small WebAssembly helper from a
- *   data: URL with fetch(). api.github.com joins when saving to GitHub does.
+ * - connect-src 'self' data:: the static build only reads its own __tf/ files.
+ *   data: is for the compiler, which loads a small WebAssembly helper from a
+ *   data: URL with fetch(). The AI and GitHub origins are added only when
+ *   hosted mode (plan step 5) needs them.
  * - frame-ancestors 'none': no framing (clickjacking). Header only, so this
  *   policy is never sent as a meta tag.
  */
@@ -31,7 +38,7 @@ export const CONTENT_SECURITY_POLICY = [
   "img-src 'self' data: blob:",
   "media-src 'self' data: blob:",
   "font-src 'self' data:",
-  "connect-src 'self' https://api.anthropic.com data:",
+  "connect-src 'self' data:",
   "worker-src 'self' blob:",
   "object-src 'none'",
   "base-uri 'self'",
@@ -64,6 +71,8 @@ export function rootHtaccess(): string {
   RewriteCond %{HTTPS} !=on
   RewriteCond %{HTTP:X-Forwarded-Proto} !=https
   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+  # The AI proxy's config (pnpm ai:setup) when it has to live in the web root.
+  RewriteRule ^.private(/|$) - [F]
 </IfModule>
 
 <IfModule mod_headers.c>
@@ -90,6 +99,43 @@ export function hashedAssetsHtaccess(): string {
 `;
 }
 
+/** The AI proxy, with the editor's model list. */
+export function aiProxyPhp(): string {
+  return readFileSync(PROXY_SOURCE, 'utf8')
+    .replace('/*MODELS*/ []', JSON.stringify(CLAUDE_MODELS))
+    .replace("/*DEFAULT_MODEL*/ ''", JSON.stringify(DEFAULT_CLAUDE_MODEL));
+}
+
+/** __tf/ai/.htaccess: the proxy's routes go to index.php, never compressed (it streams). */
+export function aiProxyHtaccess(): string {
+  return `# Written by apps/editor/vite/site-headers.ts at build time. Do not edit here.
+# index.php checks HTTPS itself (this file's RewriteEngine replaces the root's rules here).
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /__tf/ai/
+  RewriteRule ^(status|login|logout|anthropic/v1/messages)$ index.php [L]
+</IfModule>
+# Streamed replies must not wait for compression.
+SetEnv no-gzip 1
+<Files ".user.ini">
+  Require all denied
+</Files>
+`;
+}
+
+/** __tf/ai/.user.ini: PHP settings for the proxy (PHP-FPM reads them per folder). */
+export function aiProxyUserIni(): string {
+  return `; Written by apps/editor/vite/site-headers.ts at build time. Do not edit here.
+; A long conversation with file contents can be several MB.
+post_max_size = 40M
+; Stream the reply as it arrives.
+output_buffering = 0
+zlib.output_compression = 0
+; A long reply can take minutes.
+max_execution_time = 900
+`;
+}
+
 export function siteHeaders(): Plugin {
   return {
     name: 'tinyforge-site-headers',
@@ -103,6 +149,9 @@ export function siteHeaders(): Plugin {
     generateBundle() {
       this.emitFile({ type: 'asset', fileName: '.htaccess', source: rootHtaccess() });
       this.emitFile({ type: 'asset', fileName: 'assets/.htaccess', source: hashedAssetsHtaccess() });
+      this.emitFile({ type: 'asset', fileName: '__tf/ai/index.php', source: aiProxyPhp() });
+      this.emitFile({ type: 'asset', fileName: '__tf/ai/.htaccess', source: aiProxyHtaccess() });
+      this.emitFile({ type: 'asset', fileName: '__tf/ai/.user.ini', source: aiProxyUserIni() });
     },
   };
 }

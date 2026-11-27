@@ -25,9 +25,7 @@ pnpm workspace. Two hosts share one engine:
   (`game-host.ts`), the code editor and live asset scan, the asset library and import
   (`asset-library.ts`, `asset-import.ts`), the sprite editor and sound player
   (`sprite-editor.ts`, `sprite-canvas.ts`, `sound-editor.ts`, `sound-view.ts`,
-  with plain-TS `png.ts` and `wav.ts`), viewport, memory view, and the key
-  vault of hosted mode (`key-vault.ts`: API keys encrypted with a password,
-  in IndexedDB). The AI tools
+  with plain-TS `png.ts` and `wav.ts`), viewport, memory view. The AI tools
   are apart in `src/ai/` (`@tinyforge/editor-core/ai`, loaded only by the AI
   panel): provider interface, the Claude adapter and an OpenAI-compatible one
   (`openai.ts`, no SDK), the code agent and its tools,
@@ -37,6 +35,9 @@ pnpm workspace. Two hosts share one engine:
   and watches project files; it does not compile), and `vite/ai-proxy.ts` (dev
   server only: adds the API key from `.env` to the AI panel's requests, and
   forwards them to Claude or to the OpenAI-compatible server set in `.env`).
+  The deployed editor answers the same routes with `server/ai/index.php`, a
+  PHP proxy with a password login (set up by `pnpm ai:setup`); the build
+  writes it, and the site's `.htaccess` files, from `vite/site-headers.ts`.
 - `apps/classic`: the original host, deployed to the site root. Keep it working,
   with minimal changes and no code shared with the editor packages. What it
   does not do is listed in `apps/classic/README.md`.
