@@ -10,6 +10,7 @@
 // of pnpm upload:editor. EDITOR_SITE_URL is the site to check afterwards
 // (https://tf.basille.net by default).
 import { createInterface } from 'readline/promises';
+import { Buffer } from 'buffer';
 import { Readable } from 'stream';
 import ftp from 'basic-ftp';
 import dotenv from 'dotenv';
@@ -21,6 +22,7 @@ const { EDITOR_FTP_HOST, EDITOR_FTP_USER, EDITOR_FTP_PASS, EDITOR_FTP_SECURE, ED
 const key = (process.env.EDITOR_AI_ANTHROPIC_KEY || process.env.ANTHROPIC_API_KEY || '').trim();
 const site = (process.env.EDITOR_SITE_URL || 'https://tf.basille.net').replace(/\/+$/, '');
 const MIN_PASSWORD = 12;
+const { fetch } = globalThis;
 
 const missing = ['EDITOR_FTP_HOST', 'EDITOR_FTP_USER', 'EDITOR_FTP_PASS'].filter((n) => !process.env[n]);
 if (missing.length > 0) {
