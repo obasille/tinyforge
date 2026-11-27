@@ -905,6 +905,7 @@ pnpm watch:games
 - `pnpm dev:classic` - Build the classic host and all games, then serve it
 - `pnpm dev` - Start the new editor (see [The Editor](#the-editor))
 - `pnpm editor:static` - Build the editor as static files with a read-only copy of the project, and serve them on http://localhost:4173 (no AI)
+- `pnpm test:e2e:static` - Build the editor and check it under the deployed site's Content-Security-Policy
 
 **Command line (`pnpm tf help` lists them):**
 
@@ -1021,6 +1022,16 @@ Then open the URL Vite prints (http://localhost:5173/).
 serves them at http://localhost:4173/. It runs, compiles and exports games,
 but cannot change files and has no AI. The `dist` folder can be put on any
 static web host.
+
+**Deployed editor:** https://tf.basille.net, uploaded with `pnpm build:editor`
+then `pnpm upload:editor` (or the Deploy editor workflow). The build writes
+`.htaccess` files (`apps/editor/vite/site-headers.ts`) for Apache: HTTP
+redirects to HTTPS, a strict Content-Security-Policy and other security
+headers, and long caching for the hashed bundles in `assets/` only. `vite
+preview` (and so `pnpm editor:static`) sends the same CSP, and
+`pnpm test:e2e:static` builds the editor and checks that games compile and run
+under it with no violation. `pnpm upload:editor` refuses to upload a build
+that contains an API key, a GitHub token or any value from `.env`.
 
 - **The game runs in a Web Worker** with an `OffscreenCanvas`, so heavy gameplay
   code cannot stall the editor. Audio is played on the main thread
