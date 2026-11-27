@@ -22,7 +22,7 @@ const missing = ['EDITOR_FTP_HOST', 'EDITOR_FTP_USER', 'EDITOR_FTP_PASS'].filter
   (name) => !process.env[name],
 );
 if (missing.length > 0) {
-  console.error(`Missing ${missing.join(', ')} in .env`);
+  console.error(`Missing ${missing.join(', ')} in .env (or the environment)`);
   process.exit(1);
 }
 

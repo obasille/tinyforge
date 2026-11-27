@@ -1,0 +1,72 @@
+# Builds the editor and uploads it to its FTP account (https://basille.net/tf/),
+# the same as `pnpm build:editor` then `pnpm upload:editor` on a PC.
+#
+# Runs only when started by hand (Actions > Deploy editor > Run workflow) on the
+# branch picked there, and on pushes to master that touch the editor. It never
+# runs for pull requests, so code from a pull request never sees the secrets.
+#
+# The FTP login lives in the `editor-ftp` environment's secrets:
+# EDITOR_FTP_HOST, EDITOR_FTP_USER, EDITOR_FTP_PASS, and optionally
+# EDITOR_FTP_SECURE and EDITOR_FTP_PORT (see .env.example).
+name: Deploy editor
+
+on:
+  workflow_dispatch:
+    inputs:
+      with_maps:
+        description: Upload source maps too
+        type: boolean
+        default: false
+  push:
+    branches: [master]
+    paths:
+      - apps/editor/**
+      - packages/**
+      - pnpm-lock.yaml
+      - scripts/upload-editor.js
+      - .github/workflows/deploy-editor.yml
+
+permissions:
+  contents: read
+
+# One upload at a time; a newer run waits for the one in progress.
+concurrency:
+  group: deploy-editor
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: editor-ftp
+      url: https://basille.net/tf/
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # pnpm comes from corepack (the version in package.json), not from a
+      # third-party action.
+      - run: corepack enable
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm build:editor
+
+      - name: Upload to FTP
+        env:
+          EDITOR_FTP_HOST: ${{ secrets.EDITOR_FTP_HOST }}
+          EDITOR_FTP_USER: ${{ secrets.EDITOR_FTP_USER }}
+          EDITOR_FTP_PASS: ${{ secrets.EDITOR_FTP_PASS }}
+          EDITOR_FTP_SECURE: ${{ secrets.EDITOR_FTP_SECURE }}
+          EDITOR_FTP_PORT: ${{ secrets.EDITOR_FTP_PORT }}
+          WITH_MAPS: ${{ inputs.with_maps && '--with-maps' || '' }}
+        run: pnpm upload:editor -- $WITH_MAPS
+
+      - name: Check the site
+        run: curl --fail --silent --show-error --output /dev/null https://basille.net/tf/
