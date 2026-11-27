@@ -17,6 +17,7 @@ import { Buffer } from 'buffer';
 import { setTimeout as sleep } from 'timers/promises';
 import ftp from 'basic-ftp';
 import dotenv from 'dotenv';
+import { scanForSecrets, secretValues } from './secret-scan.js';
 
 dotenv.config();
 
@@ -160,13 +161,26 @@ async function readManifest() {
 }
 
 const started = Date.now();
+const toUpload = (await collectFiles(distPath)).filter(
+  (f) => withMaps || !f.endsWith('.map'),
+);
+
+// Nothing goes up if the build holds a key, a token or a value from .env.
+const leaks = await scanForSecrets(
+  toUpload,
+  distPath,
+  await secretValues(path.resolve(__dirname, '..', '.env')),
+);
+if (leaks.length > 0) {
+  console.error(`Upload refused, the build contains secrets:\n  ${leaks.join('\n  ')}`);
+  process.exit(1);
+}
+
 try {
   await main.connect();
 
   const local = {};
-  for (const filePath of (await collectFiles(distPath)).filter(
-    (f) => withMaps || !f.endsWith('.map'),
-  )) {
+  for (const filePath of toUpload) {
     local[path.relative(distPath, filePath).replace(/\\/g, '/')] =
       await sha256(filePath);
   }

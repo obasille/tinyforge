@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import checker from 'vite-plugin-checker';
 import { aiProxy } from './vite/ai-proxy.ts';
+import { siteHeaders } from './vite/site-headers.ts';
 import { tinyforge } from './vite/tinyforge-plugin.ts';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -13,6 +14,8 @@ export default defineConfig(({ command }) => ({
   plugins: [
     react(),
     tinyforge({ assetsDir: path.join(repoRoot, 'assets') }),
+    // .htaccess files for the deployed site (HTTPS, CSP, caching); the CSP in vite preview.
+    siteHeaders(),
     // AI panel routes (dev server only). The key is read from the repository's .env.
     aiProxy({ envDir: repoRoot }),
     // Type errors in the browser overlay while developing (not during tests).

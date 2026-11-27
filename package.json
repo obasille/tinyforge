@@ -20,6 +20,7 @@
     "test": "pnpm -r --if-present test",
     "test:sdk": "node scripts/test-utility.js",
     "test:e2e": "pnpm --filter @tinyforge/editor test:e2e",
+    "test:e2e:static": "pnpm --filter @tinyforge/editor test:e2e:static",
     "typecheck": "pnpm -r --if-present typecheck",
     "lint": "biome check . && eslint .",
     "format": "biome format --write .",

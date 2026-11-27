@@ -1,4 +1,4 @@
-# Builds the editor and uploads it to its FTP account (https://basille.net/tf/),
+# Builds the editor and uploads it to its FTP account (https://tf.basille.net/),
 # the same as `pnpm build:editor` then `pnpm upload:editor` on a PC. Only the
 # files that changed since the last deploy are sent (see scripts/upload-editor.js).
 #
@@ -49,7 +49,7 @@ jobs:
     timeout-minutes: 20
     environment:
       name: editor-ftp
-      url: https://basille.net/tf/
+      url: https://tf.basille.net/
     steps:
       - uses: actions/checkout@v5
         with:
@@ -83,5 +83,6 @@ jobs:
           SERIAL: ${{ inputs.serial && '--serial' || '' }}
         run: pnpm upload:editor -- $WITH_MAPS $FULL $SERIAL
 
+      # The page loads, and the .htaccess headers are active (the CSP is sent).
       - name: Check the site
-        run: curl --fail --silent --show-error --output /dev/null https://basille.net/tf/
+        run: curl --fail --silent --show-error --head https://tf.basille.net/ | grep -qi '^content-security-policy:'
