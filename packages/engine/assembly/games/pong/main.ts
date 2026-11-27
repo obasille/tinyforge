@@ -28,7 +28,7 @@ const COVER = "pong_cover"; // sprite in assets/sprites
 const RAM_SIZE: i32 = 0x100; // game RAM in bytes: Vars needs 44
 
 // === Constants ===
-const PADDLE_WIDTH: i32 = 40;
+const PADDLE_WIDTH: i32 = 60;
 const PADDLE_HEIGHT: i32 = 6;
 const BALL_SIZE: i32 = 4;
 const PADDLE_SPEED: f32 = 3.0;
