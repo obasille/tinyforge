@@ -93,9 +93,20 @@ export class AudioPlayer {
     return { sfx: this.sfx.size, music: this.music.size };
   }
 
-  /** Browsers start audio suspended until a user gesture. */
-  unlock(): void {
-    if (this.ctx.state === 'suspended') void this.ctx.resume();
+  /**
+   * Browsers start audio suspended until a user gesture; call this from one.
+   * iOS also wants a sound started inside the gesture, so a silent sample
+   * plays once. True once the audio runs.
+   */
+  unlock(): boolean {
+    if (this.ctx.state !== 'running') {
+      void this.ctx.resume();
+      const silent = this.ctx.createBufferSource();
+      silent.buffer = this.ctx.createBuffer(1, 1, this.ctx.sampleRate);
+      silent.connect(this.ctx.destination);
+      silent.start();
+    }
+    return this.ctx.state === 'running';
   }
 
   play(command: AudioCommand, canDefer = true): void {

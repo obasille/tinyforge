@@ -25,6 +25,15 @@ body,
   color: var(--tf-text);
 }
 
+/* The editor fills the screen and scrolls inside its panels only: no
+   pull-to-refresh or rubber-band bounce when a finger drags the top bar, and
+   nothing for iOS to scroll the page by after a rotation. */
+html,
+body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 button,
 select,
 input {
@@ -2131,4 +2140,9 @@ div.tf-ai-file,
 .tf-menu-check {
   display: inline-block;
   width: 1.2em;
+}
+
+/* Touch: while typing (keyboard open), the prompt is taller. */
+.tf-touch .tf-ai-input textarea:focus {
+  min-height: 7.5em;
 }

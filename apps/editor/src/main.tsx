@@ -62,3 +62,15 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch((e) => console.warn('Service worker not registered:', e));
   });
 }
+
+// iOS can leave the page scrolled after a rotation (the installed app most of
+// all): the top bar goes off screen and an empty band shows at the bottom.
+// The page never scrolls on purpose, so put it back, unless a text field has
+// the focus (iOS scrolls to keep it above the keyboard).
+const settle = () => {
+  if (document.activeElement?.matches('input, textarea, [contenteditable="true"]')) return;
+  if (window.scrollY !== 0 || window.scrollX !== 0) window.scrollTo(0, 0);
+};
+addEventListener('orientationchange', () => setTimeout(settle, 300));
+addEventListener('resize', settle);
+window.visualViewport?.addEventListener('resize', settle);

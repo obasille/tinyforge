@@ -159,6 +159,7 @@ export class Editor {
       this.pixelProbe.setPosition(state.mouseX, state.mouseY);
     });
     this.viewport = new Viewport(this.input, () => this.audio.unlock());
+    unlockAudioOnGesture(this.audio);
     this.host = new GameHost({
       createWorker: () => new GameWorker({ name: 'tinyforge-game' }),
       createCanvas: () => this.viewport.createCanvas(),
@@ -428,4 +429,21 @@ export class Editor {
     this.host.kill({ reload: false });
     void this.loadGame();
   }
+}
+
+/**
+ * Start the audio at the first tap or key anywhere: the on-screen controls,
+ * the menus and the panels count, not only the game view. On iOS, sounds use
+ * the media channel ("playback"), so the ring/silent switch does not mute
+ * the game; the default ("ambient") is muted by it.
+ */
+function unlockAudioOnGesture(audio: { unlock(): boolean }): void {
+  const session = (navigator as { audioSession?: { type: string } }).audioSession;
+  if (session) session.type = 'playback';
+  const events = ['pointerdown', 'touchend', 'click', 'keydown'] as const;
+  const onGesture = () => {
+    if (!audio.unlock()) return;
+    for (const e of events) removeEventListener(e, onGesture, true);
+  };
+  for (const e of events) addEventListener(e, onGesture, true);
 }

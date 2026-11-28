@@ -412,7 +412,7 @@ function TouchSettings({
     ...(game
       ? [
           {
-            label: `Only change ${game}`,
+            label: 'Only change this game',
             testId: 'ai-only-game',
             title: "Off: the AI may also change other games' files. It can always read them.",
             checked: s.onlyGame,
@@ -421,6 +421,7 @@ function TouchSettings({
         ]
       : []),
     ...(onLogout ? [{ label: 'Log out', testId: 'ai-logout', onSelect: onLogout }] : []),
+    ...(onClose ? [{ label: 'Close AI', testId: 'touch-ai-close', onSelect: onClose }] : []),
   ];
   return (
     <div className="tf-ai-settings tf-ai-settings-touch">
@@ -445,17 +446,6 @@ function TouchSettings({
         New chat
       </button>
       <AppMenu items={items} label="⋯" testId="ai-menu" />
-      {onClose ? (
-        <button
-          type="button"
-          className="tf-ai-close"
-          data-testid="touch-ai-close"
-          aria-label="Close AI"
-          onClick={onClose}
-        >
-          ×
-        </button>
-      ) : null}
     </div>
   );
 }

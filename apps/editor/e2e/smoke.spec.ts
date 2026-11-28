@@ -653,9 +653,9 @@ test.describe('the AI panel in portrait', () => {
     await page.getByRole('menuitem', { name: 'AI' }).click();
     const panel = page.getByTestId('touch-panel-ai');
     const model = await panel.getByTestId('ai-model').boundingBox();
-    const close = await panel.getByTestId('touch-ai-close').boundingBox();
-    if (!model || !close) throw new Error('missing parts');
-    expect(Math.abs(model.y - close.y)).toBeLessThan(8);
+    const menu = await panel.getByTestId('ai-menu').boundingBox();
+    if (!model || !menu) throw new Error('missing parts');
+    expect(Math.abs(model.y - menu.y)).toBeLessThan(8);
     await expect(panel.getByTestId('ai-scope')).toHaveCount(0);
 
     await panel.getByTestId('ai-menu').click();
@@ -671,7 +671,10 @@ test.describe('the AI panel in portrait', () => {
     await input.pressSequentially('two');
     await expect(input).toHaveValue('one\ntwo');
 
-    await panel.getByTestId('touch-ai-close').click();
+    // The menu has a generic scope item, and closes the AI tab.
+    await panel.getByTestId('ai-menu').click();
+    await expect(page.getByTestId('ai-only-game')).toHaveText(/Only change this game/);
+    await page.getByTestId('touch-ai-close').click();
     await expect(page.getByTestId('touch-tab-ai')).toHaveCount(0);
   });
 });
