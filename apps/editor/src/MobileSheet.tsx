@@ -18,7 +18,7 @@ export type SheetState = 'collapsed' | 'half' | 'expanded';
 
 const SHEET_KEY = 'tinyforge.editor.sheet';
 /** Collapsed: the handle and the row of tabs. */
-export const COLLAPSED_HEIGHT = 64;
+export const COLLAPSED_HEIGHT = 88;
 /** A drag shorter than this is a tap. */
 const TAP = 6;
 

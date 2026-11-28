@@ -532,7 +532,8 @@ test.describe('the touch panels in portrait', () => {
     await page.goto('/');
     await expect(page.getByTestId('run-status')).toHaveText('running');
     const toolbar = await page.locator('.tf-toolbar').boundingBox();
-    expect(toolbar?.height).toBeLessThan(56);
+    // One row: 44 px controls plus padding (two rows would be over 90).
+    expect(toolbar?.height).toBeLessThan(64);
     await expect(page.getByRole('button', { name: 'Redo' })).toBeVisible();
     // No zoom into the code editor on iOS: its text is at least 16px.
     await page.evaluate(() => window.__tf?.editor.workbench.openFile('games/pong/main.ts'));
@@ -579,6 +580,46 @@ test.describe('the touch panels in portrait', () => {
   });
 });
 
+/** Visible controls in the top bar and the touch panels smaller than 44 x 44 px. */
+const smallTargets = (page: Page) =>
+  page.evaluate(() => {
+    const controls = document.querySelectorAll(
+      '.tf-toolbar button, .tf-touch-panels button, .tf-touch-panels select, .tf-touch-panels [role="tab"], .tf-files-row, .tf-touch-panels input:not([type="checkbox"], [type="radio"], [type="range"], [readonly])',
+    );
+    return [...controls].flatMap((el) => {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) return [];
+      const name = (el as HTMLElement).dataset.testid ?? el.textContent?.trim().slice(0, 20);
+      const wide = el.matches('input, select, .tf-files-row') ? r.height >= 44 : r.width >= 44 && r.height >= 44;
+      return wide ? [] : [`${el.tagName} ${name} ${Math.round(r.width)}x${Math.round(r.height)}`];
+    });
+  });
+
+test.describe('touch targets in portrait', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+
+  test('every control in the top bar and the panels is at least 44 px', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByTestId('run-status')).toHaveText('running');
+    await page.getByTestId('file-games/pong').click();
+    expect(await smallTargets(page)).toEqual([]);
+    for (const tab of ['library', 'console', 'run', 'memory']) {
+      await page.getByTestId(`touch-tab-${tab}`).click();
+      expect(await smallTargets(page), tab).toEqual([]);
+    }
+    const files = [
+      ['games/pong/main.ts', 'code-games/pong/main.ts'],
+      ['assets/sprites/dino~9x1.png', 'sprite-tool-pencil'],
+      ['assets/sfx/explosion.wav', 'sound-play'],
+    ];
+    for (const [file, shown] of files) {
+      await page.evaluate((f) => window.__tf?.editor.workbench.openFile(f), file);
+      await expect(page.getByTestId(shown)).toBeVisible();
+      expect(await smallTargets(page), file).toEqual([]);
+    }
+  });
+});
+
 test.describe('the bottom sheet in portrait', () => {
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
 
@@ -611,7 +652,7 @@ test.describe('the bottom sheet in portrait', () => {
     await page.mouse.move(h.x + h.width / 2, 830, { steps: 8 });
     await page.mouse.up();
     await expect(sheet).toHaveAttribute('data-state', 'collapsed');
-    await expect.poll(async () => Math.round((await box(sheet)).height)).toBe(64);
+    await expect.poll(async () => Math.round((await box(sheet)).height)).toBe(88);
     expect((await session(page))?.status).toBe('running');
 
     await page.reload();
