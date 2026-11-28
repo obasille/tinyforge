@@ -1889,7 +1889,7 @@ div.tf-ai-file,
 }
 
 /* iOS zooms the page into a text field whose font is under 16px. */
-.tf-touch input:not([type="range"]),
+.tf-touch input:not([type="range"], [readonly]),
 .tf-touch select,
 .tf-touch textarea,
 .tf-touch .cm-content {
@@ -2065,4 +2065,36 @@ div.tf-ai-file,
 .tf-save-failed,
 .tf-save-conflict {
   color: var(--tf-error);
+}
+
+/* Touch layout: panel controls are at least 36 px, file rows 32 px, so a
+   finger hits what it aims at while lists stay dense. Tag chips keep their
+   size. Desktop sizes are unchanged. */
+.tf-app.tf-touch .tf-touch-panels button:not(.tf-lib-tags button),
+.tf-app.tf-touch .tf-touch-panels select {
+  min-width: 36px;
+  min-height: 36px;
+}
+
+.tf-app.tf-touch .tf-touch-panels input:not([type="checkbox"], [type="radio"], [type="range"], [readonly]) {
+  min-height: 36px;
+}
+
+.tf-app.tf-touch .tf-touch-panels input[type="checkbox"],
+.tf-app.tf-touch .tf-touch-panels input[type="radio"] {
+  width: 20px;
+  height: 20px;
+}
+
+.tf-app.tf-touch .tf-files-row {
+  min-height: 32px;
+}
+
+.tf-app.tf-touch .tf-memory-bar select {
+  flex: none;
+}
+
+.tf-app.tf-touch .tf-memory-bar input {
+  flex: 1;
+  min-width: 0;
 }
