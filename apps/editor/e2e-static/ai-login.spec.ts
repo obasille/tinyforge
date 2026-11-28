@@ -87,7 +87,8 @@ test('the deployed editor logs in to its AI proxy, chats, and logs out', async (
   expect(requests[0]['x-tinyforge']).toBe('1');
   expect(JSON.stringify(requests)).not.toContain('sk-ant');
 
-  await panel.getByTestId('ai-logout').click();
+  await panel.getByTestId('ai-menu').click();
+  await page.getByTestId('ai-logout').click();
   await expect(panel.getByTestId('ai-login')).toBeVisible();
   // The 401 of the wrong password is the only console error.
   expect(errors.filter((e) => !e.includes('401'))).toEqual([]);

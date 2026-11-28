@@ -119,7 +119,7 @@ export default function AiPanel({ onClose }: { onClose?: () => void } = {}) {
   const { writable } = useStore(editor.files.state);
   const [status, setStatus] = useState<AiStatus | null | undefined>(undefined);
   const [agent, setAgent] = useState<Agent | null>(null);
-  const { provider: providerId, onlyGame } = useStore(settings);
+  const { provider: providerId } = useStore(settings);
   const provider = status?.providers.find((p) => p.id === providerId) ?? null;
 
   const [checks, setChecks] = useState(0);
@@ -195,31 +195,13 @@ export default function AiPanel({ onClose }: { onClose?: () => void } = {}) {
 
   return (
     <div className="tf-ai" data-testid="ai-panel">
-      {touch ? (
-        <TouchSettings
-          status={status ?? null}
-          game={game && !notice ? game : null}
-          onNewChat={newChat}
-          onLogout={status?.session ? () => void logout() : null}
-          onClose={onClose}
-        />
-      ) : (
-        <Settings status={status ?? null} onNewChat={newChat} onLogout={status?.session ? () => void logout() : null} />
-      )}
-      {game && !notice && !touch ? (
-        <div className="tf-ai-scope" data-testid="ai-scope">
-          Working on <strong>{game}</strong>
-          <label title="Off: the AI may also change other games' files (for a refactor across games). It can always read them.">
-            <input
-              type="checkbox"
-              data-testid="ai-only-game"
-              checked={onlyGame}
-              onChange={(e) => settings.setState((x) => ({ ...x, onlyGame: e.target.checked }))}
-            />
-            Only change this game
-          </label>
-        </div>
-      ) : null}
+      <Settings
+        status={status ?? null}
+        game={game && !notice ? game : null}
+        onNewChat={newChat}
+        onLogout={status?.session ? () => void logout() : null}
+        onClose={onClose}
+      />
       {game && !notice && !writable ? (
         <div className="tf-ai-notice" data-testid="ai-read-only">
           This copy of the editor is read-only: the AI can explain and suggest changes, but cannot save them.
@@ -298,84 +280,12 @@ function AiLoginForm({ onDone }: { onDone: () => void }) {
   );
 }
 
-function Settings({
-  status,
-  onNewChat,
-  onLogout,
-}: {
-  status: AiStatus | null;
-  onNewChat: () => void;
-  onLogout: (() => void) | null;
-}) {
-  const s = useStore(settings);
-  const providers = status?.providers ?? [];
-  // A provider's id never has a ':'; a model's name may (llama3.1:8b).
-  const choose = (value: string) => {
-    const at = value.indexOf(':');
-    settings.setState((x) => ({ ...x, provider: value.slice(0, at), model: value.slice(at + 1) }));
-  };
-  return (
-    <div className="tf-ai-settings">
-      <label>
-        Model
-        <select
-          data-testid="ai-model"
-          value={`${s.provider}:${s.model}`}
-          disabled={providers.length === 0}
-          onChange={(e) => choose(e.target.value)}
-        >
-          {providers.map((p) => (
-            <optgroup key={p.id} label={PROVIDER_LABELS[p.id] ?? p.id}>
-              {p.models.map((m) => (
-                <option key={m} value={`${p.id}:${m}`}>
-                  {m}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-      </label>
-      <label title="More effort thinks longer: better on hard requests, slower and costlier (Claude only)">
-        Effort
-        <select
-          data-testid="ai-effort"
-          disabled={s.provider !== 'anthropic'}
-          value={s.effort}
-          onChange={(e) => settings.setState((x) => ({ ...x, effort: e.target.value as Effort }))}
-        >
-          {EFFORTS.map((e) => (
-            <option key={e} value={e}>
-              {e}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        <input
-          type="checkbox"
-          checked={s.showCost}
-          onChange={(e) => settings.setState((x) => ({ ...x, showCost: e.target.checked }))}
-        />
-        Show cost
-      </label>
-      <span className="tf-spacer" />
-      <button type="button" onClick={onNewChat} title="Forget this conversation and start a new one">
-        New chat
-      </button>
-      {onLogout ? (
-        <button type="button" data-testid="ai-logout" onClick={onLogout} title="Log out of the AI on this device">
-          Log out
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
 /**
- * The touch layout's settings: one row with the model, New chat and a menu
- * holding the rest (effort, cost, scope, log out).
+ * The settings: one row with the model, New chat and a menu holding the rest
+ * (effort, cost, scope, log out; close in the touch layout, where the AI is a
+ * tab without its own close button).
  */
-function TouchSettings({
+function Settings({
   status,
   game,
   onNewChat,
@@ -498,7 +408,15 @@ function Conversation({ agent }: { agent: Agent }) {
           }}
         />
         <div className="tf-ai-actions">
-          {showCost ? <span className="tf-ai-cost">{money(state.cost)}</span> : null}
+          {showCost ? (
+            <span
+              className="tf-ai-cost"
+              data-testid="ai-total"
+              title="Spent in this conversation (New chat starts over)"
+            >
+              {`Total ${money(state.cost)}`}
+            </span>
+          ) : null}
           {state.running ? (
             <button type="button" data-testid="ai-stop" onClick={() => agent.stop()}>
               Stop

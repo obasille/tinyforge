@@ -91,7 +91,8 @@ async function fakeModel(page: Page, replies: Block[][]) {
 }
 
 async function createGame(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'New game' }).click();
+  await page.getByTestId('files-menu').click();
+  await page.getByRole('menuitem', { name: 'New game' }).click();
   await page.getByTestId('files-name').fill(game);
   await page.getByTestId('files-name').press('Enter');
   await expect.poll(() => page.evaluate((g) => window.__tf?.editor.games.includes(g), game)).toBe(true);
@@ -291,7 +292,9 @@ test('a model from the OpenAI-compatible server in .env works the same way', asy
   await page.getByTestId('show-ai').click();
   const panel = page.getByTestId('ai-panel');
   await panel.getByTestId('ai-model').selectOption('openai:qwen3:8b');
-  await expect(panel.getByTestId('ai-effort')).toBeDisabled();
+  await panel.getByTestId('ai-menu').click();
+  await expect(page.getByTestId('ai-effort-medium')).toBeDisabled();
+  await page.keyboard.press('Escape');
   await panel.getByTestId('ai-input').fill('Change the description');
   await panel.getByTestId('ai-input').press('Enter');
 

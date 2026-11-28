@@ -346,23 +346,8 @@ export function FilesPanel() {
   return (
     <div className="tf-files" data-testid="files">
       <div className="tf-files-actions">
-        {touch ? (
-          // The touch layout: the actions in a menu, so the tree starts at the top.
-          <AppMenu items={actions} label="Actions ▾" testId="files-menu" />
-        ) : (
-          actions.map((action) => (
-            <button
-              key={action.label}
-              type="button"
-              data-testid={action.testId}
-              disabled={action.disabled}
-              title={action.title}
-              onClick={action.onSelect}
-            >
-              {action.label}
-            </button>
-          ))
-        )}
+        {/* The actions in a menu, so the tree starts at the top. */}
+        <AppMenu items={actions} label="Actions ▾" testId="files-menu" />
         <input
           ref={zipInput}
           type="file"

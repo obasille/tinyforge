@@ -906,7 +906,13 @@ pnpm watch:games
 - `pnpm dev` - Start the new editor (see [The Editor](#the-editor))
 - `pnpm editor:static` - Build the editor as static files with a read-only copy of the project, and serve them on http://localhost:4173 (no AI)
 - `pnpm test:e2e:static` - Build the editor and check it under the deployed site's Content-Security-Policy
-- `pnpm ai:setup` - Set the deployed editor's AI password and upload its key (see [The Editor](#the-editor))
+
+**Deploying the editor (see [The Editor](#the-editor)):**
+
+- `pnpm build:editor` - Build the editor into `apps/editor/dist` (with the PHP proxy, `.htaccess` files and the installable app)
+- `pnpm upload:editor` - Upload that build to the editor's FTP account (`EDITOR_FTP_*` in `.env`): only the files that changed, and nothing if the build contains a secret. `--full` uploads everything, `--with-maps` adds the source maps, `--serial` or `--parallel=N` (1 to 8, default 3) sets the connections
+- `pnpm ai:setup` - Set the deployed editor's password and upload its Anthropic key and, if set, its GitHub token
+- The **Deploy editor** GitHub workflow does build and upload on GitHub, for any branch (Actions > Deploy editor > Run workflow, or `gh workflow run deploy-editor.yml --ref <branch>`); it also runs on pushes to `master` that touch the editor
 
 **Command line (`pnpm tf help` lists them):**
 
@@ -923,7 +929,8 @@ pnpm watch:games
 
 **Utility scripts:**
 
-- `pnpm upload` - Manually trigger FTP upload to remote server
+- `pnpm format` - Format the new packages with Biome
+- `pnpm upload` - Manually trigger FTP upload of the classic host
 - `pnpm check:alloc <gameName>` - Check a game for memory allocation symbols
 
 ### Checking for Memory Allocation
@@ -1040,9 +1047,10 @@ server and holds the Anthropic key; the browser never sees it. The AI panel
 asks for a password (the browser's password manager can keep it), and the
 proxy then sets a 30-day session cookie that scripts cannot read. It forwards
 only the editor's models, at most 300 requests an hour, and refuses logins for
-an hour after 10 wrong passwords. To set it up, put a key made for this (with
-a monthly spending limit) in `.env` as `EDITOR_AI_ANTHROPIC_KEY`, deploy, then
-run `pnpm ai:setup`: it asks for the password (shown as you type) and uploads the key and the
+an hour after 10 wrong passwords. To set it up, deploy, then run `pnpm ai:setup`. It
+uses `ANTHROPIC_API_KEY` from `.env`, or `EDITOR_AI_ANTHROPIC_KEY` when set
+(better: a key used only by the site, with a monthly spending limit, that
+you can revoke without touching your dev key). It asks for the password (shown as you type) and uploads the key and the
 password's hash to `/.private/` on the site (refused to browsers), and checks
 that the site answers. Run it again to change the password, which logs every
 browser out.
@@ -1073,8 +1081,9 @@ never registers it.
   loop, the editor notices within 3 s and offers to stop and reload it.
 - **Files and code:** the Files panel shows the games, the asset library and
   the (read-only) SDK. Click a file to edit it in a code panel (CodeMirror).
-  Ctrl+S saves. New game, New file, Rename and Delete are in the panel (deleting
-  the running game runs another one), and
+  Ctrl+S saves. New game, New file, Rename, Delete, Export, Cartridge and
+  Import are in the panel's Actions menu (deleting the running game runs
+  another one), and
   every file change can be undone with Ctrl+Z outside the text. If a file
   changes on disk while you edit it, a clean buffer reloads and an edited one
   asks which version to keep.
@@ -1132,18 +1141,23 @@ never registers it.
   file, `<file>.json` (`coin~8x1.png.json`). It is optional, and other keys
   (such as `prompt` for a generated asset) are kept. Renaming or deleting an
   asset in the editor takes its sidecar along.
-- **AI code agent (dev server only):** the AI button opens a chat with
+- **AI code agent:** with `pnpm dev`, or in the deployed editor once logged
+  in (see above). The AI button opens a chat with
   Claude about the current game ("Working on <game>" at the top). There is
   one chat per game and model provider, kept until the page reloads; New chat
-  starts it over. It reads the game, the SDK, the other games and the asset
+  starts it over. The panel's top row has the model, New chat and a ⋯ menu
+  with the rest: effort, Show cost, Only change this game, and Log out on
+  the deployed editor. With Show cost on, each request shows what it cost and
+  the total above Send is what the whole chat has cost so far. It reads the game, the SDK, the other games and the asset
   list, edits files in the game's folder only (untick "Only change this
   game" to let it change other games too, for a refactor across games),
   compiles until each game it changed builds, and checks the running game's
-  log. Its thinking (a summary, for Claude; the reasoning of local models
+  log. In the panel, Enter sends and Shift+Enter starts a new line (on a touch
+  screen, Enter is a new line and Send sends). Its thinking (a summary, for Claude; the reasoning of local models
   that send one) shows as a collapsed Thinking line. On a Windows checkout
   with CRLF line endings, its edits match and keep them. Each request is one undo step,
-  and the panel lists every file it changed with a diff. Model, effort and
-  "show cost" are set in the panel and saved in the browser. Setup: put
+  and the panel lists every file it changed with a diff. The model and the
+  menu's settings are saved in the browser. Setup: put
   `ANTHROPIC_API_KEY=...` in a `.env` file at the repository root (it is
   git-ignored) and restart `pnpm dev`; `TF_AI_MODEL` sets the default model.
   The key stays in the dev server: the page sends requests to
@@ -1182,6 +1196,10 @@ never registers it.
   cartridge into the Library's Import lists its assets as drafts.
 - **Debugging:** debug builds carry their source map, so Chrome DevTools can
   set breakpoints in the AssemblyScript source.
+- **Game panel:** its bar has Pause/Resume and Restart, the color of the
+  pixel under the mouse, and a View menu whose Game buttons shows the
+  on-screen controls below the game (D-pad, A/B/X/Y, LT/RT, Start), to play
+  with the mouse. The choice is saved in the browser.
 - **Panels:** Game, Run (pause, single step, restart, save/load state, seed),
   Memory (hex view of the visible range, refreshed every frame), Console,
   Library. The layout is saved in the browser; Reset layout brings back the
@@ -1200,6 +1218,13 @@ never registers it.
   | Ctrl+Z         | Undo (Cmd+Z on macOS)           |
   | Ctrl+Shift+Z   | Redo (Cmd+Shift+Z on macOS)     |
 
+- **Touch layout:** on a phone or tablet (or with Use touch layout in the ☰
+  menu) the editor shows the game with on-screen controls and the panels as
+  tabs below it (portrait), or the game full screen (landscape). It is the
+  same editor with the same menus; the differences are only what a touch
+  screen needs: bigger controls, no keyboard shortcuts shown, 16px text
+  fields (no zoom on iOS), Undo/Redo as arrows, one panel at a time with an
+  Editor switcher, no pixel color readout, and Close AI in the AI menu.
 - **Dev hook:** in development, `window.__tf` exposes the editor, the project
   files, the project and session stores, and `snapshot()`, for tests and
   agents.

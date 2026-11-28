@@ -5,7 +5,7 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { expect, type Page, test } from '@playwright/test';
+import { expect, type Locator, type Page, test } from '@playwright/test';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const GAMES = path.join(REPO, 'packages', 'engine', 'assembly', 'games');
@@ -54,9 +54,22 @@ async function setText(page: Page, file: string, edit: [string, string]) {
   );
 }
 
+/** Run an action of the Files panel's menu. */
+async function fileAction(page: Page, name: string): Promise<void> {
+  await page.getByTestId('files-menu').click();
+  await page.getByRole('menuitem', { name, exact: true }).click();
+}
+
+/** Open the Files menu, check its Export items, and close it. */
+async function exportItems(page: Page, check: (exp: Locator, cart: Locator) => Promise<void>): Promise<void> {
+  await page.getByTestId('files-menu').click();
+  await check(page.getByTestId('files-export'), page.getByTestId('files-export-cartridge'));
+  await page.keyboard.press('Escape');
+}
+
 /** Create a game with the Files panel and wait for its code panel. */
 async function createGame(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'New game' }).click();
+  await fileAction(page, 'New game');
   await page.getByTestId('files-name').fill(game);
   await page.getByTestId('files-name').press('Enter');
   await expect(page.getByTestId(`code-${mainPath()}`).locator('.cm-content')).toContainText(`const TITLE = "${game}"`);
@@ -263,28 +276,30 @@ test('files can be created, renamed and deleted from the tree, with undo', async
   await page.getByTestId(`file-games/${game}`).click(); // select the folder (it stays open)
   await expect(page.getByTestId(`file-games/${game}/main.ts`)).toHaveCount(0);
   // Export follows the selection: this game's folder, not the code root.
-  await expect(page.getByTestId('files-export')).toHaveAttribute('title', new RegExp(`^Save ${game} as a zip`));
+  await exportItems(page, (exp) => expect(exp).toHaveAttribute('title', new RegExp(`^Save ${game} as a zip`)));
   await page.getByTestId('file-games').click();
-  await expect(page.getByTestId('files-export')).toBeDisabled();
-  await expect(page.getByTestId('files-export-cartridge')).toBeDisabled();
+  await exportItems(page, async (exp, cart) => {
+    await expect(exp).toBeDisabled();
+    await expect(cart).toBeDisabled();
+  });
   await page.getByTestId('file-games').click();
   await page.getByTestId('file-games/pong').click();
-  await expect(page.getByTestId('files-export')).toHaveAttribute('title', /^Save pong as a zip/);
+  await exportItems(page, (exp) => expect(exp).toHaveAttribute('title', /^Save pong as a zip/));
   await page.getByTestId(`file-games/${game}`).click();
-  await page.getByRole('button', { name: 'New file' }).click();
+  await fileAction(page, 'New file');
   await page.getByTestId('files-name').fill('level.ts');
   await page.getByTestId('files-name').press('Enter');
   await expect.poll(() => existsSync(path.join(dir, 'level.ts'))).toBe(true);
 
   await page.getByTestId(`file-games/${game}/level.ts`).click();
-  await page.getByRole('button', { name: 'Rename' }).click();
+  await fileAction(page, 'Rename');
   await page.getByTestId('files-name').fill('levels.ts');
   await page.getByTestId('files-name').press('Enter');
   await expect.poll(() => existsSync(path.join(dir, 'levels.ts'))).toBe(true);
   expect(existsSync(path.join(dir, 'level.ts'))).toBe(false);
 
   await page.getByTestId(`file-games/${game}/levels.ts`).click();
-  await page.getByRole('button', { name: 'Delete', exact: true }).first().click();
+  await fileAction(page, 'Delete');
   await page.getByTestId('files-confirm').getByRole('button', { name: 'Delete' }).click();
   await expect.poll(() => existsSync(path.join(dir, 'levels.ts'))).toBe(false);
   await expect(page.getByTestId(`file-games/${game}/levels.ts`)).toHaveCount(0);
@@ -298,7 +313,7 @@ test('files can be created, renamed and deleted from the tree, with undo', async
   await page.evaluate((g) => window.__tf?.editor.selectGame(g), game);
   await expect.poll(() => page.evaluate(() => window.__tf?.session.getState().game)).toBe(game);
   await page.getByTestId(`file-games/${game}`).click();
-  await page.getByRole('button', { name: 'Delete', exact: true }).first().click();
+  await fileAction(page, 'Delete');
   await page.getByTestId('files-confirm').getByRole('button', { name: 'Delete' }).click();
   await expect.poll(() => existsSync(dir)).toBe(false);
   await expect.poll(() => page.evaluate((g) => window.__tf?.files.games.includes(g), game)).toBe(false);
@@ -323,7 +338,7 @@ test('a game exports as a zip and imports back as one undo step', async ({ page 
   await createGame(page);
   await page.getByTestId(`file-${mainPath()}`).click();
   const download = page.waitForEvent('download');
-  await page.getByTestId('files-export').click();
+  await fileAction(page, 'Export');
   const zip = await download;
   expect(zip.suggestedFilename()).toBe(`${game}.zip`);
   const zipFile = path.join(test.info().outputDir, `${game}.zip`);
@@ -352,7 +367,7 @@ test('a game exports as a cartridge whose assets the library imports', async ({ 
   await page.getByTestId('file-games/pong').click();
   await page.getByTestId('file-games/pong/main.ts').click();
   const download = page.waitForEvent('download');
-  await page.getByTestId('files-export-cartridge').click();
+  await fileAction(page, 'Cartridge');
   const cartridge = await download;
   expect(cartridge.suggestedFilename()).toBe('pong.wasm');
   const wasmFile = path.join(test.info().outputDir, 'pong.wasm');
@@ -370,7 +385,7 @@ test('a game exports as a cartridge whose assets the library imports', async ({ 
   await createGame(page);
   await page.getByTestId(`file-${mainPath()}`).click();
   const plain = page.waitForEvent('download');
-  await page.getByTestId('files-export-cartridge').click();
+  await fileAction(page, 'Cartridge');
   const plainFile = path.join(test.info().outputDir, `${game}.wasm`);
   await (await plain).saveAs(plainFile);
   await page.locator('.dv-tab', { hasText: 'Library' }).click();
