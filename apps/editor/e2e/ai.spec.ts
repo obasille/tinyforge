@@ -342,6 +342,20 @@ test('replacing an existing asset waits for the user to say yes', async ({ page 
   expect(errors).toEqual([]);
 });
 
+test('a half-typed prompt survives closing and reopening the panel', async ({ page }) => {
+  await fakeModel(page, []);
+  await page.goto('/');
+  await createGame(page);
+  await page.getByTestId('app-menu').click();
+  await page.getByTestId('show-ai').click();
+  await page.getByTestId('ai-panel').getByTestId('ai-input').fill('Make the paddles');
+  await page.getByRole('button', { name: 'Close AI' }).click();
+  await expect(page.getByTestId('ai-panel')).toHaveCount(0);
+  await page.getByTestId('app-menu').click();
+  await page.getByTestId('show-ai').click();
+  await expect(page.getByTestId('ai-panel').getByTestId('ai-input')).toHaveValue('Make the paddles');
+});
+
 /** Any sound in the library, to copy as a stand-in for an imported one. */
 function readdirFirstWav(): string {
   return readdirSync(path.join(ASSETS, 'sfx')).find((f) => f.endsWith('.wav') && !f.startsWith('e2e')) ?? '';

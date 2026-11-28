@@ -1064,7 +1064,11 @@ the top bar, they become one commit. If the branch moved meanwhile (another
 device, or a push), the editor shows Conflict and never overwrites it; reload
 to get the latest. Files unchanged since the deploy load from the site
 itself, so only changed files cost GitHub requests. Merge `web` into
-`master` on your computer (`git pull origin web`), then push. The
+`master` on your computer (`git pull origin web`), then push. Until you do,
+`pnpm dev` shows "web: N to merge" in the top bar, a link to the commits on
+GitHub (one GitHub API request when the editor opens, at most every 5
+minutes; `EDITOR_GITHUB_BASE` sets the main branch, `master` by default, and
+`TF_NO_WEB_BRANCH=1` turns it off). The
 repository is public: what you save from the site is public at once.
 
 **Installing the editor:** the deployed editor is an installable app. On an
@@ -1144,7 +1148,8 @@ never registers it.
 - **AI code agent:** with `pnpm dev`, or in the deployed editor once logged
   in (see above). The AI button opens a chat with
   Claude about the current game ("Working on <game>" at the top). There is
-  one chat per game and model provider, kept until the page reloads; New chat
+  one chat per game and model provider, kept until the page reloads (a
+  half-typed prompt too, when the panel closes or the game changes); New chat
   starts it over. The panel's top row has the model, New chat and a ⋯ menu
   with the rest: effort, Show cost, Only change this game, and Log out on
   the deployed editor. With Show cost on, each request shows what it cost and

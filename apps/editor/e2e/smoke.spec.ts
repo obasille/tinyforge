@@ -444,6 +444,31 @@ test('the Game panel bar pauses, restarts and shows the game buttons', async ({ 
   expect(errors).toEqual([]);
 });
 
+test('the top bar says when the web branch has commits to merge', async ({ page }) => {
+  await page.route('**/__tf/web-branch', (route) =>
+    route.fulfill({
+      json: {
+        ahead: 2,
+        repo: 'me/game',
+        branch: 'web',
+        base: 'master',
+        url: 'https://github.com/me/game/compare/master...web',
+      },
+    }),
+  );
+  await page.goto('/');
+  const badge = page.getByTestId('web-branch');
+  await expect(badge).toHaveText('web: 2 to merge');
+  await expect(badge).toHaveAttribute('href', 'https://github.com/me/game/compare/master...web');
+  await expect(badge).toHaveAttribute('title', /git pull origin web/);
+});
+
+test('no web branch badge when nothing waits', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('run-status')).toHaveText('running');
+  await expect(page.getByTestId('web-branch')).toHaveCount(0);
+});
+
 test.describe('on a touch screen in landscape', () => {
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 844, height: 390 } });
 

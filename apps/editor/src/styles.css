@@ -2185,3 +2185,18 @@ div.tf-ai-file,
 .tf-touch .tf-ai-input textarea:focus {
   min-height: 7.5em;
 }
+
+/* pnpm dev: commits saved from the site, not merged yet. */
+.tf-web-branch {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  white-space: nowrap;
+  color: #fc6;
+  background: rgb(255 200 100 / 12%);
+  text-decoration: none;
+}
+
+.tf-web-branch:hover {
+  text-decoration: underline;
+}
