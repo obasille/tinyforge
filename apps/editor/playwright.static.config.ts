@@ -14,6 +14,8 @@ export default defineConfig({
     baseURL: `http://localhost:${PORT}/`,
     ...devices['Desktop Chrome'],
     viewport: { width: 1280, height: 800 },
+    // Only pwa.spec.ts lets the service worker run; the others route requests by hand.
+    serviceWorkers: 'block',
   },
   webServer: {
     command: `vite preview --port ${PORT} --strictPort`,

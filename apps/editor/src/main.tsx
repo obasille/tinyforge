@@ -53,3 +53,12 @@ boot().catch((e) => {
   console.error(e);
   document.body.textContent = `TinyForge editor failed to start: ${e instanceof Error ? e.message : String(e)}`;
 });
+
+// The installable app's service worker (apps/editor/pwa/sw.js), in the build
+// only: pnpm dev never registers one. After the page has loaded, so it never
+// slows the start.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch((e) => console.warn('Service worker not registered:', e));
+  });
+}

@@ -40,6 +40,9 @@ pnpm workspace. Two hosts share one engine:
   PHP proxy with a password login (set up by `pnpm ai:setup`) that also
   lists, reads and commits the web branch on GitHub; the build
   writes it, and the site's `.htaccess` files, from `vite/site-headers.ts`.
+  `vite/pwa.ts` adds the installable app to the build only: manifest, icons
+  (`pwa/`) and the service worker (`pwa/sw.js`: hashed assets cache first,
+  the page network first, `__tf/` never touched).
 - `apps/classic`: the original host, deployed to the site root. Keep it working,
   with minimal changes and no code shared with the editor packages. What it
   does not do is listed in `apps/classic/README.md`.

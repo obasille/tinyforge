@@ -1059,6 +1059,14 @@ itself, so only changed files cost GitHub requests. Merge `web` into
 `master` on your computer (`git pull origin web`), then push. The
 repository is public: what you save from the site is public at once.
 
+**Installing the editor:** the deployed editor is an installable app. On an
+iPhone, open it in Safari and use Share > Add to Home Screen; Chrome and Edge
+offer Install. It opens without the browser's bars. A small service worker
+keeps the app's hashed files, so later launches start faster; the page itself
+is always fetched first, so a deploy shows at the next launch. It never stores
+project files, AI replies or anything from the login (`__tf/`). `pnpm dev`
+never registers it.
+
 - **The game runs in a Web Worker** with an `OffscreenCanvas`, so heavy gameplay
   code cannot stall the editor. Audio is played on the main thread
   (`AudioContext` does not exist in Workers). If a game hangs in an infinite
