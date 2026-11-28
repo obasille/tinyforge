@@ -30,6 +30,7 @@ import {
 } from '@tinyforge/editor-core/ai';
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import guide from '../../../../AGENTS.md?raw';
+import { AppMenu, type AppMenuItem } from '../AppMenu.tsx';
 import { useEditor } from '../EditorContext.ts';
 import type { Editor } from '../editor.ts';
 import { useStore, useTouchLayout } from '../hooks.ts';
@@ -110,7 +111,9 @@ async function agentFor(editor: Editor, game: string, provider: ProviderStatus):
   return agent;
 }
 
-export default function AiPanel() {
+/** `onClose`: the touch layout's AI tab, closed from the panel's own row. */
+export default function AiPanel({ onClose }: { onClose?: () => void } = {}) {
+  const touch = useTouchLayout();
   const editor = useEditor();
   const game = useStore(editor.project).game;
   const { writable } = useStore(editor.files.state);
@@ -169,6 +172,19 @@ export default function AiPanel() {
   if (status?.login) {
     return (
       <div className="tf-ai" data-testid="ai-panel">
+        {touch && onClose ? (
+          <div className="tf-ai-settings tf-ai-settings-touch">
+            <button
+              type="button"
+              className="tf-ai-close"
+              data-testid="touch-ai-close"
+              aria-label="Close AI"
+              onClick={onClose}
+            >
+              ×
+            </button>
+          </div>
+        ) : null}
         <AiLoginForm onDone={afterLogin} />
       </div>
     );
@@ -179,8 +195,18 @@ export default function AiPanel() {
 
   return (
     <div className="tf-ai" data-testid="ai-panel">
-      <Settings status={status ?? null} onNewChat={newChat} onLogout={status?.session ? () => void logout() : null} />
-      {game && !notice ? (
+      {touch ? (
+        <TouchSettings
+          status={status ?? null}
+          game={game && !notice ? game : null}
+          onNewChat={newChat}
+          onLogout={status?.session ? () => void logout() : null}
+          onClose={onClose}
+        />
+      ) : (
+        <Settings status={status ?? null} onNewChat={newChat} onLogout={status?.session ? () => void logout() : null} />
+      )}
+      {game && !notice && !touch ? (
         <div className="tf-ai-scope" data-testid="ai-scope">
           Working on <strong>{game}</strong>
           <label title="Off: the AI may also change other games' files (for a refactor across games). It can always read them.">
@@ -345,6 +371,85 @@ function Settings({
   );
 }
 
+/**
+ * The touch layout's settings: one row with the model, New chat and a menu
+ * holding the rest (effort, cost, scope, log out).
+ */
+function TouchSettings({
+  status,
+  game,
+  onNewChat,
+  onLogout,
+  onClose,
+}: {
+  status: AiStatus | null;
+  game: string | null;
+  onNewChat: () => void;
+  onLogout: (() => void) | null;
+  onClose?: () => void;
+}) {
+  const s = useStore(settings);
+  const providers = status?.providers ?? [];
+  const choose = (value: string) => {
+    const at = value.indexOf(':');
+    settings.setState((x) => ({ ...x, provider: value.slice(0, at), model: value.slice(at + 1) }));
+  };
+  const items: AppMenuItem[] = [
+    ...EFFORTS.map((e) => ({
+      label: `Effort: ${e}`,
+      testId: `ai-effort-${e}`,
+      title: 'More effort thinks longer: better on hard requests, slower and costlier (Claude only)',
+      disabled: s.provider !== 'anthropic',
+      checked: s.effort === e,
+      onSelect: () => settings.setState((x) => ({ ...x, effort: e })),
+    })),
+    {
+      label: 'Show cost',
+      testId: 'ai-show-cost',
+      checked: s.showCost,
+      onSelect: () => settings.setState((x) => ({ ...x, showCost: !x.showCost })),
+    },
+    ...(game
+      ? [
+          {
+            label: 'Only change this game',
+            testId: 'ai-only-game',
+            title: "Off: the AI may also change other games' files. It can always read them.",
+            checked: s.onlyGame,
+            onSelect: () => settings.setState((x) => ({ ...x, onlyGame: !x.onlyGame })),
+          },
+        ]
+      : []),
+    ...(onLogout ? [{ label: 'Log out', testId: 'ai-logout', onSelect: onLogout }] : []),
+    ...(onClose ? [{ label: 'Close AI', testId: 'touch-ai-close', onSelect: onClose }] : []),
+  ];
+  return (
+    <div className="tf-ai-settings tf-ai-settings-touch">
+      <select
+        data-testid="ai-model"
+        aria-label="Model"
+        value={`${s.provider}:${s.model}`}
+        disabled={providers.length === 0}
+        onChange={(e) => choose(e.target.value)}
+      >
+        {providers.map((p) => (
+          <optgroup key={p.id} label={PROVIDER_LABELS[p.id] ?? p.id}>
+            {p.models.map((m) => (
+              <option key={m} value={`${p.id}:${m}`}>
+                {m}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+      <button type="button" onClick={onNewChat}>
+        New chat
+      </button>
+      <AppMenu items={items} label="⋯" testId="ai-menu" />
+    </div>
+  );
+}
+
 const money = (cost: number | null) => (cost === null ? 'cost unknown' : `$${cost.toFixed(cost < 0.1 ? 3 : 2)}`);
 
 function Conversation({ agent }: { agent: Agent }) {
@@ -385,7 +490,8 @@ function Conversation({ agent }: { agent: Agent }) {
           placeholder={touch ? 'Ask for a change' : 'Ask for a change (Enter to send, Shift+Enter for a new line)'}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
+            // On a phone, Enter is a new line; Send sends.
+            if (e.key === 'Enter' && !e.shiftKey && !touch) {
               e.preventDefault();
               send();
             }

@@ -25,6 +25,15 @@ body,
   color: var(--tf-text);
 }
 
+/* The editor fills the screen and scrolls inside its panels only: no
+   pull-to-refresh or rubber-band bounce when a finger drags the top bar, and
+   nothing for iOS to scroll the page by after a rotation. */
+html,
+body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 button,
 select,
 input {
@@ -44,6 +53,10 @@ button:disabled {
   display: flex;
   flex-direction: column;
   height: 100%;
+  /* Installed on iOS, the page runs under the status bar (black-translucent):
+     keep the top bar below it. 0 in a browser tab. */
+  padding-top: env(safe-area-inset-top);
+  box-sizing: border-box;
 }
 
 .tf-toolbar {
@@ -2097,4 +2110,39 @@ div.tf-ai-file,
 .tf-app.tf-touch .tf-memory-bar input {
   flex: 1;
   min-width: 0;
+}
+
+/* The AI panel's settings in the touch layout: one row (model, New chat,
+   a menu with the rest, close). */
+.tf-ai-settings.tf-ai-settings-touch {
+  flex-wrap: nowrap;
+  gap: 6px;
+  padding: 4px 8px;
+}
+
+.tf-app .tf-ai-settings.tf-ai-settings-touch select {
+  flex: 1;
+  min-width: 0;
+}
+
+.tf-app .tf-ai-settings.tf-ai-settings-touch > button,
+.tf-app .tf-ai-settings.tf-ai-settings-touch .tf-menu-button {
+  flex: none;
+  min-width: 36px;
+  height: 36px;
+  font-size: 15px;
+}
+
+.tf-ai-close {
+  margin-left: auto;
+}
+
+.tf-menu-check {
+  display: inline-block;
+  width: 1.2em;
+}
+
+/* Touch: while typing (keyboard open), the prompt is taller. */
+.tf-touch .tf-ai-input textarea:focus {
+  min-height: 7.5em;
 }

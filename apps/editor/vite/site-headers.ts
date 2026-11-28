@@ -83,7 +83,10 @@ ${headers}
   Header always set Strict-Transport-Security "max-age=86400"
 </IfModule>
 
-# The page and the project files (__tf/) keep their names across deploys:
+# The installable app's manifest (Apache may not know the extension).
+AddType application/manifest+json .webmanifest
+
+# The page, sw.js and the project files (__tf/) keep their names across deploys:
 # always revalidate (a 304 when unchanged). assets/.htaccess overrides this.
 # The proxy (__tf/ai/) sets its own.
 <If "%{REQUEST_URI} !~ m#^/__tf/ai/#">

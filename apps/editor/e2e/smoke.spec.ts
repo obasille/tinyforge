@@ -637,6 +637,48 @@ test.describe('touch targets in portrait', () => {
   });
 });
 
+test.describe('the AI panel in portrait', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+
+  test('has one row of settings, the rest in a menu; Enter adds a line', async ({ page }) => {
+    // AI set up, without a key: the panel only needs the status route.
+    await page.route('**/__tf/ai/status', (route) =>
+      route.fulfill({
+        json: { providers: [{ id: 'anthropic', models: ['claude-opus-5-5'], defaultModel: 'claude-opus-5-5' }] },
+      }),
+    );
+    await page.goto('/');
+    await expect(page.getByTestId('run-status')).toHaveText('running');
+    await page.getByTestId('app-menu').click();
+    await page.getByRole('menuitem', { name: 'AI' }).click();
+    const panel = page.getByTestId('touch-panel-ai');
+    const model = await panel.getByTestId('ai-model').boundingBox();
+    const menu = await panel.getByTestId('ai-menu').boundingBox();
+    if (!model || !menu) throw new Error('missing parts');
+    expect(Math.abs(model.y - menu.y)).toBeLessThan(8);
+    await expect(panel.getByTestId('ai-scope')).toHaveCount(0);
+
+    await panel.getByTestId('ai-menu').click();
+    await expect(page.getByTestId('ai-show-cost')).toHaveAttribute('aria-checked', 'true');
+    await page.getByTestId('ai-show-cost').click();
+    await panel.getByTestId('ai-menu').click();
+    await expect(page.getByTestId('ai-show-cost')).toHaveAttribute('aria-checked', 'false');
+    await page.getByTestId('ai-show-cost').click();
+
+    const input = panel.getByTestId('ai-input');
+    await input.fill('one');
+    await input.press('Enter');
+    await input.pressSequentially('two');
+    await expect(input).toHaveValue('one\ntwo');
+
+    // The menu has a generic scope item, and closes the AI tab.
+    await panel.getByTestId('ai-menu').click();
+    await expect(page.getByTestId('ai-only-game')).toHaveText(/Only change this game/);
+    await page.getByTestId('touch-ai-close').click();
+    await expect(page.getByTestId('touch-tab-ai')).toHaveCount(0);
+  });
+});
+
 test.describe('the bottom sheet in portrait', () => {
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
 

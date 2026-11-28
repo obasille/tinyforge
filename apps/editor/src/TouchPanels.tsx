@@ -18,9 +18,9 @@ import { SpritePanel } from './panels/SpritePanel.tsx';
 import type { FileKind, OpenFile, TouchPanels as TouchPanelsStore, TouchTab } from './touch-panels.ts';
 
 const AiPanel = lazy(() => import('./panels/AiPanel.tsx'));
-const LazyAiPanel = () => (
+const LazyAiPanel = ({ onClose }: { onClose?: () => void }) => (
   <Suspense fallback={null}>
-    <AiPanel />
+    <AiPanel onClose={onClose} />
   </Suspense>
 );
 
@@ -134,20 +134,9 @@ export function TouchPanels({ panels, onTab }: Props) {
         )}
         {ai && visited.has('ai') && (
           <section className="tf-touch-panel tf-touch-editor" hidden={tab !== 'ai'} data-testid="touch-panel-ai">
-            <div className="tf-touch-filebar">
-              <span>AI</span>
-              <button
-                type="button"
-                className="tf-touch-close"
-                data-testid="touch-ai-close"
-                aria-label="Close AI"
-                onClick={() => panels.closeAi()}
-              >
-                ×
-              </button>
-            </div>
+            {/* The AI panel's own row holds its close button. */}
             <div className="tf-touch-file">
-              <Ai />
+              <Ai onClose={() => panels.closeAi()} />
             </div>
           </section>
         )}

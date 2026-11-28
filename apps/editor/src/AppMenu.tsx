@@ -5,6 +5,8 @@ export interface AppMenuItem {
   testId?: string;
   title?: string;
   disabled?: boolean;
+  /** A setting that is on or off: shown with a check mark. */
+  checked?: boolean;
   onSelect: () => void;
 }
 
@@ -79,14 +81,12 @@ export function AppMenu({
       if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener('pointerdown', onDown);
-    listRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')?.focus();
+    listRef.current?.querySelector<HTMLButtonElement>('.tf-menu-item:not(:disabled)')?.focus();
     return () => document.removeEventListener('pointerdown', onDown);
   }, [open]);
 
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    const buttons = [
-      ...(listRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)') ?? []),
-    ];
+    const buttons = [...(listRef.current?.querySelectorAll<HTMLButtonElement>('.tf-menu-item:not(:disabled)') ?? [])];
     const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
     const move = (to: number) => {
       e.preventDefault();
@@ -125,23 +125,31 @@ export function AppMenu({
           ref={listRef}
           onKeyDown={onKey}
         >
-          {items.map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              role="menuitem"
-              className="tf-menu-item"
-              data-testid={item.testId}
-              title={item.title}
-              disabled={item.disabled}
-              onClick={() => {
+          {items.map((item) => {
+            const props = {
+              type: 'button' as const,
+              className: 'tf-menu-item',
+              'data-testid': item.testId,
+              title: item.title,
+              disabled: item.disabled,
+              onClick: () => {
                 setOpen(false);
                 item.onSelect();
-              }}
-            >
-              {item.label}
-            </button>
-          ))}
+              },
+            };
+            return item.checked === undefined ? (
+              <button key={item.label} role="menuitem" {...props}>
+                {item.label}
+              </button>
+            ) : (
+              <button key={item.label} role="menuitemcheckbox" aria-checked={item.checked} {...props}>
+                <span className="tf-menu-check" aria-hidden="true">
+                  {item.checked ? '✓' : ''}
+                </span>
+                {item.label}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
