@@ -59,8 +59,11 @@ export interface VirtualControlsOptions {
    * Restart on the left; RT, the A/B/X/Y diamond and Start on the right).
    * portrait: one narrow column on each side of the game (the D-pad, then
    * Y/X/B/A) and a row above it (LT, Pause, Restart, Start, RT).
+   * strip: one row below the game (LT over the D-pad, Start, RT over the
+   * A/B/X/Y diamond), with no Pause or Restart: the desktop Game panel has
+   * those in its bar.
    */
-  layout: 'landscape' | 'portrait';
+  layout: 'landscape' | 'portrait' | 'strip';
   onPause(): void;
   onRestart(): void;
   /** Label of the pause button (Pause or Resume). */
@@ -183,7 +186,14 @@ export function mountVirtualControls(
 
   const root = el('div', `tf-vc tf-vc-${options.layout}`);
   root.dataset.testid = 'virtual-controls';
-  if (options.layout === 'landscape') {
+  if (options.layout === 'strip') {
+    const left = el('div', 'tf-vc-group');
+    const right = el('div', 'tf-vc-group');
+    left.append(lt, control(pad('tf-vc-dpad', dpadKeys), dpadBits));
+    right.append(rt, control(pad('tf-vc-face', faceKeys), faceBit));
+    root.append(left, start, right);
+    add(root);
+  } else if (options.layout === 'landscape') {
     const left = el('div', 'tf-vc-col tf-vc-col-left');
     const right = el('div', 'tf-vc-col tf-vc-col-right');
     const actions = el('div', 'tf-vc-actions');

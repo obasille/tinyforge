@@ -30,7 +30,8 @@ const USAGE = `TinyForge command line (pnpm tf <command>):
   help                             this list
 
 Builds: pnpm build:games (all games), pnpm build:debug. The editor: pnpm dev, or
-pnpm editor:static for a read-only copy with no AI.`;
+pnpm editor:static for a read-only copy with no AI. Deploying the editor:
+pnpm build:editor, pnpm upload:editor, pnpm ai:setup (see README.md).`;
 
 function fail(message) {
   console.error(`✗ ${message}`);

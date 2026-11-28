@@ -404,6 +404,46 @@ const touchAt = (page: Page, x: number, y: number, id: number, type: string) =>
 
 const heldButtons = (page: Page) => page.evaluate(() => window.__tf?.editor.input.current.buttons ?? -1);
 
+test('the Game panel bar pauses, restarts and shows the game buttons', async ({ page }) => {
+  const errors = trackErrors(page);
+  await page.goto('/');
+  await expect(page.getByTestId('run-status')).toHaveText('running');
+  await page.getByTestId('game-pause').click();
+  await expect(page.getByTestId('run-status')).toHaveText('paused');
+  await expect(page.getByTestId('game-pause')).toHaveAttribute('title', 'Resume (F8)');
+  // The keys still go to the game.
+  await expect(page.getByTestId('viewport')).toBeFocused();
+  await page.getByTestId('game-pause').click();
+  await expect(page.getByTestId('run-status')).toHaveText('running');
+  const ticks = async () => (await session(page))?.stats?.ticks ?? 0;
+  await expect.poll(ticks).toBeGreaterThan(60);
+  await page.getByTestId('game-restart').click();
+  await expect.poll(ticks).toBeLessThan(60);
+
+  // The buttons are off until the menu turns them on, and stay on after a reload.
+  await expect(page.getByTestId('virtual-controls')).toHaveCount(0);
+  await page.getByTestId('game-menu').click();
+  await page.getByTestId('game-show-controls').click();
+  await expect(page.getByTestId('virtual-controls')).toBeVisible();
+  const pad = await page.locator('.tf-vc-dpad').boundingBox();
+  if (!pad) throw new Error('no D-pad');
+  await page.mouse.move(pad.x + 5, pad.y + pad.height / 2);
+  await page.mouse.down();
+  await expect.poll(() => heldButtons(page)).toBe(1 << 2);
+  await page.mouse.up();
+  await expect.poll(() => heldButtons(page)).toBe(0);
+  // Below the game, inside the panel.
+  const viewport = await page.getByTestId('viewport').boundingBox();
+  const controls = await page.getByTestId('virtual-controls').boundingBox();
+  expect(controls?.y ?? 0).toBeGreaterThanOrEqual((viewport?.y ?? 0) + (viewport?.height ?? 0) - 1);
+  await page.reload();
+  await expect(page.getByTestId('virtual-controls')).toBeVisible();
+  await page.getByTestId('game-menu').click();
+  await page.getByTestId('game-show-controls').click();
+  await expect(page.getByTestId('virtual-controls')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
 test.describe('on a touch screen in landscape', () => {
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 844, height: 390 } });
 
