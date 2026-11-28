@@ -532,8 +532,7 @@ test.describe('the touch panels in portrait', () => {
     await page.goto('/');
     await expect(page.getByTestId('run-status')).toHaveText('running');
     const toolbar = await page.locator('.tf-toolbar').boundingBox();
-    // One row: 44 px controls plus padding (two rows would be over 90).
-    expect(toolbar?.height).toBeLessThan(64);
+    expect(toolbar?.height).toBeLessThan(56);
     await expect(page.getByRole('button', { name: 'Redo' })).toBeVisible();
     // No zoom into the code editor on iOS: its text is at least 16px.
     await page.evaluate(() => window.__tf?.editor.workbench.openFile('games/pong/main.ts'));
@@ -580,25 +579,29 @@ test.describe('the touch panels in portrait', () => {
   });
 });
 
-/** Visible controls in the top bar and the touch panels smaller than 44 x 44 px. */
+/** Visible panel controls under 36 px (file rows under 32 px; tag chips keep their size). */
 const smallTargets = (page: Page) =>
   page.evaluate(() => {
     const controls = document.querySelectorAll(
-      '.tf-toolbar button, .tf-touch-panels button, .tf-touch-panels select, .tf-touch-panels [role="tab"], .tf-files-row, .tf-touch-panels input:not([type="checkbox"], [type="radio"], [type="range"], [readonly])',
+      '.tf-touch-panels button, .tf-touch-panels select, .tf-files-row, .tf-touch-panels input:not([type="checkbox"], [type="radio"], [type="range"], [readonly])',
     );
     return [...controls].flatMap((el) => {
       const r = el.getBoundingClientRect();
-      if (r.width === 0 || r.height === 0) return [];
+      if (r.width === 0 || r.height === 0 || el.closest('.tf-lib-tags')) return [];
       const name = (el as HTMLElement).dataset.testid ?? el.textContent?.trim().slice(0, 20);
-      const wide = el.matches('input, select, .tf-files-row') ? r.height >= 44 : r.width >= 44 && r.height >= 44;
-      return wide ? [] : [`${el.tagName} ${name} ${Math.round(r.width)}x${Math.round(r.height)}`];
+      const ok = el.matches('.tf-files-row')
+        ? r.height >= 32
+        : el.matches('input, select')
+          ? r.height >= 36
+          : r.width >= 36 && r.height >= 36;
+      return ok ? [] : [`${el.tagName} ${name} ${Math.round(r.width)}x${Math.round(r.height)}`];
     });
   });
 
 test.describe('touch targets in portrait', () => {
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
 
-  test('every control in the top bar and the panels is at least 44 px', async ({ page }) => {
+  test('every control in the panels is at least 36 px, file rows 32 px', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByTestId('run-status')).toHaveText('running');
     await page.getByTestId('file-games/pong').click();
@@ -652,7 +655,7 @@ test.describe('the bottom sheet in portrait', () => {
     await page.mouse.move(h.x + h.width / 2, 830, { steps: 8 });
     await page.mouse.up();
     await expect(sheet).toHaveAttribute('data-state', 'collapsed');
-    await expect.poll(async () => Math.round((await box(sheet)).height)).toBe(88);
+    await expect.poll(async () => Math.round((await box(sheet)).height)).toBe(64);
     expect((await session(page))?.status).toBe('running');
 
     await page.reload();

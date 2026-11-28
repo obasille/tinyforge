@@ -309,7 +309,7 @@ button:disabled {
   flex: none;
   align-items: center;
   justify-content: center;
-  height: 44px;
+  height: 24px;
   cursor: grab;
   touch-action: none;
 }
@@ -1872,8 +1872,8 @@ div.tf-ai-file,
 .tf-touch .tf-toolbar > button,
 .tf-touch .tf-undo-group > button:first-child,
 .tf-touch .tf-volume button {
-  min-width: 44px;
-  height: 44px;
+  min-width: 36px;
+  height: 34px;
   font-size: 18px;
 }
 
@@ -1907,7 +1907,7 @@ div.tf-ai-file,
 .tf-touch-tabs {
   display: flex;
   flex: none;
-  height: 44px;
+  height: 40px;
   overflow-x: auto;
   scrollbar-width: none;
   border-bottom: 1px solid #3a3a48;
@@ -1970,18 +1970,18 @@ div.tf-ai-file,
 .tf-touch-filebar span {
   flex: 1;
   min-width: 0;
-  height: 44px;
+  height: 36px;
   font-size: 15px;
 }
 
 .tf-touch-filebar span {
-  line-height: 44px;
+  line-height: 36px;
 }
 
 .tf-touch-close {
   flex: none;
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 36px;
   font-size: 20px;
   color: inherit;
   background: #2a2a38;
@@ -2007,13 +2007,13 @@ div.tf-ai-file,
 }
 
 .tf-touch .tf-files-actions .tf-menu-button {
-  height: 44px;
+  height: 34px;
   padding: 0 12px;
   font-size: 15px;
 }
 
 .tf-touch .tf-menu-item {
-  min-height: 44px;
+  min-height: 40px;
   font-size: 15px;
 }
 
@@ -2067,18 +2067,27 @@ div.tf-ai-file,
   color: var(--tf-error);
 }
 
-/* Touch layout: every control is at least 44 x 44 px (Apple's minimum touch
-   target), so a finger hits what it aims at. Desktop sizes are unchanged. */
-.tf-app.tf-touch .tf-toolbar button,
-.tf-app.tf-touch .tf-touch-panels button,
-.tf-app.tf-touch .tf-touch-panels select,
-.tf-app.tf-touch .tf-touch-panels [role="tab"] {
-  min-width: 44px;
-  min-height: 44px;
+/* Touch layout: panel controls are at least 36 px, file rows 32 px, so a
+   finger hits what it aims at while lists stay dense. Tag chips keep their
+   size. Desktop sizes are unchanged. */
+.tf-app.tf-touch .tf-touch-panels button:not(.tf-lib-tags button),
+.tf-app.tf-touch .tf-touch-panels select {
+  min-width: 36px;
+  min-height: 36px;
 }
 
 .tf-app.tf-touch .tf-touch-panels input:not([type="checkbox"], [type="radio"], [type="range"], [readonly]) {
-  min-height: 44px;
+  min-height: 36px;
+}
+
+.tf-app.tf-touch .tf-touch-panels input[type="checkbox"],
+.tf-app.tf-touch .tf-touch-panels input[type="radio"] {
+  width: 20px;
+  height: 20px;
+}
+
+.tf-app.tf-touch .tf-files-row {
+  min-height: 32px;
 }
 
 .tf-app.tf-touch .tf-memory-bar select {
@@ -2088,14 +2097,4 @@ div.tf-ai-file,
 .tf-app.tf-touch .tf-memory-bar input {
   flex: 1;
   min-width: 0;
-}
-
-.tf-app.tf-touch .tf-touch-panels input[type="checkbox"],
-.tf-app.tf-touch .tf-touch-panels input[type="radio"] {
-  width: 22px;
-  height: 22px;
-}
-
-.tf-app.tf-touch .tf-files-row {
-  min-height: 44px;
 }
