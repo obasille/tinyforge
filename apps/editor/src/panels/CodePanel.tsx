@@ -4,7 +4,7 @@
 import type { CodeEditor } from '@tinyforge/editor-core';
 import { useEffect, useRef, useState } from 'react';
 import { useEditor } from '../EditorContext.ts';
-import { useStore } from '../hooks.ts';
+import { useStore, useTouchLayout } from '../hooks.ts';
 import type { PanelProps } from './panel-api.ts';
 
 export interface CodePanelParams {
@@ -36,6 +36,7 @@ export function CodePanel({ api, params }: PanelProps<CodePanelParams>) {
 }
 
 function CodeStatus({ code, title, name }: { code: CodeEditor; title: (t: string) => void; name: string }) {
+  const touch = useTouchLayout();
   const s = useStore(code.state);
   useEffect(() => title(s.dirty ? `● ${name}` : name), [s.dirty, name, title]);
   return (
@@ -59,7 +60,7 @@ function CodeStatus({ code, title, name }: { code: CodeEditor; title: (t: string
       ) : null}
       {s.conflict === 'deleted' ? (
         <div className="tf-code-bar tf-code-conflict" data-testid="code-conflict">
-          {name} was deleted on disk. Save (Ctrl+S) to create it again.
+          {name} was deleted on disk. {touch ? 'Save' : 'Save (Ctrl+S)'} to create it again.
           <button type="button" onClick={() => code.keepMine()}>
             OK
           </button>

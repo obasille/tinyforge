@@ -32,7 +32,7 @@ import { type FormEvent, useEffect, useRef, useState } from 'react';
 import guide from '../../../../AGENTS.md?raw';
 import { useEditor } from '../EditorContext.ts';
 import type { Editor } from '../editor.ts';
-import { useStore } from '../hooks.ts';
+import { useStore, useTouchLayout } from '../hooks.ts';
 
 const SETTINGS_KEY = 'tinyforge.editor.ai';
 const EFFORTS: Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -348,6 +348,7 @@ function Settings({
 const money = (cost: number | null) => (cost === null ? 'cost unknown' : `$${cost.toFixed(cost < 0.1 ? 3 : 2)}`);
 
 function Conversation({ agent }: { agent: Agent }) {
+  const touch = useTouchLayout();
   const state = useStore(agent.state);
   const { showCost } = useStore(settings);
   const [draft, setDraft] = useState('');
@@ -381,7 +382,7 @@ function Conversation({ agent }: { agent: Agent }) {
         <textarea
           data-testid="ai-input"
           value={draft}
-          placeholder="Ask for a change (Enter to send, Shift+Enter for a new line)"
+          placeholder={touch ? 'Ask for a change' : 'Ask for a change (Enter to send, Shift+Enter for a new line)'}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {

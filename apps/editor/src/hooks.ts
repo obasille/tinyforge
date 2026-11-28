@@ -1,4 +1,6 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { useEditor } from './EditorContext.ts';
+import { usesTouchLayout } from './layout-mode.ts';
 import type { PanelApi } from './panels/panel-api.ts';
 
 interface Subscribable<T> {
@@ -9,6 +11,11 @@ interface Subscribable<T> {
 /** Read a plain-TS store from React. */
 export function useStore<T>(store: Subscribable<T>): T {
   return useSyncExternalStore(store.subscribe, store.getState);
+}
+
+/** True in the touch layout, where keyboard shortcuts are not shown. */
+export function useTouchLayout(): boolean {
+  return usesTouchLayout(useStore(useEditor().layoutMode));
 }
 
 /**

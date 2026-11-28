@@ -21,8 +21,7 @@ import { useMemo, useRef, useState } from 'react';
 import { AppMenu, type AppMenuItem } from '../AppMenu.tsx';
 import { BuildStatus } from '../BuildStatus.tsx';
 import { useEditor } from '../EditorContext.ts';
-import { useStore } from '../hooks.ts';
-import { usesTouchLayout } from '../layout-mode.ts';
+import { useStore, useTouchLayout } from '../hooks.ts';
 import { useRevealFile } from './reveal-file.ts';
 
 type Edit =
@@ -46,6 +45,7 @@ const isFixedFolder = (node: TreeNode) =>
 
 export function FilesPanel() {
   const editor = useEditor();
+  const touch = useTouchLayout();
   const state = useStore(editor.files.state);
   const tree = useMemo(() => buildTree(state.files), [state.files]);
   const [open, setOpen] = useState<Set<string>>(() => new Set(['games', 'assets']));
@@ -291,7 +291,6 @@ export function FilesPanel() {
     );
   };
 
-  const touch = usesTouchLayout(useStore(editor.layoutMode));
   const actions: AppMenuItem[] = [
     {
       label: 'New game',
@@ -395,7 +394,8 @@ export function FilesPanel() {
       ) : null}
       {edit?.kind === 'delete' ? (
         <div className="tf-files-confirm" data-testid="files-confirm">
-          Delete {edit.node.kind === 'folder' ? `the folder ${edit.node.path}` : edit.node.path}? Ctrl+Z undoes it.
+          Delete {edit.node.kind === 'folder' ? `the folder ${edit.node.path}` : edit.node.path}?{' '}
+          {touch ? 'Undo brings it back.' : 'Ctrl+Z undoes it.'}
           <button type="button" onClick={() => run(editor.workbench.delete(edit.node.path))}>
             Delete
           </button>

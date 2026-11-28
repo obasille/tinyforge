@@ -579,6 +579,20 @@ test.describe('the touch panels in portrait', () => {
   });
 });
 
+test.describe('keyboard shortcuts in portrait', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+
+  test('are not shown in the touch layout', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByTestId('run-status')).toHaveText('running');
+    await page.getByTestId('touch-tab-run').click();
+    const run = page.getByTestId('run-panel');
+    await expect(run.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
+    await expect(run.getByRole('button', { name: 'Step 1 tick', exact: true })).toBeVisible();
+    await expect(run).not.toContainText(/F5|F8|F10/);
+  });
+});
+
 /** Visible panel controls under 36 px (file rows under 32 px; tag chips keep their size). */
 const smallTargets = (page: Page) =>
   page.evaluate(() => {
