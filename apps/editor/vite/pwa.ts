@@ -49,8 +49,10 @@ const HEAD_TAGS = [
   { tag: 'meta', attrs: { name: 'mobile-web-app-capable', content: 'yes' } },
   { tag: 'meta', attrs: { name: 'apple-mobile-web-app-capable', content: 'yes' } },
   { tag: 'meta', attrs: { name: 'apple-mobile-web-app-title', content: 'TinyForge' } },
-  // "black", not "black-translucent": the top bar stays below the status bar.
-  { tag: 'meta', attrs: { name: 'apple-mobile-web-app-status-bar-style', content: 'black' } },
+  // The page runs under the status bar, which shows over the page's own
+  // background; .tf-app pads the top by the safe-area inset. ("black" left a
+  // grey veil over the top bar on an iPhone.)
+  { tag: 'meta', attrs: { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' } },
 ] as const;
 
 export function pwa(): Plugin {
