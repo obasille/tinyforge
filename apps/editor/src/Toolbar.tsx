@@ -1,4 +1,5 @@
 import { GitHubWorkspace } from '@tinyforge/editor-core';
+import { useEffect, useState } from 'react';
 import { AppMenu, type AppMenuItem } from './AppMenu.tsx';
 import { useEditor } from './EditorContext.ts';
 import type { Editor } from './editor.ts';
@@ -76,6 +77,7 @@ export function Toolbar({
           onPointerUp={() => editor.viewport.focus()}
         />
       </span>
+      <WebBranch touch={touch} />
       {editor.files.workspace instanceof GitHubWorkspace ? (
         <SaveState workspace={editor.files.workspace} touch={touch} />
       ) : null}
@@ -94,6 +96,46 @@ const SAVE_LABELS = {
   failed: 'Save failed',
   conflict: 'Conflict',
 } as const;
+
+interface WebBranchStatus {
+  ahead: number;
+  branch?: string;
+  base?: string;
+  url?: string;
+}
+
+/**
+ * `pnpm dev` only: the commits the deployed editor saved on the web branch
+ * that are not merged yet, as a link to the comparison on GitHub.
+ */
+function WebBranch({ touch }: { touch: boolean }) {
+  const [status, setStatus] = useState<WebBranchStatus | null>(null);
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    let live = true;
+    fetch('__tf/web-branch')
+      .then((r) => (r.ok ? (r.json() as Promise<WebBranchStatus>) : null))
+      .then((s) => live && setStatus(s))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+  if (!status?.url || status.ahead <= 0) return null;
+  const n = status.ahead;
+  return (
+    <a
+      className="tf-web-branch"
+      data-testid="web-branch"
+      href={status.url}
+      target="_blank"
+      rel="noreferrer"
+      title={`${n} commit${n === 1 ? '' : 's'} saved from the site on ${status.branch}, not in ${status.base} yet. Merge them with: git pull origin ${status.branch}`}
+    >
+      {touch ? `${status.branch} +${n}` : `${status.branch}: ${n} to merge`}
+    </a>
+  );
+}
 
 /** The deployed editor's GitHub saves: their state, and Save (or Reload after a conflict). */
 function SaveState({ workspace, touch }: { workspace: GitHubWorkspace; touch: boolean }) {

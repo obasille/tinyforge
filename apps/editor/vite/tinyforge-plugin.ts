@@ -176,8 +176,10 @@ export function tinyforge({ assetsDir }: { assetsDir: string }): Plugin {
       dev.middlewares.use(async (req, res, next) => {
         const url = new URL(req.url ?? '/', 'http://localhost');
         const pathname = url.pathname;
-        // /__tf/ai/ belongs to the AI routes (ai-proxy.ts).
-        if (!pathname.startsWith('/__tf/') || pathname.startsWith('/__tf/ai/')) return next();
+        // /__tf/ai/ belongs to the AI routes (ai-proxy.ts), /__tf/web-branch to web-branch.ts.
+        if (!pathname.startsWith('/__tf/') || pathname.startsWith('/__tf/ai/') || pathname === '/__tf/web-branch') {
+          return next();
+        }
         const method = req.method ?? 'GET';
         try {
           if (pathname === '/__tf/files.json' && method === 'GET') {

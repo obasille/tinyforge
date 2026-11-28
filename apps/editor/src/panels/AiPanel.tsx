@@ -362,11 +362,20 @@ function Settings({
 
 const money = (cost: number | null) => (cost === null ? 'cost unknown' : `$${cost.toFixed(cost < 0.1 ? 3 : 2)}`);
 
+/** The half-typed prompt of each conversation: it survives the panel being closed, hidden or remounted. */
+const drafts = new WeakMap<Agent, string>();
+
 function Conversation({ agent }: { agent: Agent }) {
   const touch = useTouchLayout();
   const state = useStore(agent.state);
   const { showCost } = useStore(settings);
-  const [draft, setDraft] = useState('');
+  const [draft, setDraftState] = useState(() => drafts.get(agent) ?? '');
+  const setDraft = (text: string) => {
+    drafts.set(agent, text);
+    setDraftState(text);
+  };
+  // Another game's conversation: its own prompt.
+  useEffect(() => setDraftState(drafts.get(agent) ?? ''), [agent]);
   const listRef = useRef<HTMLDivElement>(null);
 
   // Follow the conversation as it grows.

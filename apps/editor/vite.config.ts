@@ -7,6 +7,7 @@ import { aiProxy } from './vite/ai-proxy.ts';
 import { pwa } from './vite/pwa.ts';
 import { siteHeaders } from './vite/site-headers.ts';
 import { tinyforge } from './vite/tinyforge-plugin.ts';
+import { webBranch } from './vite/web-branch.ts';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '../..');
@@ -21,6 +22,8 @@ export default defineConfig(({ command }) => ({
     pwa(),
     // AI panel routes (dev server only). The key is read from the repository's .env.
     aiProxy({ envDir: repoRoot }),
+    // Commits on the web branch not merged yet (dev server only).
+    webBranch({ envDir: repoRoot }),
     // Type errors in the browser overlay while developing (not during tests).
     command === 'serve' && !process.env.TF_NO_CHECKER ? checker({ typescript: true }) : null,
   ],

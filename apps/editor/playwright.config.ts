@@ -18,6 +18,6 @@ export default defineConfig({
     command: `vite --port ${PORT} --strictPort`,
     url: `http://localhost:${PORT}/__tf/files.json`,
     reuseExistingServer: !process.env.CI,
-    env: { TF_NO_CHECKER: '1' },
+    env: { TF_NO_CHECKER: '1', TF_NO_WEB_BRANCH: '1' },
   },
 });

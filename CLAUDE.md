@@ -36,7 +36,9 @@ pnpm workspace. Two hosts share one engine:
 - `apps/editor`: React + Dockview UI, Vite, the `tinyforge` Vite plugin (serves
   and watches project files; it does not compile), and `vite/ai-proxy.ts` (dev
   server only: adds the API key from `.env` to the AI panel's requests, and
-  forwards them to Claude or to the OpenAI-compatible server set in `.env`).
+  forwards them to Claude or to the OpenAI-compatible server set in `.env`),
+  and `vite/web-branch.ts` (dev server only: the web branch's commits not yet
+  in master, for the top bar).
   The deployed editor answers the same routes with `server/ai/index.php`, a
   PHP proxy with a password login (set up by `pnpm ai:setup`) that also
   lists, reads and commits the web branch on GitHub; the build
